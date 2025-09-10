@@ -24,6 +24,7 @@ export default function CreatePositionFollowUp() {
     }
   }, [operation_id, position]);
 
+  
   const loadMeasurements = async () => {
     try {
       const res = await fetch(`${API_URL}/results/${operation_id}/${position}`);
