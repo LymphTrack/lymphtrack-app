@@ -3,6 +3,8 @@ from sqlalchemy.orm import Session
 from app.db.models import Operation, Result
 from app.db.database import get_db
 
+import boto3, os
+
 router = APIRouter()
 
 @router.get("/by_patient/{patient_id}")
@@ -61,3 +63,24 @@ def create_operation(op_data: dict = Body(...), db: Session = Depends(get_db)):
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=f"Error creating operation: {e}")
+    
+
+@router.get("/operations/{id_operation}/positions/{position}/measurements")
+def get_measurements(id_operation: int, position: int, db: Session = Depends(get_db)):
+    measurements = (
+        db.query(Result)
+        .filter(Result.id_operation == id_operation, Result.position == position)
+        .order_by(Result.measurement_number.asc())
+        .all()
+    )
+
+    return [
+        {
+            "id": m.id,
+            "measurement_number": m.measurement_number,
+            "file_path": m.file_path,
+            "file_name": os.path.basename(m.file_path) if m.file_path else None
+        }
+        for m in measurements
+    ]
+
