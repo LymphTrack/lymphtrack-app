@@ -26,7 +26,7 @@ export default function CreatePositionFollowUp() {
 
   const loadMeasurements = async () => {
     try {
-      const res = await fetch(`${API_URL}/operations/${operation_id}/positions/${position}/measurements`);
+      const res = await fetch(`${API_URL}/results/${operation_id}/${position}`);
       if (!res.ok) throw new Error("Failed to fetch measurements");
 
       const data = await res.json();
