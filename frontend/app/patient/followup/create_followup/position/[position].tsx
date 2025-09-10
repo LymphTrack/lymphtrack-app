@@ -1,13 +1,5 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TouchableOpacity, 
-  Alert, 
-  ScrollView, 
-  ActivityIndicator 
-} from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView, ActivityIndicator } from "react-native";
 import { ArrowLeft, FileUp, Plus, Save, Edit } from "lucide-react-native";
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
@@ -34,14 +26,10 @@ export default function CreatePositionFollowUp() {
 
   const loadMeasurements = async () => {
     try {
-      const { data, error } = await supabase
-        .from("results")
-        .select("id, measurement_number, min_return_loss_db, min_frequency_hz, bandwidth_hz, file_path")
-        .eq("id_operation", operation_id)
-        .eq("position", position)
-        .order("measurement_number", { ascending: true });
+      const res = await fetch(`${API_URL}/results/${operation_id}/${position}`);
+      if (!res.ok) throw new Error("Failed to fetch measurements");
 
-      if (error) throw error;
+      const data = await res.json();
       setMeasurements(data || []);
     } catch (err) {
       console.error("Error loading measurements:", err);
@@ -65,28 +53,34 @@ export default function CreatePositionFollowUp() {
       if (res.canceled) return;
 
       const file = res.assets[0];
-      const filePath = `operation_${operation_id}/position_${position}/measurement_${index}_${file.name}`;
 
-      const response = await fetch(file.uri);
-      const blob = await response.blob();
+      const formData = new FormData();
+      formData.append("operation_id", operation_id);
+      formData.append("position", position);
+      formData.append("index", String(index));
+      formData.append("file", {
+        uri: file.uri,
+        name: file.name,
+        type: file.mimeType || "application/octet-stream",
+      } as any);
 
-      const { error } = await supabase.storage
-        .from("data")
-        .upload(filePath, blob, {
-          cacheControl: "3600",
-          upsert: true,
-        });
+      const response = await fetch(`${API_URL}/upload-measurement`, {
+        method: "POST",
+        body: formData,
+      });
 
-      if (error) {
-        console.error("Upload error:", error);
+      const data = await response.json();
+
+      if (data.status !== "success") {
+        console.error("Upload error:", data.message);
         Alert.alert("Error", "File upload failed");
         return;
       }
-      
+
       setMeasurements((prev) =>
         prev.map((m) =>
           m.measurement_number === index
-            ? { ...m, file_path: filePath, file_name: file.name }
+            ? { ...m, file_path: data.file_path, file_name: data.file_name }
             : m
         )
       );
@@ -113,9 +107,13 @@ export default function CreatePositionFollowUp() {
   const handleSave = async () => {
     try {
       const res = await fetch(
-        `${API_URL}/process-results?operation_id=${operation_id}&position=${position}`,
+        `${API_URL}/process-results/${operation_id}/${position}`,
         { method: "POST" }
       );
+
+      if (!res.ok) {
+        throw new Error("Failed to save measurements");
+      }
 
       const data = await res.json();
       Alert.alert("Success", `Measurements processed and saved (${data.results.length})`);
@@ -155,14 +153,13 @@ export default function CreatePositionFollowUp() {
                         .map((m) => m.file_path);
 
                       if (paths.length > 0) {
-                        const { error } = await supabase.storage.from("data").remove(paths);
-
-                        if (error) {
-                          console.error("Error deleting files:", error);
-                        } else {
-                          console.log("Files deleted", paths);
-                        }
+                        await fetch(`${API_URL}/delete-measurements`, {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ paths }),
+                        });
                       }
+
                     } catch (err) {
                       console.error("Unexpected error while deleting files:", err);
                     }
