@@ -57,7 +57,6 @@ export default function CreatePositionFollowUp() {
       const formData = new FormData();
       formData.append("id_operation", operation_id);
       formData.append("position", position);
-      formData.append("index", String(index));
       formData.append("file", {
         uri: file.uri,
         name: file.name,

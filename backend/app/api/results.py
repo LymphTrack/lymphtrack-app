@@ -34,14 +34,13 @@ def get_results(id_operation: int, position: int, db: Session = Depends(get_db))
 
 @router.post("/upload-measurement")
 async def upload_measurement(
-    operation_id: int = Form(...),
+    id_operation: int = Form(...),
     position: int = Form(...),
-    index: int = Form(...),
     file: UploadFile = None,
     db: Session = Depends(get_db)
 ):
     try:
-        operation = db.query(Operation).filter(Operation.id_operation == operation_id).first()
+        operation = db.query(Operation).filter(Operation.id_operation == id_operation).first()
         if not operation:
             return {"status": "error", "message": "Operation not found"}
 
