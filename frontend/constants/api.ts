@@ -1,1 +1,1 @@
-export const API_URL = "https://lymphtrack-backend.onrender.com";
+export const API_URL = "https://lymphtrack-app.onrender.com";
