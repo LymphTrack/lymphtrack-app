@@ -55,7 +55,7 @@ export default function CreatePositionFollowUp() {
       const file = res.assets[0];
 
       const formData = new FormData();
-      formData.append("operation_id", operation_id);
+      formData.append("id_operation", operation_id);
       formData.append("position", position);
       formData.append("index", String(index));
       formData.append("file", {
@@ -64,7 +64,7 @@ export default function CreatePositionFollowUp() {
         type: file.mimeType || "application/octet-stream",
       } as any);
 
-      const response = await fetch(`${API_URL}/upload-measurement`, {
+      const response = await fetch(`${API_URL}/results/upload-measurement`, {
         method: "POST",
         body: formData,
       });
@@ -208,7 +208,6 @@ export default function CreatePositionFollowUp() {
           </TouchableOpacity>
         ))}
 
-        {/* Add Measurement Button */}
         {measurements.length < maxMeasurements && (
           <TouchableOpacity
             style={styles.addButton}
@@ -220,7 +219,6 @@ export default function CreatePositionFollowUp() {
         )}
       </ScrollView>
 
-      {/* Save Button */}
       <View style={styles.footer}>
         <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
           <Save size={20} color="#FFFFFF" />

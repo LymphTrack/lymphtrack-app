@@ -34,13 +34,13 @@ def get_results(id_operation: int, position: int, db: Session = Depends(get_db))
 
 @router.post("/upload-measurement")
 async def upload_measurement(
-    operation_id: str = Form(...),
+    id_operation: str = Form(...),
     position: str = Form(...),
     index: int = Form(...),
     file: UploadFile = None
 ):
     try:
-        archive_path = f"operation_{operation_id}/position_{position}/measurement_{index}_{file.filename}"
+        archive_path = f"operation_{id_operation}/position_{position}/measurement_{index}_{file.filename}"
         s3.upload_fileobj(file.file, B2_BUCKET, archive_path)
 
         return {"status": "success", "file_path": archive_path, "file_name": file.filename}
