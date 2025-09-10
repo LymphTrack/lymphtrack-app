@@ -3,7 +3,7 @@ import { Text, View } from "react-native";
 export default function Index() {
   return (
     <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-      <Text>Bienvenue dans mon app</Text>
+      <Text>Lol dans mon app</Text>
     </View>
   );
 }
