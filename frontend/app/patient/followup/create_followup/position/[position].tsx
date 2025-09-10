@@ -2,7 +2,6 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView, ActivityIndicator } from "react-native";
 import { ArrowLeft, FileUp, Plus, Save, Edit } from "lucide-react-native";
 import { useState, useEffect } from "react";
-import { supabase } from "@/lib/supabase";
 import * as DocumentPicker from "expo-document-picker";
 import { API_URL } from "@/constants/api";
 
@@ -24,10 +23,12 @@ export default function CreatePositionFollowUp() {
     }
   }, [operation_id, position]);
 
-  
+
   const loadMeasurements = async () => {
     try {
-      const res = await fetch(`${API_URL}/results/${operation_id}/${position}`);
+      const res = await fetch(`${API_URL}/results/${operation_id}/${position}`,
+        {method : "GET"}
+      );
       if (!res.ok) throw new Error("Failed to fetch measurements");
 
       const data = await res.json();

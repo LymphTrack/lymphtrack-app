@@ -23,7 +23,7 @@ s3 = boto3.client(
     config=Config(signature_version="s3v4"),
 )
 
-@router.get("/results/{id_operation}/{position}")
+@router.get("/{id_operation}/{position}")
 def get_results(id_operation: int, position: int, db: Session = Depends(get_db)):
     return (
         db.query(Result)
