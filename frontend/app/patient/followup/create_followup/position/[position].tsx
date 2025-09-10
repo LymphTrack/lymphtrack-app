@@ -134,7 +134,6 @@ export default function CreatePositionFollowUp() {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
           onPress={() => {
@@ -153,10 +152,10 @@ export default function CreatePositionFollowUp() {
                         .map((m) => m.file_path);
 
                       if (paths.length > 0) {
-                        await fetch(`${API_URL}/delete-measurements`, {
+                        await fetch(`${API_URL}/results/delete-measurements`, {
                           method: "POST",
                           headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ paths }),
+                          body: JSON.stringify(paths),
                         });
                       }
 

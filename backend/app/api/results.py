@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, UploadFile, Form
 from sqlalchemy.orm import Session
-from app.db.models import Result
+from app.db.models import Result, Operation
 from app.db.database import get_db
 
 import boto3, os
@@ -34,19 +34,32 @@ def get_results(id_operation: int, position: int, db: Session = Depends(get_db))
 
 @router.post("/upload-measurement")
 async def upload_measurement(
-    id_operation: str = Form(...),
-    position: str = Form(...),
+    operation_id: int = Form(...),
+    position: int = Form(...),
     index: int = Form(...),
-    file: UploadFile = None
+    file: UploadFile = None,
+    db: Session = Depends(get_db)
 ):
     try:
-        archive_path = f"operation_{id_operation}/position_{position}/measurement_{index}_{file.filename}"
+        operation = db.query(Operation).filter(Operation.id_operation == operation_id).first()
+        if not operation:
+            return {"status": "error", "message": "Operation not found"}
+
+        patient_id = operation.patient_id
+        operation_name = operation.name
+
+        archive_path = f"{patient_id}/{operation_name}/{position}/{file.filename}"
+
         s3.upload_fileobj(file.file, B2_BUCKET, archive_path)
 
-        return {"status": "success", "file_path": archive_path, "file_name": file.filename}
+        return {
+            "status": "success",
+            "file_path": archive_path,
+            "file_name": file.filename
+        }
+
     except Exception as e:
         return {"status": "error", "message": str(e)}
-
 
 @router.post("/delete-measurements")
 def delete_measurements(paths: list[str]):
