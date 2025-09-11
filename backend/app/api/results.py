@@ -9,6 +9,9 @@ from botocore.config import Config
 from dotenv import load_dotenv
 from datetime import datetime, timezone
 
+import logging
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
 
 # -------------------------------
@@ -79,8 +82,6 @@ async def process_results(
         visit_name = operation.name.replace(" ", "_")
         visit_str = f"{visit_number}_{visit_name}_{operation.operation_date.strftime('%d%m%Y')}"
 
-        print(visit_str)
-
         processed_results = []
 
         for idx, file in enumerate(files, start=1):
@@ -104,15 +105,11 @@ async def process_results(
             if mask.any():
                 bw_freqs = freqs[mask]
                 bandwidth = float(bw_freqs.max() - bw_freqs.min())
-            
-            print(min_return_loss)
-            print(min_freq)
 
             file.file.seek(0)
             archive_path = f"{patient_id}/{visit_str}/{position}/{file.filename}"
             s3.upload_fileobj(file.file, B2_BUCKET, archive_path)
 
-            # 5. Sauvegarde en DB
             result = Result(
                 id_operation=id_operation,
                 position=position,
@@ -129,22 +126,10 @@ async def process_results(
 
         db.commit()
 
-        # ⚠️ Sérialisation JSON-friendly
-        results_json = [
-            {
-                "id": r.id,
-                "measurement_number": r.measurement_number,
-                "file_name": r.file_name,
-                "file_path": r.file_path,
-                "min_return_loss_db": r.min_return_loss_db,
-                "min_frequency_hz": r.min_frequency_hz,
-                "bandwidth_hz": r.bandwidth_hz,
-                "uploaded_at": r.uploaded_at.isoformat() if r.uploaded_at else None,
-            }
-            for r in processed_results
-        ]
+        logger.info(f"Processed {len(processed_results)} results")
+        print("Processed results:", processed_results) 
 
-        return {"status": "success", "results": results_json}
+        return {"status": "success", "results": processed_results}
 
     except Exception as e:
         return {"status": "error", "message": str(e)}
