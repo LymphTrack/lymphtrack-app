@@ -1,9 +1,10 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView, ActivityIndicator } from "react-native";
 import { ArrowLeft, FileUp, Plus, Save, Edit } from "lucide-react-native";
-import { useState, useEffect } from "react";
 import * as DocumentPicker from "expo-document-picker";
 import { API_URL } from "@/constants/api";
+import { useState, useCallback } from "react";
+import { useFocusEffect } from "@react-navigation/native";
 
 export default function CreatePositionFollowUp() {
   const { position, operation_id } = useLocalSearchParams<{
@@ -17,12 +18,13 @@ export default function CreatePositionFollowUp() {
   const [loading, setLoading] = useState(true);
   const maxMeasurements = 6;
 
-  useEffect(() => {
-    if (operation_id && position) {
-      loadMeasurements();
-    }
-  }, [operation_id, position]);
-
+  useFocusEffect(
+      useCallback(() => {
+        if (operation_id && position) {
+          loadMeasurements();
+        }
+      }, [operation_id, position])
+  );
 
   const loadMeasurements = async () => {
     try {
@@ -104,18 +106,18 @@ export default function CreatePositionFollowUp() {
       if (!res.ok) throw new Error("Processing failed");
 
       const data = await res.json();
-      console.log("DEBUG Response:", data);
 
       if (data.status === "error") {
         Alert.alert("Error", data.message || "Processing failed");
         return;
       }
-      
+
       Alert.alert(
         "Success",
-        `Measurements processed and saved (${data.results.length})`
+        `Measurements processed and saved`
       );
-      router.back();
+      router.push(`/patient/followup/${operation_id}`);
+
     } catch (err) {
       console.error("Save error:", err);
       Alert.alert("Error", "Unable to save measurements");

@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from "react";
 import { View, Text, ScrollView, StyleSheet, ActivityIndicator, Alert, TouchableOpacity } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { ArrowLeft, Save, Trash } from "lucide-react-native";
 import { API_URL } from "@/constants/api";
+import { useState, useCallback } from "react";
+import { useFocusEffect } from "@react-navigation/native";
 
 export default function PatientResultsScreen() {
   const { id_operation } = useLocalSearchParams<{ id_operation: string }>();
@@ -12,9 +13,14 @@ export default function PatientResultsScreen() {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
-  useEffect(() => {
-    if (id_operation) loadAllData();
-  }, [id_operation]);
+
+  useFocusEffect(
+      useCallback(() => {
+        if (id_operation) {
+          loadAllData();
+        }
+      }, [id_operation])
+  );
 
   const loadAllData = async () => {
     try {
