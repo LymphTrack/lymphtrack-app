@@ -53,7 +53,7 @@ def delete_measurements(paths: list[str]):
         return {"status": "error", "message": str(e)}
 
 # -------------------------------
-# 🔹 Nouveau : calcul avant → upload après
+#  calcul avant → upload après
 # -------------------------------
 @router.post("/process-results/{id_operation}/{position}")
 async def process_results(
@@ -69,7 +69,6 @@ async def process_results(
 
         patient_id = operation.patient_id
 
-        # 🔹 Déterminer le numéro de visite
         all_ops = (
             db.query(Operation)
             .filter(Operation.patient_id == patient_id)
@@ -80,23 +79,22 @@ async def process_results(
         visit_name = operation.name.replace(" ", "_")
         visit_str = f"{visit_number}_{visit_name}_{operation.operation_date.strftime('%d%m%Y')}"
 
+        print(visit_str)
+
         processed_results = []
 
         for idx, file in enumerate(files, start=1):
-            # 1. Charger le fichier
             if file.filename.endswith(".csv"):
                 df = pd.read_csv(file.file)
             else:
                 df = pd.read_excel(file.file)
 
-            # 2. Colonnes utiles
             freq_col = [c for c in df.columns if "Freq" in c or "frequency" in c.lower()][0]
             rl_col = [c for c in df.columns if "S11" in c or "return" in c.lower()][0]
 
             freqs = df[freq_col].values
             s11 = df[rl_col].values
 
-            # 3. Calculs
             min_idx = s11.argmin()
             min_return_loss = float(s11[min_idx])
             min_freq = float(freqs[min_idx])
@@ -106,8 +104,10 @@ async def process_results(
             if mask.any():
                 bw_freqs = freqs[mask]
                 bandwidth = float(bw_freqs.max() - bw_freqs.min())
+            
+            print(min_return_loss)
+            print(min_freq)
 
-            # 4. Upload fichier uniquement si calcul OK
             file.file.seek(0)
             archive_path = f"{patient_id}/{visit_str}/{position}/{file.filename}"
             s3.upload_fileobj(file.file, B2_BUCKET, archive_path)

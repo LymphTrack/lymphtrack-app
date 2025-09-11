@@ -61,8 +61,6 @@ export default function CreatePositionFollowUp() {
             : m
         )
       );
-
-      Alert.alert("Success", `File imported for measurement ${index}`);
     } catch (err) {
       console.error("Import error:", err);
       Alert.alert("Error", "Unable to import file");
