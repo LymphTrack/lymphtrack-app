@@ -196,7 +196,6 @@ async def process_results(
                 min_frequency_hz=min_freq,
                 bandwidth_hz=bw,
                 file_path=archive_path,
-                file_name=file.filename,
                 uploaded_at=datetime.now(timezone.utc),
             )
             db.add(result)
