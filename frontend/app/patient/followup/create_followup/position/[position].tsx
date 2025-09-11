@@ -104,7 +104,13 @@ export default function CreatePositionFollowUp() {
       if (!res.ok) throw new Error("Processing failed");
 
       const data = await res.json();
-      console.log("Response JSON:", data);
+      console.log("DEBUG Response:", data);
+
+      if (data.status === "error") {
+        Alert.alert("Error", data.message || "Processing failed");
+        return;
+      }
+      
       Alert.alert(
         "Success",
         `Measurements processed and saved (${data.results.length})`
