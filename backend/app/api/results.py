@@ -67,7 +67,6 @@ def get_results(id_operation: int, position: int, db: Session = Depends(get_db))
             "min_return_loss_db": r.min_return_loss_db,
             "min_frequency_hz": r.min_frequency_hz,
             "bandwidth_hz": r.bandwidth_hz,
-            "uploaded_at": r.uploaded_at.isoformat() if r.uploaded_at else None,
         }
         for r in results
     ]
