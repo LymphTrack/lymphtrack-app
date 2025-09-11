@@ -135,11 +135,11 @@ async def process_results(
                         raw = pd.read_excel(file, header=None)
                         df = infer_header_and_data(raw, key_cols=['freq', 'returnloss'])
             except Exception as e:
-                logging.warning(f"Skipping {file.name}: read error: {e}")
+                logging.warning(f"Skipping {file.filename}: read error: {e}")
                 continue
 
             if df is None:
-                logging.warning(f"Skipping {file.name}: could not infer or find header")
+                logging.warning(f"Skipping {file.filename}: could not infer or find header")
                 continue
 
             # Normalize column names
@@ -154,7 +154,7 @@ async def process_results(
             freq_cols = [c for c in df.columns if 'freq' in c]
             rl_cols = [c for c in df.columns if 's11' in c or 'returnloss' in c]
             if not freq_cols or not rl_cols:
-                logging.warning(f"Skipping {file.name}: missing freq or return loss columns: {df.columns.tolist()}")
+                logging.warning(f"Skipping {file.filename}: missing freq or return loss columns: {df.columns.tolist()}")
                 continue
 
             # Prepare and coerce numeric data, handling comma decimals
@@ -164,7 +164,7 @@ async def process_results(
             df_vals = df_vals.applymap(lambda x: x.replace(',', '.'))
             df_sub = df_vals.apply(pd.to_numeric, errors='coerce').dropna()
             if df_sub.empty:
-                logging.warning(f"Skipping {file.name}: no numeric data after coercion")
+                logging.warning(f"Skipping {file.filename}: no numeric data after coercion")
                 continue
 
             # Compute metrics
