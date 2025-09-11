@@ -128,7 +128,23 @@ async def process_results(
             processed_results.append(result)
 
         db.commit()
-        return {"status": "success", "results": processed_results}
+
+        # ⚠️ Sérialisation JSON-friendly
+        results_json = [
+            {
+                "id": r.id,
+                "measurement_number": r.measurement_number,
+                "file_name": r.file_name,
+                "file_path": r.file_path,
+                "min_return_loss_db": r.min_return_loss_db,
+                "min_frequency_hz": r.min_frequency_hz,
+                "bandwidth_hz": r.bandwidth_hz,
+                "uploaded_at": r.uploaded_at.isoformat() if r.uploaded_at else None,
+            }
+            for r in processed_results
+        ]
+
+        return {"status": "success", "results": results_json}
 
     except Exception as e:
         return {"status": "error", "message": str(e)}
