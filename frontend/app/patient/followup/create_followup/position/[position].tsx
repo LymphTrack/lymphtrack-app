@@ -39,7 +39,7 @@ export default function CreatePositionFollowUp() {
     }
   };
 
-  const handleImport = async (index: number, existingId?: number) => {
+  const handleImport = async (index: number) => {
     try {
       const res = await DocumentPicker.getDocumentAsync({
         type: [
@@ -54,32 +54,10 @@ export default function CreatePositionFollowUp() {
 
       const file = res.assets[0];
 
-      const formData = new FormData();
-      formData.append("id_operation", operation_id);
-      formData.append("position", position);
-      formData.append("file", {
-        uri: file.uri,
-        name: file.name,
-        type: file.mimeType || "application/octet-stream",
-      } as any);
-
-      const response = await fetch(`${API_URL}/results/upload-measurement`, {
-        method: "POST",
-        body: formData,
-      });
-
-      const data = await response.json();
-
-      if (data.status !== "success") {
-        console.error("Upload error:", data.message);
-        Alert.alert("Error", "File upload failed");
-        return;
-      }
-
       setMeasurements((prev) =>
         prev.map((m) =>
           m.measurement_number === index
-            ? { ...m, file_path: data.file_path, file_name: data.file_name }
+            ? { ...m, localFile: file, file_name: file.name }
             : m
         )
       );
@@ -105,17 +83,33 @@ export default function CreatePositionFollowUp() {
 
   const handleSave = async () => {
     try {
-      const res = await fetch(
-        `${API_URL}/results/process-results/${operation_id}/${position}`,
-        { method: "POST" }
-      );
+      const formData = new FormData();
 
-      if (!res.ok) {
-        throw new Error("Failed to save measurements");
+      for (const m of measurements) {
+        if (m.localFile) {
+          formData.append("files", {
+            uri: m.localFile.uri,
+            name: m.localFile.name,
+            type: m.localFile.mimeType || "application/octet-stream",
+          } as any);
+        }
       }
 
+      const res = await fetch(
+        `${API_URL}/results/process-results/${operation_id}/${position}`,
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
+
+      if (!res.ok) throw new Error("Processing failed");
+
       const data = await res.json();
-      Alert.alert("Success", `Measurements processed and saved (${data.results.length})`);
+      Alert.alert(
+        "Success",
+        `Measurements processed and saved (${data.results.length})`
+      );
       router.back();
     } catch (err) {
       console.error("Save error:", err);
@@ -182,7 +176,7 @@ export default function CreatePositionFollowUp() {
           <TouchableOpacity
             key={idx}
             style={styles.importButton}
-            onPress={() => handleImport(m.measurement_number, m.id)}
+            onPress={() => handleImport(m.measurement_number)}
           >
             {m.file_name ? (
               <>
