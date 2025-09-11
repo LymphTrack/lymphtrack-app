@@ -165,8 +165,7 @@ async def process_results(
             # Prepare and coerce numeric data, handling comma decimals
             freq_col = freq_cols[0]
             rl_col = rl_cols[0]
-            df_vals = df[[freq_col, rl_col]].astype(str)
-            df_vals = df_vals.applymap(lambda x: x.replace(',', '.'))
+            df_vals = df[[freq_col, rl_col]].astype(str).map(lambda x: x.replace(',', '.'))
             df_sub = df_vals.apply(pd.to_numeric, errors='coerce').dropna()
             if df_sub.empty:
                 logging.warning(f"Skipping {file.filename}: no numeric data after coercion")
