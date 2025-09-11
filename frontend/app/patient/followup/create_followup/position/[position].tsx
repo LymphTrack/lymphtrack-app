@@ -28,7 +28,7 @@ export default function CreatePositionFollowUp() {
 
   const loadMeasurements = async () => {
     try {
-      const res = await fetch(`${API_URL}/results/${operation_id}/${position}`);
+      const res = await fetch(`${API_URL}/results/${operation_id}${position}`);
       if (!res.ok) throw new Error("Failed to fetch measurements");
 
       const data = await res.json();
@@ -139,30 +139,13 @@ export default function CreatePositionFollowUp() {
           onPress={() => {
             Alert.alert(
               "Confirmation",
-              "Are you sure you want to leave this page without saving? All imported files will be deleted.",
+              "Are you sure you want to leave this page without saving? All imported files will be lost.",
               [
                 { text: "Cancel", style: "cancel" },
                 {
                   text: "Yes, leave",
                   style: "destructive",
                   onPress: async () => {
-                    try {
-                      const paths = measurements
-                        .filter((m) => m.file_path)
-                        .map((m) => m.file_path);
-
-                      if (paths.length > 0) {
-                        await fetch(`${API_URL}/results/delete-measurements`, {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify(paths),
-                        });
-                      }
-
-                    } catch (err) {
-                      console.error("Unexpected error while deleting files:", err);
-                    }
-
                     router.back();
                   },
                 },
