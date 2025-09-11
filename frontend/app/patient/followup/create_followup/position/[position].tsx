@@ -75,7 +75,7 @@ export default function CreatePositionFollowUp() {
         Alert.alert("Error", "File upload failed");
         return;
       }
-      
+
       setMeasurements((prev) =>
         prev.map((m) =>
           m.measurement_number === index
@@ -106,7 +106,7 @@ export default function CreatePositionFollowUp() {
   const handleSave = async () => {
     try {
       const res = await fetch(
-        `${API_URL}/process-results/${operation_id}/${position}`,
+        `${API_URL}/results/process-results/${operation_id}/${position}`,
         { method: "POST" }
       );
 

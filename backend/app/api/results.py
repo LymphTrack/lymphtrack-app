@@ -84,7 +84,7 @@ def delete_measurements(paths: list[str]):
         return {"status": "error", "message": str(e)}
 
 
-@router.post("/{id_operation}/{position}")
+@router.post("/process-results/{id_operation}/{position}")
 def process_results(id_operation: int, position: int, db: Session = Depends(get_db)):
     try:
         results = db.query(Result).filter(Result.id_operation == id_operation, Result.position == position).all()
