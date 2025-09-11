@@ -114,7 +114,7 @@ async def process_results(
             try:
                 if suffix == '.csv':
                     # Try direct read with header
-                    tmp = pd.read_csv(file, header=0, sep=None, engine='python')
+                    tmp = pd.read_csv(file.file, header=0, sep=None, engine='python')
                     cols = (tmp.columns.astype(str)
                         .str.strip()
                         .str.lower()
@@ -124,11 +124,11 @@ async def process_results(
                         df.columns = cols
                     else:
                         # Fallback: infer header in raw CSV
-                        raw = pd.read_csv(file, header=None, sep=None, engine='python')
+                        raw = pd.read_csv(file.file, header=None, sep=None, engine='python')
                         df = infer_header_and_data(raw, key_cols=['freq', 'returnloss'])
                 else:
                     # Excel: header row first
-                    tmp = pd.read_excel(file, header=0)
+                    tmp = pd.read_excel(file.file, header=0)
                     cols = (tmp.columns.astype(str)
                         .str.strip()
                         .str.lower()
@@ -137,7 +137,7 @@ async def process_results(
                         df = tmp.copy()
                         df.columns = cols
                     else:
-                        raw = pd.read_excel(file, header=None)
+                        raw = pd.read_excel(file.file, header=None)
                         df = infer_header_and_data(raw, key_cols=['freq', 'returnloss'])
             except Exception as e:
                 logging.warning(f"Skipping {file.filename}: read error: {e}")
