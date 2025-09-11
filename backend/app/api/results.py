@@ -49,7 +49,7 @@ async def upload_measurement(
 
         patient_id = operation.patient_id
 
-        visit_name_clean = operation.visit_name.replace(" ", "_")
+        visit_name_clean = operation.name.replace(" ", "_")
 
         visit_str = f"{operation.visit_number}_{visit_name_clean}_{operation.visit_date.strftime('%d%m%Y')}"
 
