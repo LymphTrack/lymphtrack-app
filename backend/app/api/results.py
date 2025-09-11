@@ -4,6 +4,7 @@ from app.db.models import Result, Operation
 from app.db.database import get_db
 
 import boto3, os
+import traceback
 import pandas as pd
 from botocore.config import Config
 from dotenv import load_dotenv
@@ -132,4 +133,5 @@ async def process_results(
         return {"status": "success", "results": processed_results}
 
     except Exception as e:
+        traceback.print_exc()   # 🔹 affiche la stack complète dans la console
         return {"status": "error", "message": str(e)}
