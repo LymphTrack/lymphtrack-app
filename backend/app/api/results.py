@@ -51,12 +51,27 @@ s3 = boto3.client(
 # -------------------------------
 @router.get("/{id_operation}/{position}")
 def get_results(id_operation: int, position: int, db: Session = Depends(get_db)):
-    return (
+    results = (
         db.query(Result)
         .filter(Result.id_operation == id_operation, Result.position == position)
         .order_by(Result.measurement_number.asc())
         .all()
     )
+
+    return [
+        {
+            "id": r.id,
+            "measurement_number": r.measurement_number,
+            "file_path": r.file_path,
+            "file_name": r.file_path.split("/")[-1] if r.file_path else None,
+            "min_return_loss_db": r.min_return_loss_db,
+            "min_frequency_hz": r.min_frequency_hz,
+            "bandwidth_hz": r.bandwidth_hz,
+            "uploaded_at": r.uploaded_at.isoformat() if r.uploaded_at else None,
+        }
+        for r in results
+    ]
+
 
 # -------------------------------
 # 🔹 Suppression fichiers du storage
