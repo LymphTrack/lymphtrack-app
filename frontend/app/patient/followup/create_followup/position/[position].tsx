@@ -75,7 +75,7 @@ export default function CreatePositionFollowUp() {
         Alert.alert("Error", "File upload failed");
         return;
       }
-
+      
       setMeasurements((prev) =>
         prev.map((m) =>
           m.measurement_number === index
@@ -176,11 +176,7 @@ export default function CreatePositionFollowUp() {
         <View style={{ width: 28 }} />
       </View>
 
-      {/* Content */}
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.infoText}>
-          Operation: {operation_id} | Position: {position}
-        </Text>
 
         {measurements.map((m, idx) => (
           <TouchableOpacity
@@ -278,7 +274,7 @@ const styles = StyleSheet.create({
     marginLeft: 10,
   },
   footer: {
-    padding: 20,
+    padding: 25,
     borderTopWidth: 1,
     borderTopColor: "#E5E7EB",
     backgroundColor: "#FFFFFF",
@@ -288,6 +284,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#6a90db",
     borderRadius: 12,
     paddingVertical: 16,
+    marginBottom : 15,
     alignItems: "center",
     justifyContent: "center",
   },
