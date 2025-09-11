@@ -73,7 +73,7 @@ class Operation(Base):
 class Result(Base):
     __tablename__ = "results"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True, index = True, autoincrement=True)
     id_operation = Column(Integer)
     position = Column(Integer)
     measurement_number = Column(Integer)
