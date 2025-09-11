@@ -49,9 +49,16 @@ async def upload_measurement(
 
         patient_id = operation.patient_id
 
-        visit_name_clean = operation.name.replace(" ", "_")
+        all_ops = (
+            db.query(Operation)
+            .filter(Operation.patient_id == patient_id)
+            .order_by(Operation.operation_date.asc())
+            .all()
+        )
 
-        visit_str = f"{operation.visit_number}_{visit_name_clean}_{operation.visit_date.strftime('%d%m%Y')}"
+        visit_number = {op.id_operation: idx + 1 for idx, op in enumerate(all_ops)}[operation.id_operation]
+        visit_name= operation.name.replace(" ", "_")
+        visit_str = f"{visit_number}_{visit_name}_{operation.operation_date.strftime('%d%m%Y')}"
 
         archive_path = f"{patient_id}/{visit_str}/{position}/{file.filename}"
 
