@@ -80,6 +80,9 @@ async def process_results(
     files: list[UploadFile] = File(...),
     db: Session = Depends(get_db),
 ):
+    
+    print("DEBUG nb files reçus:", len(files))
+
     try:
         operation = db.query(Operation).filter(Operation.id_operation == id_operation).first()
         if not operation:
@@ -105,6 +108,8 @@ async def process_results(
         for idx, file in enumerate(files, start=1):
             df = None
             suffix = file.filename.split(".")[-1].lower()
+
+            print(f"DEBUG processing file {file.filename}, suffix={suffix}")
 
             try:
                 if suffix == '.csv':
