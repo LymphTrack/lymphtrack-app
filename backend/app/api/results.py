@@ -188,12 +188,12 @@ async def process_results(
 
             # Sauvegarde en DB
             result = Result(
-                id_operation=id_operation,
-                position=position,
-                measurement_number=idx,
-                min_return_loss_db=min_rl,
-                min_frequency_hz=min_freq,
-                bandwidth_hz=bw,
+                id_operation=int(id_operation),
+                position=int(position),
+                measurement_number=int(idx),
+                min_return_loss_db=float(min_rl),
+                min_frequency_hz=int(min_freq),
+                bandwidth_hz=float(bw) if bw is not None and not pd.isna(bw) else None,
                 file_path=archive_path,
                 uploaded_at=datetime.now(timezone.utc),
             )
