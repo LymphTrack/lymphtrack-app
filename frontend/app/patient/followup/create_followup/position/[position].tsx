@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView, ActivityIndicator } from "react-native";
-import { ArrowLeft, FileUp, Plus, Save, Edit } from "lucide-react-native";
+import { ArrowLeft, FileUp, Plus, Save, Edit, Trash } from "lucide-react-native";
 import * as DocumentPicker from "expo-document-picker";
 import { API_URL } from "@/constants/api";
 import { useState, useCallback } from "react";
@@ -17,6 +17,7 @@ export default function CreatePositionFollowUp() {
   const [measurements, setMeasurements] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const maxMeasurements = 6;
 
@@ -129,6 +130,29 @@ export default function CreatePositionFollowUp() {
     }
   };
 
+  const handleDelete = async (index: number, filePath?: string) => {
+    try {
+      setDeleting(true);
+      if (filePath) {
+        const res = await fetch(`${API_URL}/results/delete-measurements`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ file_path: filePath }),
+        });
+
+        if (!res.ok) throw new Error("Failed to delete file from server");
+      }
+
+      setMeasurements((prev) => prev.filter((m) => m.measurement_number !== index));
+
+    } catch (err) {
+      console.error("Delete error:", err);
+      Alert.alert("Error", "Unable to delete measurement");
+      setDeleting(false);
+    }
+  };
+
+
   if (loading) {
     return (
       <View style={styles.loader}>
@@ -141,9 +165,24 @@ export default function CreatePositionFollowUp() {
     return (
       <View style={{ flex: 1, backgroundColor: "#FFFFFF", justifyContent: "center", alignItems: "center" }}>
         <ActivityIndicator size="large" color="#6a90db" />
+        <Text style={{ marginTop: 20, fontSize: 16, color: "#1F2937", textAlign: "center", paddingHorizontal: 30 }}>
+          Please do not close the app while your Excel files are being processed...
+        </Text>
       </View>
     );
   }
+
+  if (deleting) {
+    return (
+      <View style={{ flex: 1, backgroundColor: "#FFFFFF", justifyContent: "center", alignItems: "center" }}>
+        <ActivityIndicator size="large" color="#6a90db" />
+        <Text style={{ marginTop: 20, fontSize: 16, color: "#1F2937", textAlign: "center", paddingHorizontal: 30 }}>
+          Please do not close the app while your Excel files are being deleted...
+        </Text>
+      </View>
+    );
+  }
+
 
   return (
     <View style={styles.container}>
@@ -176,27 +215,33 @@ export default function CreatePositionFollowUp() {
       <ScrollView contentContainerStyle={styles.content}>
 
         {measurements.map((m, idx) => (
-          <TouchableOpacity
-            key={idx}
-            style={styles.importButton}
-            onPress={() => handleImport(m.measurement_number)}
-          >
-            {m.file_name ? (
-              <>
-                <Edit size={20} color="#FFFFFF" />
-                <Text style={styles.importText}>
-                  {m.file_name}
-                </Text>
-              </>
-            ) : (
-              <>
-                <FileUp size={20} color="#FFFFFF" />
-                <Text style={styles.importText}>
-                  Import Measurement {m.measurement_number}
-                </Text>
-              </>
-            )}
-          </TouchableOpacity>
+          <View key={idx} style={{ flexDirection: "row", alignItems: "center", gap : 10 }}>
+            <TouchableOpacity
+              style={[styles.importButton, { flex: 1 }]}
+              onPress={() => handleImport(m.measurement_number)}
+            >
+              {m.file_name ? (
+                <>
+                  <Edit size={20} color="#FFFFFF" />
+                  <Text style={styles.importText}>{m.file_name}</Text>
+                </>
+              ) : (
+                <>
+                  <FileUp size={20} color="#FFFFFF" />
+                  <Text style={styles.importText}>
+                    Import Measurement {m.measurement_number}
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.deleteButton}
+              onPress={() => handleDelete(m.measurement_number, m.file_path)}
+            >
+              <Trash size={20} color="#891111" />
+            </TouchableOpacity>
+          </View>
         ))}
 
         {measurements.length < maxMeasurements && (
@@ -209,6 +254,8 @@ export default function CreatePositionFollowUp() {
           </TouchableOpacity>
         )}
       </ScrollView>
+
+      
 
       <View style={styles.footer}>
         <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
@@ -270,6 +317,22 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginLeft: 10,
   },
+
+  deleteButton: {
+    backgroundColor: "#f38181ff", 
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal:10,
+    alignItems: "center",
+    marginTop: 10,
+    marginBottom : 25,
+  },
+  deleteButtonText: {
+    color: "#891111ff",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+
   footer: {
     padding: 25,
     borderTopWidth: 1,

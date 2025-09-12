@@ -76,11 +76,16 @@ def get_results(id_operation: int, position: int, db: Session = Depends(get_db))
 # 🔹 Suppression fichiers du storage
 # -------------------------------
 @router.post("/delete-measurements")
-def delete_measurements(paths: list[str]):
+def delete_measurements(payload: dict):
     try:
-        objects = [{"Key": p} for p in paths]
+        file_path = payload.get("file_path")
+        if not file_path:
+            return {"status": "error", "message": "No file_path provided"}
+
+        objects = [{"Key": file_path}]
         s3.delete_objects(Bucket=B2_BUCKET, Delete={"Objects": objects})
-        return {"status": "success", "deleted": paths}
+
+        return {"status": "success", "deleted": [file_path]}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
