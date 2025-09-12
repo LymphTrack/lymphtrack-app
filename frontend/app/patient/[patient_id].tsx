@@ -60,6 +60,7 @@ export default function PatientDetailScreen() {
 
   const handleExport = async () => {
     try {
+      console.log("patient id : " , patient_id)
       setExporting(true);
 
       const fileUri = FileSystem.documentDirectory + `patient_${patient_id}.zip`;

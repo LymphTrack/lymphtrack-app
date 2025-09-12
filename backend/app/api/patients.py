@@ -72,7 +72,7 @@ def update_patient(patient_id: str, updated_data: dict, db: Session = Depends(ge
     db.refresh(patient)
     return patient
 
-@router.get("/patients/export-folder/{patient_id}")
+@router.get("/export-folder/{patient_id}")
 def export_patient_folder(patient_id: str):
     try:
         # Préfixe = "dossier" du patient
