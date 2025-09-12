@@ -73,31 +73,45 @@ def update_patient(patient_id: str, updated_data: dict, db: Session = Depends(ge
     return patient
 
 @router.get("/patients/export-folder/{patient_id}")
-def export_patient_folder(patient_id: int, db: Session = Depends(get_db)):
+def export_patient_folder(patient_id: str):
     try:
-        prefix = f"patients/{patient_id}/"
+        # Préfixe = "dossier" du patient
+        prefix = f"{patient_id}/"
 
+        # Lister tous les fichiers sous ce préfixe
         objects = s3.list_objects_v2(Bucket=B2_BUCKET, Prefix=prefix)
 
-        if "Contents" not in objects:
-            return {"status": "error", "message": "No files found for this patient"}
+        if "Contents" not in objects or len(objects["Contents"]) == 0:
+            return {"status": "error", "message": f"No files found for {patient_id}"}
 
+        # Créer un buffer mémoire pour le zip
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zipf:
             for obj in objects["Contents"]:
                 key = obj["Key"]
+
+                # ignorer les "clés dossier"
+                if key.endswith("/"):
+                    continue  
+
+                # Récupérer le fichier depuis B2
                 file_obj = s3.get_object(Bucket=B2_BUCKET, Key=key)
                 file_data = file_obj["Body"].read()
-                zipf.writestr(key.replace(prefix, ""), file_data)
+
+                # Garder une structure propre dans le zip
+                arcname = key.replace(prefix, "")
+                zipf.writestr(arcname, file_data)
 
         zip_buffer.seek(0)
 
+        # Retourner le zip en téléchargement
         return Response(
             content=zip_buffer.read(),
             media_type="application/zip",
             headers={
-                "Content-Disposition": f"attachment; filename=patient_{patient_id}.zip"
+                "Content-Disposition": f"attachment; filename={patient_id}.zip"
             },
         )
+
     except Exception as e:
         return {"status": "error", "message": str(e)}

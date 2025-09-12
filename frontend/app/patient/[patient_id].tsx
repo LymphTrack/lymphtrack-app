@@ -4,7 +4,7 @@ import { ArrowLeft, MapPin,Notebook, Share } from "lucide-react-native";
 import { useState, useCallback } from "react";
 import { useFocusEffect } from "@react-navigation/native";
 import { API_URL } from "@/constants/api";
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 
 interface Patient {
@@ -28,6 +28,7 @@ export default function PatientDetailScreen() {
   const [patient, setPatient] = useState<Patient | null>(null);
   const [loading, setLoading] = useState(true);
   const [operations, setOperations] = useState<Operation[]>([]);
+  const [exporting, setExporting] = useState(false);
 
   const fetchPatient = async () => {
     try {
@@ -59,19 +60,33 @@ export default function PatientDetailScreen() {
 
   const handleExport = async () => {
     try {
-      const fileUri = (FileSystem as any).documentDirectory + `patient_${patient_id}.zip`;  
+      setExporting(true);
+
+      const fileUri = FileSystem.documentDirectory + `patient_${patient_id}.zip`;
+
       const res = await FileSystem.downloadAsync(
         `${API_URL}/patients/export-folder/${patient_id}`,
         fileUri
       );
 
-      if (res.status !== 200) throw new Error("Failed to download patient zip");
+      if (res.status !== 200) {
+        throw new Error("Failed to download patient zip");
+      }
 
-      await Sharing.shareAsync(res.uri);
+      // Vérifier que Sharing est dispo (iOS/Android uniquement)
+      const isAvailable = await Sharing.isAvailableAsync();
+      if (isAvailable) {
+        await Sharing.shareAsync(res.uri);
+      } else {
+        Alert.alert("Download complete", `Saved to ${res.uri}`);
+      }
 
+      console.log("Downloaded to:", res.uri);
     } catch (error) {
       console.error("Export error:", error);
       Alert.alert("Error", "Unable to export patient folder");
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -88,6 +103,17 @@ export default function PatientDetailScreen() {
     return (
       <View style={{ flex: 1, backgroundColor: "#FFFFFF", justifyContent: "center", alignItems: "center" }}>
         <ActivityIndicator size="large" color="#6a90db"/>
+      </View>
+    );
+  }
+
+  if (exporting) {
+    return (
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#FFF" }}>
+        <ActivityIndicator size="large" color="#2563EB" />
+        <Text style={{ marginTop: 20, fontSize: 16, color: "#1F2937", textAlign: "center", paddingHorizontal: 30 }}>
+          Exporting patient folder... Please do not close the app.
+        </Text>
       </View>
     );
   }
