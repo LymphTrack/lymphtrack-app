@@ -16,6 +16,8 @@ export default function CreatePositionFollowUp() {
 
   const [measurements, setMeasurements] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
   const maxMeasurements = 6;
 
   useFocusEffect(
@@ -28,7 +30,7 @@ export default function CreatePositionFollowUp() {
 
   const loadMeasurements = async () => {
     try {
-      const res = await fetch(`${API_URL}/results/${operation_id}${position}`);
+      const res = await fetch(`${API_URL}/results/${operation_id}/${position}`);
       if (!res.ok) throw new Error("Failed to fetch measurements");
 
       const data = await res.json();
@@ -83,6 +85,7 @@ export default function CreatePositionFollowUp() {
 
   const handleSave = async () => {
     try {
+      setSaving(true);
       const formData = new FormData();
 
       for (const m of measurements) {
@@ -121,12 +124,22 @@ export default function CreatePositionFollowUp() {
     } catch (err) {
       console.error("Save error:", err);
       Alert.alert("Error", "Unable to save measurements");
+    } finally {
+    setSaving(false);
     }
   };
 
   if (loading) {
     return (
       <View style={styles.loader}>
+        <ActivityIndicator size="large" color="#6a90db" />
+      </View>
+    );
+  }
+
+  if (saving) {
+    return (
+      <View style={{ flex: 1, backgroundColor: "#FFFFFF", justifyContent: "center", alignItems: "center" }}>
         <ActivityIndicator size="large" color="#6a90db" />
       </View>
     );
@@ -203,7 +216,7 @@ export default function CreatePositionFollowUp() {
           <Text style={styles.saveButtonText}>Save Measurements</Text>
         </TouchableOpacity>
       </View>
-    </View>
+    </View> 
   );
 }
 

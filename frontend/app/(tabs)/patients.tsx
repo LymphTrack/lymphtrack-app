@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useFocusEffect } from "@react-navigation/native";
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, TextInput } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, TextInput , ActivityIndicator} from 'react-native';
 import { useRouter } from 'expo-router';
 import { Search, Plus,MapPin, Trash  } from 'lucide-react-native';
 import { Alert } from "react-native";

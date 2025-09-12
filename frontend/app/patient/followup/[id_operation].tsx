@@ -114,7 +114,7 @@ export default function PatientResultsScreen() {
                 style={styles.modifyButton}
                 onPress={() =>
                   router.push(
-                    `/patient/followup/create_followup/position/${position}?operation_id=${operation.id_operation}/`
+                    `/patient/followup/create_followup/position/${position}?operation_id=${operation.id_operation}`
                   )
                 }
               >

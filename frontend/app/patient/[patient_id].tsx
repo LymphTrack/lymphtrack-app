@@ -66,8 +66,8 @@ export default function PatientDetailScreen() {
 
   if (loading) {
     return (
-      <View style={styles.container}>
-        <ActivityIndicator size="large" color="#6a90db" style={{ marginTop: 50 }} />
+      <View style={{ flex: 1, backgroundColor: "#FFFFFF", justifyContent: "center", alignItems: "center" }}>
+        <ActivityIndicator size="large" color="#6a90db"/>
       </View>
     );
   }
