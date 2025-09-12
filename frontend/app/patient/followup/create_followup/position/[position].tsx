@@ -148,8 +148,8 @@ export default function CreatePositionFollowUp() {
     } catch (err) {
       console.error("Delete error:", err);
       Alert.alert("Error", "Unable to delete measurement");
-      setDeleting(false);
     }
+    setDeleting(false);
   };
 
 

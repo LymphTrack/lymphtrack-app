@@ -76,17 +76,33 @@ def get_results(id_operation: int, position: int, db: Session = Depends(get_db))
 # 🔹 Suppression fichiers du storage
 # -------------------------------
 @router.post("/delete-measurements")
-def delete_measurements(payload: dict):
+def delete_measurements(payload: dict, db: Session = Depends(get_db)):
     try:
         file_path = payload.get("file_path")
         if not file_path:
             return {"status": "error", "message": "No file_path provided"}
 
+        # 1) Suppression dans le storage Backblaze
         objects = [{"Key": file_path}]
         s3.delete_objects(Bucket=B2_BUCKET, Delete={"Objects": objects})
 
+        # 2) Suppression dans la table results
+        result = (
+            db.query(Result)
+            .filter(Result.file_path == file_path)
+            .first()
+        )
+
+        if result:
+            db.delete(result)
+            db.commit()
+        else:
+            return {"status": "error", "message": f"No DB record found for {file_path}"}
+
         return {"status": "success", "deleted": [file_path]}
+
     except Exception as e:
+        db.rollback()
         return {"status": "error", "message": str(e)}
 
 # -------------------------------
