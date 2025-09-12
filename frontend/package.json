@@ -58,7 +58,8 @@
     "react-native-webview": "13.13.5",
     "victory-native": "^41.19.3",
     "xlsx": "^0.18.5",
-    "yup": "^1.7.0"
+    "yup": "^1.7.0",
+    "expo-sharing": "~13.1.5"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

@@ -1,9 +1,11 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView } from "react-native";
-import { ArrowLeft, MapPin,Notebook } from "lucide-react-native";
-import { useEffect, useState, useCallback } from "react";
+import { View, Text, StyleSheet, Alert, TouchableOpacity, ActivityIndicator, ScrollView } from "react-native";
+import { ArrowLeft, MapPin,Notebook, Share } from "lucide-react-native";
+import { useState, useCallback } from "react";
 import { useFocusEffect } from "@react-navigation/native";
 import { API_URL } from "@/constants/api";
+import * as FileSystem from "expo-file-system";
+import * as Sharing from "expo-sharing";
 
 interface Patient {
   patient_id: string;
@@ -52,6 +54,25 @@ export default function PatientDetailScreen() {
       );
     } catch (error) {
       console.error("Erreur op:", error);
+    }
+  };
+
+  const handleExport = async () => {
+    try {
+      const fileUri = FileSystem.documentDirectory + `patient_${patient_id}.zip`;
+
+      const res = await FileSystem.downloadAsync(
+        `${API_URL}/patients/export-folder/${patient_id}`,
+        fileUri
+      );
+
+      if (res.status !== 200) throw new Error("Failed to download patient zip");
+
+      await Sharing.shareAsync(res.uri);
+
+    } catch (error) {
+      console.error("Export error:", error);
+      Alert.alert("Error", "Unable to export patient folder");
     }
   };
 
@@ -166,6 +187,14 @@ export default function PatientDetailScreen() {
           <Text style={styles.addFollowUpButtonText}>Add Follow-Up</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      <View style={styles.footer}>
+        <TouchableOpacity style={styles.exportButton} onPress={handleExport}>
+          <Share size={20} color="#FFFFFF" />
+          <Text style={styles.exportButtonText}>Export Patient Folder</Text>
+        </TouchableOpacity>
+      </View>
+
     </View>
   );
 }
@@ -282,5 +311,27 @@ const styles = StyleSheet.create({
     color: '#2563EB',
     fontSize: 16,
     fontWeight: '600',
+  },
+
+   footer: {
+    padding: 25,
+    borderTopWidth: 1,
+    borderTopColor: "#E5E7EB",
+    backgroundColor: "#FFFFFF",
+  },
+  exportButton: {
+    flexDirection: "row",
+    backgroundColor: "#6a90db",
+    borderRadius: 12,
+    paddingVertical: 16,
+    marginBottom : 15,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  exportButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "600",
+    marginLeft: 8,
   },
 });
