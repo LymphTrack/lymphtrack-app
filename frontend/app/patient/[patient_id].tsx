@@ -59,8 +59,7 @@ export default function PatientDetailScreen() {
 
   const handleExport = async () => {
     try {
-      const fileUri = FileSystem.documentDirectory + `patient_${patient_id}.zip`;
-
+      const fileUri = (FileSystem as any).documentDirectory + `patient_${patient_id}.zip`;  
       const res = await FileSystem.downloadAsync(
         `${API_URL}/patients/export-folder/${patient_id}`,
         fileUri
