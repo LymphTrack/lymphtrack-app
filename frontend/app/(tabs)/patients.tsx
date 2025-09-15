@@ -20,7 +20,7 @@ interface Patient {
 export default function PatientsScreen() {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const router = useRouter();            
 
   useFocusEffect(
@@ -31,6 +31,7 @@ export default function PatientsScreen() {
 
   const loadPatients = async () => {
     try {
+      setLoading(true);
       const res = await fetch(`${API_URL}/patients/`);
       if (!res.ok) {
         throw new Error("Failed to fetch patients");
@@ -150,6 +151,16 @@ export default function PatientsScreen() {
 
     </TouchableOpacity>
   );
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: "#FFFFFF", justifyContent: "center", alignItems: "center" }}>
+        <ActivityIndicator size="large" color="#6a90db" />
+        <Text style={{ marginTop: 20, fontSize: 16, color: "#1F2937", textAlign: "center", paddingHorizontal: 30 }}>
+        </Text>
+      </View>
+    );
+  }  
 
   return (
     <View style={styles.container}>

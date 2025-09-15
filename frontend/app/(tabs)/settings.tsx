@@ -1,7 +1,7 @@
 import React, { useState, useCallback} from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
-import { User, LogOut, ChevronRight, Mail, Briefcase, Building, Lock , ShieldCheck, ScrollText, Download} from 'lucide-react-native';
+import { User, LogOut, ChevronRight, Mail, Briefcase, Building, Lock , ShieldCheck, ScrollText, } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { useFocusEffect } from "@react-navigation/native";
 import { API_URL } from "@/constants/api";
@@ -16,7 +16,7 @@ interface UserProfile {
 
 export default function SettingsScreen() {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
 
   useFocusEffect(
@@ -27,6 +27,7 @@ export default function SettingsScreen() {
 
   const loadUserProfile = async () => {
   try {
+    setLoading(true);
     const { data: { user }, error: userError } = await supabase.auth.getUser();
 
     if (userError || !user) {
@@ -99,6 +100,16 @@ export default function SettingsScreen() {
       {showChevron && <ChevronRight size={20} color="#6B7280" />}
     </TouchableOpacity>
   );
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: "#FFFFFF", justifyContent: "center", alignItems: "center" }}>
+        <ActivityIndicator size="large" color="#6a90db" />
+        <Text style={{ marginTop: 20, fontSize: 16, color: "#1F2937", textAlign: "center", paddingHorizontal: 30 }}>
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -201,13 +212,6 @@ export default function SettingsScreen() {
             subtitle="Read our usage guidelines"
             onPress={() => router.push("../setting/security/terms_of_use")}
           />
-
-          <SettingItem
-            icon={Download}
-            title="Export Data"
-            subtitle="Download patient records"
-            onPress={() => Alert.alert("Export Data", "Feature coming soon")}
-          />
         </View>
 
         <View style={styles.section}>
@@ -222,11 +226,6 @@ export default function SettingsScreen() {
             <Text style={styles.infoLabel}>Build</Text>
             <Text style={styles.infoValue}>2025.08.28</Text>
           </View>
-          
-          <View style={styles.infoItem}>
-            <Text style={styles.infoLabel}>HIPAA Compliant</Text>
-            <Text style={[styles.infoValue, { color: '#2563EB' }]}>Yes</Text>
-          </View>
         </View>
 
         <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
@@ -234,12 +233,6 @@ export default function SettingsScreen() {
           <Text style={styles.signOutText}>Sign Out</Text>
         </TouchableOpacity>
 
-        <View style={styles.disclaimer}>
-          <Text style={styles.disclaimerText}>
-            LymphTrack is designed for medical professionals. All patient data is handled in 
-            accordance with HIPAA regulations and medical data protection standards.
-          </Text>
-        </View>
       </ScrollView>
     </View>
   );
@@ -399,6 +392,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 4,
+    marginBottom : 20,
   },
   signOutText: {
     fontSize: 16,

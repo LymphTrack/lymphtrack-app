@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView } from "react-native";
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView, ActivityIndicator } from "react-native";
 import { ArrowLeft } from "lucide-react-native";
 import { useRouter } from "expo-router";
 import { supabase } from "@/lib/supabase";
@@ -10,7 +10,7 @@ export default function ModifyAccountScreen() {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("");
   const [institution, setInstitution] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -19,6 +19,7 @@ export default function ModifyAccountScreen() {
 
   const loadUserProfile = async () => {
     try {
+      setLoading(true);
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
@@ -88,11 +89,38 @@ export default function ModifyAccountScreen() {
     }
   };
 
+  const handleBack = () => {
+    Alert.alert(
+      'Unsaved Changes',
+      'If you leave now, your modifications will not be saved. Do you want to continue?',
+      [
+        { text: 'Stay', style: 'cancel' },
+        {
+          text: 'Leave',
+          style: 'destructive',
+          onPress: () => {
+            router.push('../../(tabs)/settings');
+          },
+        },
+      ]
+    );
+  };
+
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: "#FFFFFF", justifyContent: "center", alignItems: "center" }}>
+        <ActivityIndicator size="large" color="#6a90db" />
+        <Text style={{ marginTop: 20, fontSize: 16, color: "#1F2937", textAlign: "center", paddingHorizontal: 30 }}>
+        </Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
+        <TouchableOpacity onPress={handleBack}>
           <ArrowLeft size={24} color="#1F2937" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Modify Account</Text>
@@ -146,11 +174,8 @@ export default function ModifyAccountScreen() {
         <TouchableOpacity
           style={[styles.saveButton, loading && { backgroundColor: "#9CA3AF" }]}
           onPress={handleSave}
-          disabled={loading}
         >
-          <Text style={styles.saveButtonText}>
-            {loading ? "Saving..." : "Save Changes"}
-          </Text>
+          <Text style={styles.saveButtonText}>Save Changes</Text>
         </TouchableOpacity>
       </ScrollView>
     </View>
