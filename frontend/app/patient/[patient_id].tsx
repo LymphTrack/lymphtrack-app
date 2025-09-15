@@ -60,7 +60,6 @@ export default function PatientDetailScreen() {
 
   const handleExport = async () => {
     try {
-      console.log("patient id : " , patient_id)
       setExporting(true);
 
       const fileUri = FileSystem.documentDirectory + `patient_${patient_id}.zip`;
@@ -74,15 +73,12 @@ export default function PatientDetailScreen() {
         throw new Error("Failed to download patient zip");
       }
 
-      // Vérifier que Sharing est dispo (iOS/Android uniquement)
       const isAvailable = await Sharing.isAvailableAsync();
       if (isAvailable) {
         await Sharing.shareAsync(res.uri);
       } else {
         Alert.alert("Download complete", `Saved to ${res.uri}`);
       }
-
-      console.log("Downloaded to:", res.uri);
     } catch (error) {
       console.error("Export error:", error);
       Alert.alert("Error", "Unable to export patient folder");
