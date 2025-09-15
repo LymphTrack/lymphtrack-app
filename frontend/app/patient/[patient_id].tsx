@@ -119,7 +119,7 @@ export default function PatientDetailScreen() {
     return (
       <View style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()}>
+          <TouchableOpacity onPress={() => router.push('../(tabs)/patients')}>
             <ArrowLeft size={28} color="#1F2937" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Patient not found</Text>

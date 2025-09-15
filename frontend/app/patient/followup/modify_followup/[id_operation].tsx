@@ -7,9 +7,10 @@ import {
   StyleSheet,
   Alert,
   ScrollView,
+  ActivityIndicator
 } from "react-native";
 import { ArrowLeft } from "lucide-react-native";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useRouter, useLocalSearchParams,  } from "expo-router";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { API_URL } from "@/constants/api";
 
@@ -18,7 +19,7 @@ export default function ModifyFollowUpScreen() {
   const [name, setName] = useState("");
   const [date, setDate] = useState(new Date());
   const [notes, setNotes] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
 
   const router = useRouter();
@@ -28,6 +29,7 @@ export default function ModifyFollowUpScreen() {
   }, [id_operation]);
 
   const loadFollowUp = async () => {
+    setLoading(true);
     try {
       const res = await fetch(`${API_URL}/operations/${id_operation}`);
       if (!res.ok) throw new Error("Failed to fetch follow-up");
@@ -73,20 +75,28 @@ export default function ModifyFollowUpScreen() {
     }
   };
 
+  if (loading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: "#FFFFFF", justifyContent: "center", alignItems: "center" }}>
+        <ActivityIndicator size="large" color="#6a90db" />
+        <Text style={{ marginTop: 20, fontSize: 16, color: "#1F2937", textAlign: "center", paddingHorizontal: 30 }}>
+        </Text>
+      </View>
+    );
+  }
+
+
   return (
     <View style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
+        <TouchableOpacity onPress={() => router.push(`../${id_operation}`)}>
           <ArrowLeft size={24} color="#1F2937" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Modify Follow-Up</Text>
         <View style={{ width: 24 }} />
       </View>
 
-      {/* Form */}
       <ScrollView contentContainerStyle={styles.form}>
-        {/* Name */}
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Follow-Up Name</Text>
           <TextInput
@@ -97,7 +107,6 @@ export default function ModifyFollowUpScreen() {
           />
         </View>
 
-        {/* Date */}
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Date</Text>
           <TouchableOpacity
@@ -119,7 +128,6 @@ export default function ModifyFollowUpScreen() {
           )}
         </View>
 
-        {/* Notes */}
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Notes</Text>
           <TextInput
@@ -131,14 +139,11 @@ export default function ModifyFollowUpScreen() {
           />
         </View>
 
-        {/* Save Button */}
         <TouchableOpacity
           style={[styles.saveButton, loading && { backgroundColor: "#9CA3AF" }]}
           onPress={handleSave}
-          disabled={loading}
         >
-          <Text style={styles.saveButtonText}>
-            {loading ? "Saving..." : "Save Changes"}
+          <Text style={styles.saveButtonText}>Save Changes
           </Text>
         </TouchableOpacity>
       </ScrollView>

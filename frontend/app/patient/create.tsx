@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ArrowLeft,User, Weight} from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
@@ -143,10 +143,21 @@ export default function CreatePatientScreen() {
     </View>
   );
 
+  if (loading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: "#FFFFFF", justifyContent: "center", alignItems: "center" }}>
+        <ActivityIndicator size="large" color="#6a90db" />
+        <Text style={{ marginTop: 20, fontSize: 16, color: "#1F2937", textAlign: "center", paddingHorizontal: 30 }}>
+          Creating Patient ...
+        </Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
+        <TouchableOpacity onPress={() => router.push('../(tabs)/patients')}>
           <ArrowLeft size={24} color="#1F2937" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>New Patient</Text>
@@ -257,11 +268,8 @@ export default function CreatePatientScreen() {
         <TouchableOpacity
           style={[styles.submitButton, loading && styles.submitButtonDisabled]}
           onPress={handleSubmit}
-          disabled={loading}
         >
-          <Text style={styles.submitButtonText}>
-            {loading ? 'Creating Patient...' : 'Create Patient'}
-          </Text>
+          <Text style={styles.submitButtonText}>Create Patient</Text>
         </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>

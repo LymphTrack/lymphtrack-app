@@ -7,6 +7,7 @@ import {
   ScrollView,
   Alert,
   TextInput,
+  ActivityIndicator
 } from "react-native";
 import { ArrowLeft, Calendar, ClipboardList, Save, FileUp } from "lucide-react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
@@ -20,6 +21,7 @@ export default function CreateFollowUp() {
   const [name, setName] = useState("");
   const [date, setDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     notes: "",
     noteHeight: 100, 
@@ -31,6 +33,7 @@ export default function CreateFollowUp() {
       return;
     }
 
+    setLoading(true);
     try {
       const res = await fetch(`${API_URL}/operations/`, {
         method: "POST",
@@ -60,17 +63,45 @@ export default function CreateFollowUp() {
             ),
         },
       ]);
+      setLoading(false);
     } catch (err) {
       console.error("Error:", err);
       Alert.alert("Error", "An error occurred while saving");
     }
   };
 
+  const handleBack = () => {
+    Alert.alert(
+      'Unsaved Changes',
+      'If you leave now, your modifications will not be saved. Do you want to continue?',
+      [
+        { text: 'Stay', style: 'cancel' },
+        {
+          text: 'Leave',
+          style: 'destructive',
+          onPress: () => {
+            router.push(`../../${patient_id}`);
+          },
+        },
+      ]
+    );
+  };
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: "#FFFFFF", justifyContent: "center", alignItems: "center" }}>
+        <ActivityIndicator size="large" color="#6a90db" />
+        <Text style={{ marginTop: 20, fontSize: 16, color: "#1F2937", textAlign: "center", paddingHorizontal: 30 }}>
+        </Text>
+      </View>
+    );
+  }
+
+
   return (
     <View style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
+        <TouchableOpacity onPress={handleBack}>
           <ArrowLeft size={24} color="#1F2937" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Add Follow-Up</Text>
@@ -78,7 +109,6 @@ export default function CreateFollowUp() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Nom de la visite */}
         <View style={styles.card}>
           <Text style={styles.label}>Follow-up Name</Text>
           <View style={styles.inputRow}>
@@ -92,7 +122,6 @@ export default function CreateFollowUp() {
           </View>
         </View>
 
-        {/* Date */}
         <View style={styles.card}>
           <Text style={styles.label}>Date</Text>
           <TouchableOpacity

@@ -1,4 +1,4 @@
-import { Tabs } from 'expo-router';
+import { Tabs, Stack } from 'expo-router';
 import { Users, Settings, BarChart3 } from 'lucide-react-native';
 
 export default function TabLayout() {

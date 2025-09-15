@@ -3,8 +3,6 @@ from sqlalchemy.orm import Session
 from app.db.models import Operation, Result
 from app.db.database import get_db
 
-import boto3, os
-
 router = APIRouter()
 
 @router.get("/by_patient/{patient_id}")
@@ -34,9 +32,12 @@ def delete_operation(id_operation: int, db: Session = Depends(get_db)):
     op = db.query(Operation).filter(Operation.id_operation == id_operation).first()
     if not op:
         raise HTTPException(status_code=404, detail="Operation not found")
+    
+    patient_id = op.id_patient
     db.delete(op)
     db.commit()
-    return {"message": "Operation deleted successfully"}
+    return {"message": "Operation deleted successfully",
+            "patient_id" : patient_id}
 
 @router.put("/{id_operation}")
 def update_operation(id_operation: int, updated_data: dict, db: Session = Depends(get_db)):

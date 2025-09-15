@@ -61,9 +61,11 @@ export default function PatientResultsScreen() {
                 Alert.alert("Error", errData.detail || "Unable to delete the operation");
                 return;
               }
-
-              Alert.alert("Success", "Operation deleted successfully");
-              router.back();
+              
+              const data = await res.json();
+              Alert.alert("Success", data.message || "Operation deleted successfully");
+              
+              router.push(`../${data.patient_id}`);
             } catch (err) {
               console.error("Unexpected error:", err);
               Alert.alert("Error", "Something went wrong during deletion");

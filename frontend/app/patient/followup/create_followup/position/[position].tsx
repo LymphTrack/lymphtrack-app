@@ -198,7 +198,7 @@ export default function CreatePositionFollowUp() {
                   text: "Yes, leave",
                   style: "destructive",
                   onPress: async () => {
-                    router.back();
+                    router.push(`../../${operation_id}`);
                   },
                 },
               ]

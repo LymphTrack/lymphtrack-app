@@ -1,6 +1,6 @@
 import React, { useState, useCallback} from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter} from 'expo-router';
 import { User, LogOut, ChevronRight, Mail, Briefcase, Building, Lock , ShieldCheck, ScrollText, } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { useFocusEffect } from "@react-navigation/native";

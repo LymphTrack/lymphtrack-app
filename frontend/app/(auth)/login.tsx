@@ -106,11 +106,6 @@ export default function LoginScreen() {
             {loading ? 'Signing In...' : 'Sign In'}
           </Text>
         </TouchableOpacity>
-
-        <Text style={styles.disclaimer}>
-          This application handles sensitive medical data. By logging in, you agree to maintain
-          patient confidentiality in accordance with HIPAA regulations.
-        </Text>
       </View>
     </View>
   );

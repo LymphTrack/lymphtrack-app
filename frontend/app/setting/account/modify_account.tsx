@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView, ActivityIndicator } from "react-native";
 import { ArrowLeft } from "lucide-react-native";
-import { useRouter } from "expo-router";
+import { useRouter} from "expo-router";
 import { supabase } from "@/lib/supabase";
 import {API_URL} from "@/constants/api"
 
@@ -118,6 +118,7 @@ export default function ModifyAccountScreen() {
   }
 
   return (
+    
     <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={handleBack}>

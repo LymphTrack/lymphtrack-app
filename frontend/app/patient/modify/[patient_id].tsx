@@ -133,7 +133,7 @@ export default function ModifyPatientScreen() {
       }
 
       Alert.alert("Success", "Patient updated successfully!");
-      router.back();
+      router.push(`../${patient_id}`);
     } catch (err) {
       console.error("Error:", err);
       Alert.alert("Error", "Unexpected error occurred");
@@ -141,6 +141,24 @@ export default function ModifyPatientScreen() {
       setLoading(false);
     }
   };
+
+  const handleBack = () => {
+    Alert.alert(
+      'Unsaved Changes',
+      'If you leave now, your modifications will not be saved. Do you want to continue?',
+      [
+        { text: 'Stay', style: 'cancel' },
+        {
+          text: 'Leave',
+          style: 'destructive',
+          onPress: () => {
+            router.push(`../${patient_id}`);
+          },
+        },
+      ]
+    );
+  };
+
 
   if (loading) {
     return (
@@ -184,9 +202,8 @@ export default function ModifyPatientScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
+        <TouchableOpacity onPress={handleBack}>
           <ArrowLeft size={24} color="#1F2937" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Modify Patient {patient_id}</Text>
@@ -256,12 +273,10 @@ export default function ModifyPatientScreen() {
         <TouchableOpacity
           style={[styles.saveButton, loading && { backgroundColor: "#9CA3AF" }]}
           onPress={handleSave}
-          disabled={loading}
         >
           <View style={{ flexDirection: "row", alignItems: "center" }}>
             <Save size={16} color="#2563EB" style={{ marginRight: 8 }} />
-              <Text style={styles.saveButtonText}>
-                {loading ? "Saving..." : "Save Changes"}
+              <Text style={styles.saveButtonText}>Save Changes
               </Text>
           </View>
         </TouchableOpacity>
