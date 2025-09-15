@@ -85,9 +85,6 @@ def create_patient(patient: dict, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(new_patient)
 
-    folder_key = f"{patient['patient_id']}/"
-    s3.put_object(Bucket=B2_BUCKET, Key=folder_key)
-
     return new_patient
 
 @router.get("/{patient_id}")

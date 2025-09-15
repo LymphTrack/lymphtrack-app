@@ -159,25 +159,10 @@ def create_operation(op_data: dict = Body(...), db: Session = Depends(get_db)):
 
         patient_id = new_op.patient_id
         
-        all_ops = (
-            db.query(Operation)
-            .filter(Operation.patient_id == patient_id)
-            .order_by(Operation.operation_date.asc())
-            .all()
-        )
-        visit_number = {op.id_operation: idx + 1 for idx, op in enumerate(all_ops)}[new_op.id_operation]
-
-        visit_name = new_op.name.replace(" ", "_")
-        visit_str = f"{visit_number}_{visit_name}_{new_op.operation_date.strftime('%d%m%Y')}"
-
-        for pos in range(1, 7):
-            folder_key = f"{patient_id}/{visit_str}/{pos}/"
-            s3.put_object(Bucket=B2_BUCKET, Key=folder_key)
-
         return {
             "status": "success",
             "operation": new_op,
-            "visit_folder": f"{patient_id}/{visit_str}/"
+            "patient_id" : patient_id,
         }
 
     except Exception as e:

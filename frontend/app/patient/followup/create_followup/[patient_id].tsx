@@ -155,9 +155,9 @@ export default function CreateFollowUp() {
                 style={[
                   styles.input,
                   {
-                    minHeight: 100,
+                    minHeight: formData.noteHeight, 
                     textAlignVertical: "top",
-                    padding : 10,
+                    padding: 10,
                   },
                 ]}
                 multiline
@@ -167,12 +167,10 @@ export default function CreateFollowUp() {
                 onChangeText={(text) =>
                   setFormData((prev) => ({ ...prev, notes: text }))
                 }
-                onContentSizeChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    noteHeight: e.nativeEvent.contentSize.height,
-                  }))
-                }
+                onContentSizeChange={({ nativeEvent }) => {
+                  const height = nativeEvent?.contentSize?.height || 100;
+                  setFormData((prev) => ({ ...prev, noteHeight: height }));
+                }}
               />
             </View>
           </View>
