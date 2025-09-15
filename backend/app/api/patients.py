@@ -31,12 +31,48 @@ def get_patients(db: Session = Depends(get_db)):
 
 @router.delete("/{patient_id}")
 def delete_patient(patient_id: str, db: Session = Depends(get_db)):
-    patient = db.query(models.SickPatient).filter(models.SickPatient.patient_id == patient_id).first()
+    patient = (
+        db.query(models.SickPatient)
+        .filter(models.SickPatient.patient_id == patient_id)
+        .first()
+    )
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
+
     db.delete(patient)
     db.commit()
-    return {"message": "Patient deleted successfully"}
+
+    prefix = f"{patient_id}/"
+    try:
+        continuation_token = None
+        deleted_files = []
+
+        while True:
+            if continuation_token:
+                response = s3.list_objects_v2(
+                    Bucket=B2_BUCKET, Prefix=prefix, ContinuationToken=continuation_token
+                )
+            else:
+                response = s3.list_objects_v2(Bucket=B2_BUCKET, Prefix=prefix)
+
+            if "Contents" in response:
+                delete_keys = [{"Key": obj["Key"]} for obj in response["Contents"]]
+                deleted_files.extend([obj["Key"] for obj in response["Contents"]])
+
+                s3.delete_objects(Bucket=B2_BUCKET, Delete={"Objects": delete_keys})
+
+            if response.get("IsTruncated"):
+                continuation_token = response.get("NextContinuationToken")
+            else:
+                break
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error deleting files: {str(e)}")
+
+    return {
+        "message": f"Patient {patient_id} deleted successfully",
+        "deleted_files": deleted_files,
+    }
 
 @router.post("/")
 def create_patient(patient: dict, db: Session = Depends(get_db)):
@@ -48,6 +84,10 @@ def create_patient(patient: dict, db: Session = Depends(get_db)):
     db.add(new_patient)
     db.commit()
     db.refresh(new_patient)
+
+    folder_key = f"{patient['patient_id']}/"
+    s3.put_object(Bucket=B2_BUCKET, Key=folder_key)
+
     return new_patient
 
 @router.get("/{patient_id}")

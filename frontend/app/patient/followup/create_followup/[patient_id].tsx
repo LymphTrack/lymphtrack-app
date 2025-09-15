@@ -177,20 +177,6 @@ export default function CreateFollowUp() {
             </View>
           </View>
         </View>
-
-        <View style={styles.card}>
-          <Text style={styles.label}>Importer Photos (En construction)</Text>
-          <TouchableOpacity
-            style={[styles.importButton, { justifyContent: "center" }]}
-            onPress={() => Alert.alert("Info", "La fonctionnalité Importer Photos est en construction")}
-          >
-            <FileUp size={18} color="#9CA3AF" />
-            <Text style={[styles.importText, { color: "#9CA3AF" }]}>
-              Importer des photos (bientôt disponible)
-            </Text>
-          </TouchableOpacity>
-        </View>
-
         <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
           <Text style={styles.saveButtonText}>Next</Text>
         </TouchableOpacity>

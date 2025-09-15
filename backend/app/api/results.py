@@ -16,9 +16,6 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# -------------------------------
-# 🔹 Helper pour détecter la ligne d'entête
-# -------------------------------
 def infer_header_and_data(raw_df, key_cols, max_header_row=10):
     for idx in range(min(max_header_row, len(raw_df))):
         header = raw_df.iloc[idx].astype(str)
@@ -29,9 +26,6 @@ def infer_header_and_data(raw_df, key_cols, max_header_row=10):
             return df
     return None
 
-# -------------------------------
-# 🔹 Config S3
-# -------------------------------
 load_dotenv()
 B2_ENDPOINT = os.getenv("ENDPOINT_URL_YOUR_BUCKET")
 B2_KEY_ID = os.getenv("KEY_ID_YOUR_ACCOUNT")
@@ -46,9 +40,6 @@ s3 = boto3.client(
     config=Config(signature_version="s3v4"),
 )
 
-# -------------------------------
-# 🔹 Récupération des résultats
-# -------------------------------
 @router.get("/{id_operation}/{position}")
 def get_results(id_operation: int, position: int, db: Session = Depends(get_db)):
     results = (
@@ -71,10 +62,6 @@ def get_results(id_operation: int, position: int, db: Session = Depends(get_db))
         for r in results
     ]
 
-
-# -------------------------------
-# 🔹 Suppression fichiers du storage
-# -------------------------------
 @router.post("/delete-measurements")
 def delete_measurements(payload: dict, db: Session = Depends(get_db)):
     try:
@@ -82,19 +69,20 @@ def delete_measurements(payload: dict, db: Session = Depends(get_db)):
         if not file_path:
             return {"status": "error", "message": "No file_path provided"}
 
-        # 1) Suppression dans le storage Backblaze
-        objects = [{"Key": file_path}]
-        s3.delete_objects(Bucket=B2_BUCKET, Delete={"Objects": objects})
+        try:
+            s3.head_object(Bucket=B2_BUCKET, Key=file_path)
+            s3.delete_object(Bucket=B2_BUCKET, Key=file_path)
+        except s3.exceptions.ClientError as e:
+            if e.response["Error"]["Code"] == "404":
+                print(f"[INFO] File {file_path} not found in bucket, skipping deletion")
+            else:
+                raise
 
-        # 2) Suppression dans la table results
-        result = (
-            db.query(Result)
-            .filter(Result.file_path == file_path)
-            .first()
-        )
+        results = db.query(Result).filter(Result.file_path == file_path).all()
 
-        if result:
-            db.delete(result)
+        if results:
+            for r in results:
+                db.delete(r)
             db.commit()
         else:
             return {"status": "error", "message": f"No DB record found for {file_path}"}
@@ -105,9 +93,7 @@ def delete_measurements(payload: dict, db: Session = Depends(get_db)):
         db.rollback()
         return {"status": "error", "message": str(e)}
 
-# -------------------------------
-# 🔹 Calcul avant → upload après
-# -------------------------------
+
 @router.post("/process-results/{id_operation}/{position}")
 async def process_results(
     id_operation: int,
@@ -115,7 +101,6 @@ async def process_results(
     files: list[UploadFile] = File(...),
     db: Session = Depends(get_db),
 ):
-
     try:
         operation = db.query(Operation).filter(Operation.id_operation == id_operation).first()
         if not operation:
@@ -135,41 +120,52 @@ async def process_results(
 
         processed_results = []
 
-        # -------------------------------
-        # Boucle sur les fichiers
-        # -------------------------------
+        old_results = (
+            db.query(Result)
+            .filter(Result.id_operation == id_operation, Result.position == position)
+            .all()
+        )
+        for r in old_results:
+            try:
+                s3.delete_object(Bucket=B2_BUCKET, Key=r.file_path)
+            except Exception as e:
+                logging.warning(f"Could not delete old file {r.file_path}: {e}")
+            db.delete(r)
+        db.commit()
+
         for idx, file in enumerate(files, start=1):
             df = None
             suffix = file.filename.split(".")[-1].lower()
 
             try:
-                if suffix == '.csv':
-                    # Try direct read with header
-                    tmp = pd.read_csv(file.file, header=0, sep=None, engine='python')
-                    cols = (tmp.columns.astype(str)
+                if suffix == ".csv":
+                    tmp = pd.read_csv(file.file, header=0, sep=None, engine="python")
+                    cols = (
+                        tmp.columns.astype(str)
                         .str.strip()
                         .str.lower()
-                        .str.replace(r"\s+", "", regex=True))
-                    if any('freq' in c for c in cols) and any('s11' in c or 'returnloss' in c for c in cols):
+                        .str.replace(r"\s+", "", regex=True)
+                    )
+                    if any("freq" in c for c in cols) and any("s11" in c or "returnloss" in c for c in cols):
                         df = tmp.copy()
                         df.columns = cols
                     else:
-                        # Fallback: infer header in raw CSV
-                        raw = pd.read_csv(file.file, header=None, sep=None, engine='python')
-                        df = infer_header_and_data(raw, key_cols=['freq', 'returnloss'])
+                        raw = pd.read_csv(file.file, header=None, sep=None, engine="python")
+                        df = infer_header_and_data(raw, key_cols=["freq", "returnloss"])
                 else:
-                    # Excel: header row first
                     tmp = pd.read_excel(file.file, header=0)
-                    cols = (tmp.columns.astype(str)
+                    cols = (
+                        tmp.columns.astype(str)
                         .str.strip()
                         .str.lower()
-                        .str.replace(r"\s+", "", regex=True))
-                    if any('freq' in c for c in cols) and any('s11' in c or 'returnloss' in c for c in cols):
+                        .str.replace(r"\s+", "", regex=True)
+                    )
+                    if any("freq" in c for c in cols) and any("s11" in c or "returnloss" in c for c in cols):
                         df = tmp.copy()
                         df.columns = cols
                     else:
                         raw = pd.read_excel(file.file, header=None)
-                        df = infer_header_and_data(raw, key_cols=['freq', 'returnloss'])
+                        df = infer_header_and_data(raw, key_cols=["freq", "returnloss"])
             except Exception as e:
                 logging.warning(f"Skipping {file.filename}: read error: {e}")
                 continue
@@ -178,31 +174,28 @@ async def process_results(
                 logging.warning(f"Skipping {file.filename}: could not infer or find header")
                 continue
 
-            # Normalize column names
             df.columns = (
                 df.columns.astype(str)
-                    .str.strip()
-                    .str.lower()
-                    .str.replace(r"\s+", "", regex=True)
+                .str.strip()
+                .str.lower()
+                .str.replace(r"\s+", "", regex=True)
             )
 
-            # Identify frequency and return loss columns
-            freq_cols = [c for c in df.columns if 'freq' in c]
-            rl_cols = [c for c in df.columns if 's11' in c or 'returnloss' in c]
+            freq_cols = [c for c in df.columns if "freq" in c]
+            rl_cols = [c for c in df.columns if "s11" in c or "returnloss" in c]
             if not freq_cols or not rl_cols:
-                logging.warning(f"Skipping {file.filename}: missing freq or return loss columns: {df.columns.tolist()}")
+                logging.warning(f"Skipping {file.filename}: missing freq or return loss columns")
                 continue
 
-            # Prepare and coerce numeric data, handling comma decimals
             freq_col = freq_cols[0]
             rl_col = rl_cols[0]
-            df_vals = df[[freq_col, rl_col]].astype(str).map(lambda x: x.replace(',', '.'))
-            df_sub = df_vals.apply(pd.to_numeric, errors='coerce').dropna()
+
+            df_vals = df[[freq_col, rl_col]].astype(str).map(lambda x: x.replace(",", "."))
+            df_sub = df_vals.apply(pd.to_numeric, errors="coerce").dropna()
             if df_sub.empty:
                 logging.warning(f"Skipping {file.filename}: no numeric data after coercion")
                 continue
 
-            # Compute metrics
             min_idx = df_sub[rl_col].idxmin()
             min_freq = df_sub.at[min_idx, freq_col]
             min_rl = df_sub.at[min_idx, rl_col]
@@ -212,12 +205,10 @@ async def process_results(
                 freqs = df_sub.loc[mask, freq_col]
                 bw = freqs.max() - freqs.min()
 
-            # Upload fichier uniquement si calcul OK
             file.file.seek(0)
             archive_path = f"{patient_id}/{visit_str}/{position}/{file.filename}"
             s3.upload_fileobj(file.file, B2_BUCKET, archive_path)
 
-            # Sauvegarde en DB
             result = Result(
                 id_operation=int(id_operation),
                 position=int(position),
@@ -232,9 +223,10 @@ async def process_results(
             processed_results.append(result)
 
         db.commit()
-        
+
         return {"status": "success", "results": processed_results}
 
     except Exception as e:
+        db.rollback()
         traceback.print_exc()
         return {"status": "error", "message": str(e)}

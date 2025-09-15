@@ -76,12 +76,12 @@ export default function CreatePatientScreen() {
       return;
     }
 
-    setLoading(true);
     try {
+      setLoading(true);
       const patientId = await generatePatientId();
       const bmiValue = parseFloat(formData.bmi.toString().replace(",", "."));
 
-      const res = await fetch(`${API_URL}/patients`, {
+      const res = await fetch(`${API_URL}/patients/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -103,11 +103,13 @@ export default function CreatePatientScreen() {
       Alert.alert("Success", "Patient created successfully", [
         { text: "OK", onPress: () => router.replace(`/patient/${patientId}`) }
       ]);
+
+      setLoading(false);
     } catch (error) {
       Alert.alert("Error", "An unexpected error occurred");
       console.error(error);
     } finally {
-      setLoading(false);
+      
     }
   };
 
