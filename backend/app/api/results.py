@@ -27,6 +27,7 @@ def infer_header_and_data(raw_df, key_cols, max_header_row=10):
     return None
 
 load_dotenv()
+
 B2_ENDPOINT = os.getenv("ENDPOINT_URL_YOUR_BUCKET")
 B2_KEY_ID = os.getenv("KEY_ID_YOUR_ACCOUNT")
 B2_APP_KEY = os.getenv("APPLICATION_KEY_YOUR_ACCOUNT")
@@ -40,78 +41,13 @@ s3 = boto3.client(
     config=Config(signature_version="s3v4"),
 )
 
-# --------------------------------
-# READ ALL RESULTS FOR ONE OPERATION
-# --------------------------------
 
-@router.get("/{id_operation}")
-def get_results(id_operation: int, db: Session = Depends(get_db)):
-    results = (
-        db.query(Result)
-        .filter(Result.id_operation == id_operation)
-        .order_by(Result.position, Result.measurement_number)
-        .all()
-    )
-    return results
-
-
-
-@router.get("/{id_operation}/{position}")
-def get_results(id_operation: int, position: int, db: Session = Depends(get_db)):
-    results = (
-        db.query(Result)
-        .filter(Result.id_operation == id_operation, Result.position == position)
-        .order_by(Result.measurement_number.asc())
-        .all()
-    )
-
-    return [
-        {
-            "id": r.id,
-            "measurement_number": r.measurement_number,
-            "file_path": r.file_path,
-            "file_name": r.file_path.split("/")[-1] if r.file_path else None,
-            "min_return_loss_db": r.min_return_loss_db,
-            "min_frequency_hz": r.min_frequency_hz,
-            "bandwidth_hz": r.bandwidth_hz,
-        }
-        for r in results
-    ]
-
-@router.post("/delete-measurements")
-def delete_measurements(payload: dict, db: Session = Depends(get_db)):
-    try:
-        file_path = payload.get("file_path")
-        if not file_path:
-            return {"status": "error", "message": "No file_path provided"}
-
-        try:
-            s3.head_object(Bucket=B2_BUCKET, Key=file_path)
-            s3.delete_object(Bucket=B2_BUCKET, Key=file_path)
-        except s3.exceptions.ClientError as e:
-            if e.response["Error"]["Code"] == "404":
-                print(f"[INFO] File {file_path} not found in bucket, skipping deletion")
-            else:
-                raise
-
-        results = db.query(Result).filter(Result.file_path == file_path).all()
-
-        if results:
-            for r in results:
-                db.delete(r)
-            db.commit()
-        else:
-            return {"status": "error", "message": f"No DB record found for {file_path}"}
-
-        return {"status": "success", "deleted": [file_path]}
-
-    except Exception as e:
-        db.rollback()
-        return {"status": "error", "message": str(e)}
-
+# ---------------------
+# CREATE RESULT
+# ---------------------
 
 @router.post("/process-results/{id_operation}/{position}")
-async def process_results(
+async def create_results(
     id_operation: int,
     position: int,
     files: list[UploadFile] = File(...),
@@ -246,3 +182,105 @@ async def process_results(
         db.rollback()
         traceback.print_exc()
         return {"status": "error", "message": str(e)}
+
+
+# ---------------------
+# READ ALL RESULTS
+# ---------------------
+
+@router.get("/")
+def get_results(db: Session = Depends(get_db)):
+    return db.query(Result).all()
+
+
+# ---------------------
+# READ RESULT BY ID
+# ---------------------
+
+@router.get("/{id_operation}")
+def get_results(id_operation: int, db: Session = Depends(get_db)):
+    results = (
+        db.query(Result)
+        .filter(Result.id_operation == id_operation)
+        .order_by(Result.position, Result.measurement_number)
+        .all()
+    )
+    return results
+
+
+# ------------------------
+# READ RESULT BY PATIENT
+# ------------------------
+
+@router.get("/{patient_id}")
+def get_results(patient_id: str, db: Session = Depends(get_db)):
+    results = (
+        db.query(Result)
+        .filter(Result.patient_id == patient_id)
+        .all()
+    )
+    return results
+
+
+# -----------------------------------
+# READ RESULT BY VISIT AND POSITION
+# -----------------------------------
+@router.get("/{id_operation}/{position}")
+def get_results(id_operation: int, position: int, db: Session = Depends(get_db)):
+    results = (
+        db.query(Result)
+        .filter(Result.id_operation == id_operation, Result.position == position)
+        .order_by(Result.measurement_number.asc())
+        .all()
+    )
+
+    return [
+        {
+            "id": r.id,
+            "measurement_number": r.measurement_number,
+            "file_path": r.file_path,
+            "file_name": r.file_path.split("/")[-1] if r.file_path else None,
+            "min_return_loss_db": r.min_return_loss_db,
+            "min_frequency_hz": r.min_frequency_hz,
+            "bandwidth_hz": r.bandwidth_hz,
+        }
+        for r in results
+    ]
+
+
+# ---------------------
+# DELETE RESULT
+# ---------------------
+
+@router.post("/delete-measurements")
+def delete_measurements(payload: dict, db: Session = Depends(get_db)):
+    try:
+        file_path = payload.get("file_path")
+        if not file_path:
+            return {"status": "error", "message": "No file_path provided"}
+
+        try:
+            s3.head_object(Bucket=B2_BUCKET, Key=file_path)
+            s3.delete_object(Bucket=B2_BUCKET, Key=file_path)
+        except s3.exceptions.ClientError as e:
+            if e.response["Error"]["Code"] == "404":
+                print(f"[INFO] File {file_path} not found in bucket, skipping deletion")
+            else:
+                raise
+
+        results = db.query(Result).filter(Result.file_path == file_path).all()
+
+        if results:
+            for r in results:
+                db.delete(r)
+            db.commit()
+        else:
+            return {"status": "error", "message": f"No DB record found for {file_path}"}
+
+        return {"status": "success", "deleted": [file_path]}
+
+    except Exception as e:
+        db.rollback()
+        return {"status": "error", "message": str(e)}
+
+
