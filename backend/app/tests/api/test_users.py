@@ -16,7 +16,7 @@ def test_create_user():
     print("CREATE status:", r.status_code)
     return r.json().get("auth_user_id")
 
-# --------- 2. READ USER ---------
+# --------- 2. READ ONE USER ---------
 def test_get_user(user_id):
     r = requests.get(f"{API_URL}/{user_id}")
     print("GET:", r.status_code, r.json())
@@ -31,7 +31,12 @@ def test_update_user(user_id):
     r = requests.put(f"{API_URL}/{user_id}", json=payload)
     print("UPDATE:", r.status_code, r.json())
 
-# --------- 4. DELETE USER ---------
+# --------- 4. READ ALL USERS ---------
+def test_get_all_users():
+    r = requests.get(API_URL + "/")
+    print("GET ALL:", r.status_code, r.json())
+
+# --------- 5. DELETE USER ---------
 def test_delete_user(user_id):
     r = requests.delete(f"{API_URL}/{user_id}")
     print("DELETE:", r.status_code, r.json())
@@ -42,4 +47,5 @@ if __name__ == "__main__":
     if uid:
         test_get_user(uid)
         test_update_user(uid)
+        test_get_all_users()
         test_delete_user(uid)

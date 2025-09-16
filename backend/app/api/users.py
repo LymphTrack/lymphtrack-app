@@ -85,14 +85,22 @@ def create_user(user_data: dict = Body(...), db: Session = Depends(get_db)):
         "profile": new_user
     }
 
-
 # ---------------------
-# READ USER
+# READ USER BY ID
 # ---------------------
 
 @router.get("/{user_id}")
 def get_user(user_id: str, db: Session = Depends(get_db)):
     return db.query(models.User).filter(models.User.id == user_id).first()
+
+
+# ---------------------
+# READ ALL USERS
+# ---------------------
+
+@router.get("/")
+def get_users(db: Session = Depends(get_db)):
+    return db.query(models.User).all()
 
 
 # ---------------------
