@@ -1,11 +1,10 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ArrowLeft,User, Weight} from 'lucide-react-native';
-import { supabase } from '@/lib/supabase';
 import { KeyboardAvoidingView, Platform } from "react-native";
 import { API_URL } from '@/constants/api';
-
+import { mapGenderToDb, mapSideToDb, validatePatientData } from "@/utils/patientUtils";
 
 export default function CreatePatientScreen() {
   const [formData, setFormData] = useState({
@@ -18,40 +17,6 @@ export default function CreatePatientScreen() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
-  const generatePatientId = async (): Promise<string> => {
-    const prefix = "MV";
-
-    const { data, error } = await supabase
-      .from("sick_patients")
-      .select("patient_id")
-      .order("patient_id", { ascending: false }) 
-      .limit(1);
-
-    if (error) {
-      console.error("Erreur récupération patient_id:", error.message);
-      return `${prefix}001`; 
-    }
-
-    if (!data || data.length === 0) {
-      return `${prefix}001`; 
-    }
-
-    const lastId = data[0].patient_id;
-    const lastNumber = parseInt(lastId.slice(2), 10);
-
-    const nextNumber = (lastNumber + 1).toString().padStart(3, "0");
-
-    return `${prefix}${nextNumber}`; 
-  };
-
-  const mapGenderToDb = (gender : 'Male' | 'Female') => {
-    return gender === 'Female' ? 1 : 2;
-  };
-
-  const mapSideToDb = (lymphedema_side : 'Right' | 'Left' | 'Both') => {
-    return lymphedema_side === 'Right' ? 1 : lymphedema_side === 'Left' ? 2 : 3;
-  };
-
   const [noteHeight, setNoteHeight] = useState(100);
 
   <TextInput
@@ -63,32 +28,23 @@ export default function CreatePatientScreen() {
   />
 
   const handleSubmit = async () => {
-    if (!formData.age || !formData.bmi || !formData.gender || !formData.lymphedema_side) {
-      Alert.alert('Error', 'Please fill in all required fields');
-      return;
-    }
+    const { valid, error, age, bmi } = validatePatientData(formData.age, formData.bmi);
 
-    const age = parseInt(formData.age);
-    const bmi = parseInt(formData.bmi);
-
-    if (age <= 10 || age > 100 || bmi <= 10 || bmi > 60) {
-      Alert.alert('Error', 'Please enter valid values');
+    if (!valid) {
+      Alert.alert("Error", error || "Invalid data");
       return;
     }
 
     try {
       setLoading(true);
-      const patientId = await generatePatientId();
-      const bmiValue = parseFloat(formData.bmi.toString().replace(",", "."));
 
       const res = await fetch(`${API_URL}/patients/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          patient_id: patientId,
           age: age,
           gender: mapGenderToDb(formData.gender),
-          bmi: bmiValue,
+          bmi: bmi,
           lymphedema_side: mapSideToDb(formData.lymphedema_side),
           notes: formData.notes,
         }),
@@ -100,16 +56,16 @@ export default function CreatePatientScreen() {
         return;
       }
 
-      Alert.alert("Success", "Patient created successfully", [
-        { text: "OK", onPress: () => router.replace(`/patient/${patientId}`) }
-      ]);
+      const createdPatient = await res.json();
 
-      setLoading(false);
+      Alert.alert("Success", "Patient created successfully", [
+        { text: "OK", onPress: () => router.replace(`/patient/${createdPatient.patient_id}`) },
+      ]);
     } catch (error) {
+      console.error("Error creating patient:", error);
       Alert.alert("Error", "An unexpected error occurred");
-      console.error(error);
     } finally {
-      
+      setLoading(false);
     }
   };
 

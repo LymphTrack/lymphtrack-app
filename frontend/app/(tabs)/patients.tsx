@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState} from 'react';
 import { useFocusEffect } from "@react-navigation/native";
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, TextInput , ActivityIndicator} from 'react-native';
 import { useRouter } from 'expo-router';
@@ -19,6 +19,7 @@ interface Patient {
 
 export default function PatientsScreen() {
   const [patients, setPatients] = useState<Patient[]>([]);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();            
@@ -40,6 +41,10 @@ export default function PatientsScreen() {
       setPatients(data || []);
     } catch (error) {
       console.error("Error:", error);
+      Alert.alert(
+        "Error",
+        "Unable to load patients list. Please check your internet connection."
+      );
     } finally {
       setLoading(false);
     }
@@ -65,6 +70,7 @@ export default function PatientsScreen() {
 
   const deletePatient = async (patient_id: string) => {
     try {
+      setDeletingId(patient_id);
       const res = await fetch(`${API_URL}/patients/${patient_id}`, {
         method: "DELETE",
       });
@@ -77,6 +83,12 @@ export default function PatientsScreen() {
       }
     } catch (err) {
       console.error("Erreur:", err);
+      Alert.alert(
+        "Error",
+        "Unable to delete patient. Please check your internet connection."
+      );
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -144,8 +156,15 @@ export default function PatientsScreen() {
           </Text>
         </View>
 
-        <TouchableOpacity onPress={() => confirmDeletePatient(item.patient_id)}>
-          <Trash size={18} color="#4c54bc" />
+        <TouchableOpacity 
+          disabled={deletingId === item.patient_id}
+          onPress={() => confirmDeletePatient(item.patient_id)}
+        >
+          {deletingId === item.patient_id ? (
+            <ActivityIndicator size="small" color="#6a90db" />
+          ) : (
+            <Trash size={18} color="#4c54bc" />
+          )}
         </TouchableOpacity>
       </View>
 
@@ -156,8 +175,6 @@ export default function PatientsScreen() {
     return (
       <View style={{ flex: 1, backgroundColor: "#FFFFFF", justifyContent: "center", alignItems: "center" }}>
         <ActivityIndicator size="large" color="#6a90db" />
-        <Text style={{ marginTop: 20, fontSize: 16, color: "#1F2937", textAlign: "center", paddingHorizontal: 30 }}>
-        </Text>
       </View>
     );
   }  

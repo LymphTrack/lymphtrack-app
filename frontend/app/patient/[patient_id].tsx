@@ -70,6 +70,15 @@ export default function PatientDetailScreen() {
       );
 
       if (res.status !== 200) {
+        const errorText = await FileSystem.readAsStringAsync(res.uri);
+        try {
+          const errorJson = JSON.parse(errorText);
+          if (errorJson.status === "error") {
+            Alert.alert("No Files", errorJson.message || "No files found for this patient");
+            return;
+          }
+        } catch {
+        }
         throw new Error("Failed to download patient zip");
       }
 
@@ -81,7 +90,14 @@ export default function PatientDetailScreen() {
       }
     } catch (error) {
       console.error("Export error:", error);
-      Alert.alert("Error", "Unable to export patient folder");
+      Alert.alert(
+        "Error",
+        "Unable to export patient folder",
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Retry", onPress: () => handleExport() },
+        ]
+      );
     } finally {
       setExporting(false);
     }
@@ -173,13 +189,15 @@ export default function PatientDetailScreen() {
             <View style ={{marginTop : 10}}>
               <Notebook size={16} color="#6B7280" />
             </View>
-            <Text style={styles.patientNotes}>
+            <Text 
+              style={[styles.patientNotes, { flexWrap: "wrap" }]} 
+              numberOfLines={0}
+            >
               Notes: {patient.notes || "No notes available for this patient"}
             </Text>
           </View>
         </TouchableOpacity>
 
-        {/* Follow-up Timeline */}
         <Text style={styles.followUpTitle}>Follow-up</Text>
         <View style={styles.timeline}>
           {operations.length === 0 ? (
@@ -216,7 +234,6 @@ export default function PatientDetailScreen() {
           <Text style={styles.exportButtonText}>Export Patient Folder</Text>
         </TouchableOpacity>
       </View>
-
     </View>
   );
 }

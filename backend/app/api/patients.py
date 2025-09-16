@@ -29,6 +29,7 @@ s3 = boto3.client(
 def get_patients(db: Session = Depends(get_db)):
     return db.query(models.SickPatient).all()
 
+
 @router.delete("/{patient_id}")
 def delete_patient(patient_id: str, db: Session = Depends(get_db)):
     patient = (
@@ -76,16 +77,40 @@ def delete_patient(patient_id: str, db: Session = Depends(get_db)):
 
 @router.post("/")
 def create_patient(patient: dict, db: Session = Depends(get_db)):
-    existing = db.query(models.SickPatient).filter(models.SickPatient.patient_id == patient["patient_id"]).first()
-    if existing:
-        raise HTTPException(status_code=400, detail="Patient ID already exists")
+    prefix = "MV"
 
-    new_patient = models.SickPatient(**patient)
+    last_patient = (
+        db.query(models.SickPatient)
+        .order_by(models.SickPatient.patient_id.desc())
+        .first()
+    )
+
+    if last_patient and last_patient.patient_id.startswith(prefix):
+        try:
+            last_number = int(last_patient.patient_id.replace(prefix, ""))
+            next_number = str(last_number + 1).zfill(3)
+        except ValueError:
+            next_number = "001"
+    else:
+        next_number = "001"
+
+    patient_id = f"{prefix}{next_number}"
+
+    new_patient = models.SickPatient(
+        patient_id=patient_id,
+        age=patient["age"],
+        gender=patient["gender"],
+        bmi=patient["bmi"],
+        lymphedema_side=patient["lymphedema_side"],
+        notes=patient.get("notes")
+    )
+
     db.add(new_patient)
     db.commit()
     db.refresh(new_patient)
 
     return new_patient
+
 
 @router.get("/{patient_id}")
 def get_patient(patient_id: str, db: Session = Depends(get_db)):

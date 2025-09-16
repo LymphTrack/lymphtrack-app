@@ -1,18 +1,10 @@
-import React, { useState } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  Alert,
-  TextInput,
-  ActivityIndicator
-} from "react-native";
+import { useState } from "react";
+import {View,Text,StyleSheet,TouchableOpacity,ScrollView,Alert,TextInput,ActivityIndicator} from "react-native";
 import { ArrowLeft, Calendar, ClipboardList, Save, FileUp } from "lucide-react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { API_URL } from "@/constants/api";
+import { validateFollowUpDate } from "@/utils/dateUtils";
 
 export default function CreateFollowUp() {
   const { patient_id } = useLocalSearchParams<{ patient_id: string }>();
@@ -30,6 +22,12 @@ export default function CreateFollowUp() {
   const handleSave = async () => {
     if (!name.trim()) {
       Alert.alert("Error", "Follow-up name is required");
+      return;
+    }
+
+    const { valid, message } = validateFollowUpDate(date);
+    if (!valid) {
+      Alert.alert("Error", message);
       return;
     }
 
@@ -91,8 +89,6 @@ export default function CreateFollowUp() {
     return (
       <View style={{ flex: 1, backgroundColor: "#FFFFFF", justifyContent: "center", alignItems: "center" }}>
         <ActivityIndicator size="large" color="#6a90db" />
-        <Text style={{ marginTop: 20, fontSize: 16, color: "#1F2937", textAlign: "center", paddingHorizontal: 30 }}>
-        </Text>
       </View>
     );
   }

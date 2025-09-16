@@ -1,18 +1,10 @@
-import React, { useState, useEffect } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  Alert,
-  ScrollView,
-  ActivityIndicator
-} from "react-native";
+import { useState, useEffect } from "react";
+import {View,Text,TextInput,TouchableOpacity,StyleSheet,Alert,ScrollView,ActivityIndicator} from "react-native";
 import { ArrowLeft } from "lucide-react-native";
 import { useRouter, useLocalSearchParams,  } from "expo-router";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { API_URL } from "@/constants/api";
+import { validateFollowUpDate } from "@/utils/dateUtils";
 
 export default function ModifyFollowUpScreen() {
   const { id_operation } = useLocalSearchParams<{ id_operation: string }>();
@@ -47,6 +39,12 @@ export default function ModifyFollowUpScreen() {
   };
 
   const handleSave = async () => {
+    const { valid, message } = validateFollowUpDate(date);
+    if (!valid) {
+      Alert.alert("Error", message);
+      return;
+    }
+
     try {
       setLoading(true);
 
@@ -62,9 +60,10 @@ export default function ModifyFollowUpScreen() {
 
       if (!res.ok) {
         const errorData = await res.json();
-        throw new Error(errorData.detail || "Failed to update follow-up");
+        Alert.alert("Error", errorData.detail || "Unable to update follow-up");
+        return; 
       }
-
+      
       Alert.alert("Success", "Follow-up updated successfully!");
       router.push(`/patient/followup/${id_operation}`);
     } catch (err) {
@@ -79,17 +78,31 @@ export default function ModifyFollowUpScreen() {
     return (
       <View style={{ flex: 1, backgroundColor: "#FFFFFF", justifyContent: "center", alignItems: "center" }}>
         <ActivityIndicator size="large" color="#6a90db" />
-        <Text style={{ marginTop: 20, fontSize: 16, color: "#1F2937", textAlign: "center", paddingHorizontal: 30 }}>
-        </Text>
       </View>
     );
   }
 
+  const handleBack = () => {
+    Alert.alert(
+      'Unsaved Changes',
+      'If you leave now, your modifications will not be saved. Do you want to continue?',
+      [
+        { text: 'Stay', style: 'cancel' },
+        {
+          text: 'Leave',
+          style: 'destructive',
+          onPress: () => {
+            router.push(`../${id_operation}`);
+          },
+        },
+      ]
+    );
+  };
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.push(`../${id_operation}`)}>
+        <TouchableOpacity onPress={handleBack}>
           <ArrowLeft size={24} color="#1F2937" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Modify Follow-Up</Text>

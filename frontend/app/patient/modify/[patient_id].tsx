@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView, ActivityIndicator} from "react-native";
 import { ArrowLeft, Trash, Save } from "lucide-react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { KeyboardAvoidingView, Platform } from "react-native";
 import { API_URL } from "@/constants/api";
+import { mapDbToGender, mapDbToSide, validatePatientData, mapGenderToDb, mapSideToDb } from "@/utils/patientUtils";
 
 export default function ModifyPatientScreen() {
   const { patient_id } = useLocalSearchParams<{ patient_id : string }>();
@@ -16,6 +17,8 @@ export default function ModifyPatientScreen() {
   const [lymphedemaSide, setLymphedemaSide] = useState<"Right" | "Left" | "Both">("Right");
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (patient_id) {
@@ -29,17 +32,10 @@ export default function ModifyPatientScreen() {
       if (!res.ok) throw new Error("Failed to load patient data");
 
       const data = await res.json();
-
       setAge(data.age?.toString() || "");
-      setGender(data.gender === 1 ? "Female" : "Male");
       setBmi(data.bmi?.toString() || "");
-      setLymphedemaSide(
-        data.lymphedema_side === 1
-          ? "Right"
-          : data.lymphedema_side === 2
-          ? "Left"
-          : "Both"
-      );
+      setGender(mapDbToGender(data.gender));
+      setLymphedemaSide(mapDbToSide(data.lymphedema_side));
       setNotes(data.notes || "");
     } catch (error) {
       console.error("Error loading patient:", error);
@@ -59,7 +55,7 @@ export default function ModifyPatientScreen() {
           text: "Delete",
           style: "destructive",
           onPress: async () => {
-            setLoading(true);
+            setDeleting(true);
             try {
               const res = await fetch(`${API_URL}/patients/${patient_id}`, {
                 method: "DELETE",
@@ -77,7 +73,7 @@ export default function ModifyPatientScreen() {
               console.error("Error deleting patient:", err);
               Alert.alert("Error", "Unexpected error occurred");
             } finally {
-              setLoading(false);
+              setDeleting(false);
             }
           },
         },
@@ -85,34 +81,15 @@ export default function ModifyPatientScreen() {
     );
   };
 
-  const mapGenderToDb = (gender: "Male" | "Female") => {
-    return gender === "Female" ? 1 : 2;
-  };
-
-  const mapSideToDb = (side: "Right" | "Left" | "Both") => {
-    return side === "Right" ? 1 : side === "Left" ? 2 : 3;
-  };
-
   const handleSave = async () => {
-    if (!age || !gender || !bmi || !lymphedemaSide) {
-      Alert.alert("Error", "Please fill in all required fields");
+    const { valid, error, age: ageValue, bmi: bmiValue } = validatePatientData(age, bmi);
+
+    if (!valid) {
+      Alert.alert("Error", error || "Invalid data");
       return;
     }
 
-    const ageValue = parseInt(age, 10);
-    const bmiValue = parseFloat(bmi.replace(",", "."));
-
-    if (isNaN(ageValue) || ageValue < 10 || ageValue > 100) {
-      Alert.alert("Error", "Incorrect age");
-      return;
-    }
-
-    if (isNaN(bmiValue) || bmiValue < 10 || bmiValue > 60) {
-      Alert.alert("Error", "Incorrect BMI");
-      return;
-    }
-
-    setLoading(true);
+    setSaving(true);
     try {
       const res = await fetch(`${API_URL}/patients/${patient_id}`, {
         method: "PUT",
@@ -138,7 +115,7 @@ export default function ModifyPatientScreen() {
       console.error("Error:", err);
       Alert.alert("Error", "Unexpected error occurred");
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
@@ -158,7 +135,6 @@ export default function ModifyPatientScreen() {
       ]
     );
   };
-
 
   if (loading) {
     return (
@@ -273,10 +249,12 @@ export default function ModifyPatientScreen() {
         <TouchableOpacity
           style={[styles.saveButton, loading && { backgroundColor: "#9CA3AF" }]}
           onPress={handleSave}
+          disabled={saving}
         >
           <View style={{ flexDirection: "row", alignItems: "center" }}>
             <Save size={16} color="#2563EB" style={{ marginRight: 8 }} />
-              <Text style={styles.saveButtonText}>Save Changes
+              <Text style={styles.saveButtonText}>
+                {saving ? "Saving..." : "Save Changes"}
               </Text>
           </View>
         </TouchableOpacity>
@@ -284,12 +262,12 @@ export default function ModifyPatientScreen() {
         <TouchableOpacity
           style={[styles.saveButton, { backgroundColor: "#f38181ff" }]}
           onPress={deletePatient}
-          disabled={loading}
+          disabled={deleting}
         >
           <View style={{ flexDirection: "row", alignItems: "center" }}>
             <Trash size={16} color="#891111ff" style={{ marginRight: 8 }} />
             <Text style={[styles.saveButtonText, { color: "#891111ff" }]}>
-              Delete Patient
+               {deleting ? "Deleting..." : "Delete Patient"}
             </Text>
           </View>
         </TouchableOpacity>
