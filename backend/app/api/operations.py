@@ -158,11 +158,13 @@ def create_operation(op_data: dict = Body(...), db: Session = Depends(get_db)):
         db.refresh(new_op)
 
         patient_id = new_op.patient_id
+        id_operation = new_op.id_operation
         
         return {
             "status": "success",
             "operation": new_op,
             "patient_id" : patient_id,
+            "id_operation": id_operation,
         }
 
     except Exception as e:

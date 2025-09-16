@@ -41,10 +41,6 @@ export default function PatientsScreen() {
       setPatients(data || []);
     } catch (error) {
       console.error("Error:", error);
-      Alert.alert(
-        "Error",
-        "Unable to load patients list. Please check your internet connection."
-      );
     } finally {
       setLoading(false);
     }
