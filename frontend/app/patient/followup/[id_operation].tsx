@@ -28,7 +28,7 @@ export default function PatientResultsScreen() {
       if (!opRes.ok) throw new Error("Failed to fetch operation");
       const opData = await opRes.json();
 
-      const resultsRes = await fetch(`${API_URL}/operations/${id_operation}/results`);
+      const resultsRes = await fetch(`${API_URL}/results/${id_operation}`);
       if (!resultsRes.ok) throw new Error("Failed to fetch results");
       const resultsData = await resultsRes.json();
 

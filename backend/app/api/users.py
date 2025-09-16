@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from app.db.database import get_db
-from app.db import models
+from app.db.models import User
 from fastapi import APIRouter, Depends, HTTPException, Body
 from supabase import create_client
 from datetime import datetime
@@ -41,7 +41,7 @@ def create_user(user_data: dict = Body(...), db: Session = Depends(get_db)):
             raise Exception("Failed to create user in Supabase auth")
     except Exception as e:
         if "already been registered" in str(e):
-            auth_user = db.query(models.User).filter(models.User.email == email).first()
+            auth_user = db.query(User).filter(User.email == email).first()
             if not auth_user:
                 raise HTTPException(status_code=400, detail="Auth user exists but not in DB")
         else:
@@ -49,7 +49,7 @@ def create_user(user_data: dict = Body(...), db: Session = Depends(get_db)):
 
     user_id = auth_user.id if hasattr(auth_user, "id") else auth_user.id
 
-    existing = db.query(models.User).filter(models.User.id == user_id).first()
+    existing = db.query(User).filter(User.id == user_id).first()
     if existing:
         existing.name = name or existing.name
         existing.role = role or existing.role
@@ -66,7 +66,7 @@ def create_user(user_data: dict = Body(...), db: Session = Depends(get_db)):
             "profile": existing
         }
 
-    new_user = models.User(
+    new_user = User(
         id=user_id,
         email=email,
         name=name,
@@ -91,7 +91,7 @@ def create_user(user_data: dict = Body(...), db: Session = Depends(get_db)):
 
 @router.get("/{user_id}")
 def get_user(user_id: str, db: Session = Depends(get_db)):
-    return db.query(models.User).filter(models.User.id == user_id).first()
+    return db.query(User).filter(User.id == user_id).first()
 
 
 # ---------------------
@@ -100,7 +100,7 @@ def get_user(user_id: str, db: Session = Depends(get_db)):
 
 @router.get("/")
 def get_users(db: Session = Depends(get_db)):
-    return db.query(models.User).all()
+    return db.query(User).all()
 
 
 # ---------------------
@@ -109,7 +109,7 @@ def get_users(db: Session = Depends(get_db)):
 
 @router.put("/{user_id}")
 def update_user(user_id: str, user_update: dict = Body(...), db: Session = Depends(get_db)):
-    user = db.query(models.User).filter(models.User.id == user_id).first()
+    user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
@@ -128,8 +128,8 @@ def update_user(user_id: str, user_update: dict = Body(...), db: Session = Depen
 @router.delete("/{user_id}")
 def delete_user(user_id:str , db: Session = Depends(get_db)) :
     user = (
-        db.query(models.User)
-        .filter(models.User.id == user_id)
+        db.query(User)
+        .filter(User.id == user_id)
         .first()
     )
     if not user:

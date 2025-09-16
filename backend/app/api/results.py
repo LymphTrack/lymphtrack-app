@@ -40,6 +40,22 @@ s3 = boto3.client(
     config=Config(signature_version="s3v4"),
 )
 
+# --------------------------------
+# READ ALL RESULTS FOR ONE OPERATION
+# --------------------------------
+
+@router.get("/{id_operation}")
+def get_results(id_operation: int, db: Session = Depends(get_db)):
+    results = (
+        db.query(Result)
+        .filter(Result.id_operation == id_operation)
+        .order_by(Result.position, Result.measurement_number)
+        .all()
+    )
+    return results
+
+
+
 @router.get("/{id_operation}/{position}")
 def get_results(id_operation: int, position: int, db: Session = Depends(get_db)):
     results = (
