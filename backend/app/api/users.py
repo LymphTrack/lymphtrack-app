@@ -19,6 +19,10 @@ supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 # CREATE USER
 # ---------------------
 
+# ---------------------
+# CREATE USER
+# ---------------------
+
 @router.post("/")
 def create_user(user_data: dict = Body(...), db: Session = Depends(get_db)):
     email = user_data.get("email")
@@ -26,6 +30,7 @@ def create_user(user_data: dict = Body(...), db: Session = Depends(get_db)):
     name = user_data.get("name")
     role = user_data.get("role")
     institution = user_data.get("institution")
+    user_type = user_data.get("user_type", "user") 
 
     if not email or not password:
         raise HTTPException(status_code=400, detail="Email and password are required")
@@ -54,6 +59,7 @@ def create_user(user_data: dict = Body(...), db: Session = Depends(get_db)):
         existing.name = name or existing.name
         existing.role = role or existing.role
         existing.institution = institution or existing.institution
+        existing.user_type = user_type or existing.user_type
         if not existing.created_at:
             existing.created_at = datetime.utcnow()
         db.commit()
@@ -72,7 +78,8 @@ def create_user(user_data: dict = Body(...), db: Session = Depends(get_db)):
         name=name,
         role=role,
         institution=institution,
-        created_at=datetime.utcnow()
+        user_type=user_type,
+        created_at=datetime.now(datetime.timezone.utc)
     )
 
     db.add(new_user)
@@ -84,6 +91,7 @@ def create_user(user_data: dict = Body(...), db: Session = Depends(get_db)):
         "auth_user_id": user_id,
         "profile": new_user
     }
+
 
 # ---------------------
 # READ USER BY ID
