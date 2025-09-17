@@ -5,24 +5,22 @@ from app.db.database import get_db
 import boto3, os
 from dotenv import load_dotenv
 from botocore.config import Config
+from mega import Mega
 
 load_dotenv()
 
-B2_ENDPOINT = os.getenv("ENDPOINT_URL_YOUR_BUCKET")
-B2_KEY_ID = os.getenv("KEY_ID_YOUR_ACCOUNT")
-B2_APP_KEY = os.getenv("APPLICATION_KEY_YOUR_ACCOUNT")
-B2_BUCKET = "lymphtrack-data"
-
-s3 = boto3.client(
-    "s3",
-    endpoint_url=B2_ENDPOINT,
-    aws_access_key_id=B2_KEY_ID,
-    aws_secret_access_key=B2_APP_KEY,
-    config=Config(signature_version="s3v4"),
-)
-
 router = APIRouter()
 
+EMAIL = os.getenv("MEGA_EMAIL")
+PASSWORD = os.getenv("MEGA_PASSWORD")
+
+mega = Mega()
+m = mega.login(EMAIL, PASSWORD)
+
+root_folder = m.find("lymphtrack-data")
+if not root_folder:
+    raise Exception("Folder 'lymphtrack-data' was not found in Mega.nz")
+root_id = root_folder[0]
 
 # ---------------------
 # CREATE OPERATION
@@ -37,13 +35,27 @@ def create_operation(op_data: dict = Body(...), db: Session = Depends(get_db)):
         db.refresh(new_op)
 
         patient_id = new_op.patient_id
-        id_operation = new_op.id_operation
-        
+
+        all_ops = (
+            db.query(Operation)
+            .filter(Operation.patient_id == patient_id)
+            .order_by(Operation.operation_date.asc())
+            .all()
+        )
+
+        visit_number = {o.id_operation: idx + 1 for idx, o in enumerate(all_ops)}[new_op.id_operation]
+        visit_str = f"{visit_number}_{new_op.name.replace(' ', '_')}_{new_op.operation_date.strftime('%d%m%Y')}"
+        visit_folder = m.create_folder(f"lymphtrack-data/{patient_id}/{visit_str}")
+
+        for pos in range(1, 7):
+            m.create_folder(f"lymphtrack-data/{patient_id}/{visit_str}/{pos}")
+
         return {
             "status": "success",
             "operation": new_op,
-            "patient_id" : patient_id,
-            "id_operation": id_operation,
+            "patient_id": patient_id,
+            "id_operation": new_op.id_operation,
+            "visit_str": visit_str,
         }
 
     except Exception as e:
@@ -106,6 +118,7 @@ def update_operation(id_operation: int, updated_data: dict, db: Session = Depend
     if op.name != old_name or op.operation_date != old_date:
         try:
             patient_id = op.patient_id
+
             all_ops = (
                 db.query(Operation)
                 .filter(Operation.patient_id == patient_id)
@@ -117,26 +130,35 @@ def update_operation(id_operation: int, updated_data: dict, db: Session = Depend
             old_visit_str = f"{visit_number}_{old_name.replace(' ', '_')}_{old_date.strftime('%d%m%Y')}"
             new_visit_str = f"{visit_number}_{op.name.replace(' ', '_')}_{op.operation_date.strftime('%d%m%Y')}"
 
-            old_prefix = f"{patient_id}/{old_visit_str}/"
-            new_prefix = f"{patient_id}/{new_visit_str}/"
+            old_folder = m.find(f"lymphtrack-data/{patient_id}/{old_visit_str}")
+            if old_folder:
+                m.create_folder(f"lymphtrack-data/{patient_id}/{new_visit_str}")
+                for pos in range(1, 7):
+                    m.create_folder(f"lymphtrack-data/{patient_id}/{new_visit_str}/{pos}")
 
-            objects = s3.list_objects_v2(Bucket=B2_BUCKET, Prefix=old_prefix)
-            if "Contents" in objects:
-                for obj in objects["Contents"]:
-                    old_key = obj["Key"]
-                    new_key = old_key.replace(old_prefix, new_prefix, 1)
+                files = m.get_files_in_node(old_folder[0])
+                for f in files:
+                    file_name = f["a"]["n"]
+                    tmp_path = f"tmp_{file_name}"
+                    m.download(f, tmp_path)
 
-                    s3.copy_object(
-                        Bucket=B2_BUCKET,
-                        CopySource={"Bucket": B2_BUCKET, "Key": old_key},
-                        Key=new_key
-                    )
+                    pos = None
+                    for i in range(1, 7):
+                        if f"/{i}/" in file_name or file_name.startswith(f"{i}_"):
+                            pos = i
+                            break
+                        
+                    if pos:
+                        m.upload(tmp_path, m.find(f"lymphtrack-data/{patient_id}/{new_visit_str}/{pos}")[0])
+                    else:
+                        m.upload(tmp_path, m.find(f"lymphtrack-data/{patient_id}/{new_visit_str}")[0])
 
-                delete_keys = [{"Key": obj["Key"]} for obj in objects["Contents"]]
-                s3.delete_objects(Bucket=B2_BUCKET, Delete={"Objects": delete_keys})
+                    os.remove(tmp_path)
+
+                m.delete(old_folder[0])
 
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Error renaming folder in B2: {e}")
+            raise HTTPException(status_code=500, detail=f"Error renaming folder in Mega: {e}")
 
     return op
 
@@ -161,29 +183,14 @@ def delete_operation(id_operation: int, db: Session = Depends(get_db)):
     )
     visit_number = {o.id_operation: idx + 1 for idx, o in enumerate(all_ops)}[op.id_operation]
     visit_str = f"{visit_number}_{op.name.replace(' ', '_')}_{op.operation_date.strftime('%d%m%Y')}"
-    visit_prefix = f"{patient_id}/{visit_str}/"
 
     try:
-        continuation_token = None
-        while True:
-            if continuation_token:
-                response = s3.list_objects_v2(
-                    Bucket=B2_BUCKET, Prefix=visit_prefix, ContinuationToken=continuation_token
-                )
-            else:
-                response = s3.list_objects_v2(Bucket=B2_BUCKET, Prefix=visit_prefix)
-
-            if "Contents" in response:
-                delete_keys = [{"Key": obj["Key"]} for obj in response["Contents"]]
-                s3.delete_objects(Bucket=B2_BUCKET, Delete={"Objects": delete_keys})
-
-            if response.get("IsTruncated"):
-                continuation_token = response.get("NextContinuationToken")
-            else:
-                break
+        folder = m.find(f"lymphtrack-data/{patient_id}/{visit_str}")
+        if folder:
+            m.delete(folder[0]) 
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error deleting visit files: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error deleting operation folder in Mega: {e}")
 
     db.delete(op)
     db.commit()
@@ -191,5 +198,5 @@ def delete_operation(id_operation: int, db: Session = Depends(get_db)):
     return {
         "message": f"Operation {id_operation} deleted successfully",
         "patient_id": patient_id,
-        "deleted_folder": visit_prefix
+        "deleted_folder": visit_str
     }

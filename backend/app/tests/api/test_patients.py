@@ -55,7 +55,7 @@ def test_get_all_patients():
 # ---------------------
 
 def test_export_patient_folder(patient_id):
-    r = requests.get(f"{API_URL}/export-folder/{patient_id}")
+    r = requests.get(f"{API_URL}/export-folder/MV001")
     print("EXPORT:", r.status_code)
 
     if r.status_code == 200 and r.headers.get("content-type") == "application/zip":

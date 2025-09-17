@@ -1,13 +1,13 @@
-from fastapi import APIRouter, Depends, UploadFile, File
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
 from sqlalchemy.orm import Session
 from app.db.models import Result, Operation
 from app.db.database import get_db
+from mega import Mega
 
-import boto3, os
+import os
 import traceback
 import pandas as pd
 import numpy as np
-from botocore.config import Config
 from dotenv import load_dotenv
 from datetime import datetime, timezone
 
@@ -28,18 +28,11 @@ def infer_header_and_data(raw_df, key_cols, max_header_row=10):
 
 load_dotenv()
 
-B2_ENDPOINT = os.getenv("ENDPOINT_URL_YOUR_BUCKET")
-B2_KEY_ID = os.getenv("KEY_ID_YOUR_ACCOUNT")
-B2_APP_KEY = os.getenv("APPLICATION_KEY_YOUR_ACCOUNT")
-B2_BUCKET = "lymphtrack-data"
+EMAIL = os.getenv("MEGA_EMAIL")
+PASSWORD = os.getenv("MEGA_PASSWORD")
 
-s3 = boto3.client(
-    "s3",
-    endpoint_url=B2_ENDPOINT,
-    aws_access_key_id=B2_KEY_ID,
-    aws_secret_access_key=B2_APP_KEY,
-    config=Config(signature_version="s3v4"),
-)
+mega = Mega()
+m = mega.login(EMAIL, PASSWORD)
 
 
 # ---------------------
@@ -77,12 +70,20 @@ async def create_results(
             .filter(Result.id_operation == id_operation, Result.position == position)
             .all()
         )
+
         for r in old_results:
             try:
-                s3.delete_object(Bucket=B2_BUCKET, Key=r.file_path)
+                file_name = r.file_path.split("/")[-1]
+                file_node = m.find(file_name)
+                if file_node:
+                    m.delete(file_node[0])
+                else:
+                    logging.warning(f"File {file_name} not found in Mega, skipping deletion")
             except Exception as e:
                 logging.warning(f"Could not delete old file {r.file_path}: {e}")
+
             db.delete(r)
+
         db.commit()
 
         for idx, file in enumerate(files, start=1):
@@ -148,31 +149,44 @@ async def create_results(
                 logging.warning(f"Skipping {file.filename}: no numeric data after coercion")
                 continue
 
-            min_idx = df_sub[rl_col].idxmin()
-            min_freq = df_sub.at[min_idx, freq_col]
-            min_rl = df_sub.at[min_idx, rl_col]
-            mask = df_sub[rl_col] <= -3
-            bw = np.nan
-            if mask.any():
-                freqs = df_sub.loc[mask, freq_col]
-                bw = freqs.max() - freqs.min()
+        min_idx = df_sub[rl_col].idxmin()
+        min_freq = df_sub.at[min_idx, freq_col]
+        min_rl = df_sub.at[min_idx, rl_col]
+        mask = df_sub[rl_col] <= -3
+        bw = np.nan
+        if mask.any():
+            freqs = df_sub.loc[mask, freq_col]
+            bw = freqs.max() - freqs.min()
 
-            file.file.seek(0)
-            archive_path = f"{patient_id}/{visit_str}/{position}/{file.filename}"
-            s3.upload_fileobj(file.file, B2_BUCKET, archive_path)
+        file.file.seek(0)
 
-            result = Result(
-                id_operation=int(id_operation),
-                position=int(position),
-                measurement_number=int(idx),
-                min_return_loss_db=float(min_rl),
-                min_frequency_hz=int(min_freq),
-                bandwidth_hz=float(bw) if bw is not None and not pd.isna(bw) else None,
-                file_path=archive_path,
-                uploaded_at=datetime.now(timezone.utc),
-            )
-            db.add(result)
-            processed_results.append(result)
+        archive_path = f"{patient_id}/{visit_str}/{position}/{file.filename}"
+
+        tmp_path = f"tmp_{file.filename}"
+        with open(tmp_path, "wb") as tmp_f:
+            tmp_f.write(file.file.read())
+
+        dest_folder = m.find(f"lymphtrack-data/{patient_id}/{visit_str}/{position}")
+        if not dest_folder:
+            dest_folder = m.create_folder(f"lymphtrack-data/{patient_id}/{visit_str}/{position}")
+
+        m.upload(tmp_path, dest_folder[0])
+
+        os.remove(tmp_path)
+
+        result = Result(
+            id_operation=int(id_operation),
+            position=int(position),
+            measurement_number=int(idx),
+            min_return_loss_db=float(min_rl),
+            min_frequency_hz=int(min_freq),
+            bandwidth_hz=float(bw) if bw is not None and not pd.isna(bw) else None,
+            file_path=archive_path, 
+            uploaded_at=datetime.now(timezone.utc),
+        )
+        db.add(result)
+        processed_results.append(result)
+
 
         db.commit()
 
@@ -259,17 +273,18 @@ def delete_measurements(payload: dict, db: Session = Depends(get_db)):
         if not file_path:
             return {"status": "error", "message": "No file_path provided"}
 
+        file_name = file_path.split("/")[-1]
+
         try:
-            s3.head_object(Bucket=B2_BUCKET, Key=file_path)
-            s3.delete_object(Bucket=B2_BUCKET, Key=file_path)
-        except s3.exceptions.ClientError as e:
-            if e.response["Error"]["Code"] == "404":
-                print(f"[INFO] File {file_path} not found in bucket, skipping deletion")
+            file_node = m.find(file_name)
+            if file_node:
+                m.delete(file_node[0])
             else:
-                raise
+                print(f"[INFO] File {file_name} not found in Mega, skipping deletion")
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error deleting file from Mega: {e}")
 
         results = db.query(Result).filter(Result.file_path == file_path).all()
-
         if results:
             for r in results:
                 db.delete(r)
@@ -282,5 +297,6 @@ def delete_measurements(payload: dict, db: Session = Depends(get_db)):
     except Exception as e:
         db.rollback()
         return {"status": "error", "message": str(e)}
+
 
 

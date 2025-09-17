@@ -4,27 +4,25 @@ from app.db import models
 from app.db.database import get_db
 import io
 import zipfile
-import boto3, os
+import os
 from dotenv import load_dotenv
 from botocore.config import Config
+from mega import Mega
 
 router = APIRouter()
 
 load_dotenv()
 
-B2_ENDPOINT = os.getenv("ENDPOINT_URL_YOUR_BUCKET")
-B2_KEY_ID = os.getenv("KEY_ID_YOUR_ACCOUNT")
-B2_APP_KEY = os.getenv("APPLICATION_KEY_YOUR_ACCOUNT")
-B2_BUCKET = "lymphtrack-data"
+EMAIL = os.getenv("MEGA_EMAIL")
+PASSWORD = os.getenv("MEGA_PASSWORD")
 
-s3 = boto3.client(
-    "s3",
-    endpoint_url=B2_ENDPOINT,
-    aws_access_key_id=B2_KEY_ID,
-    aws_secret_access_key=B2_APP_KEY,
-    config=Config(signature_version="s3v4"),
-)
+mega = Mega()
+m = mega.login(EMAIL, PASSWORD)
 
+root_folder = m.find("lymphtrack-data")
+if not root_folder:
+    raise Exception("Folder 'lymphtrack-data' was not found in Mega.nz")
+root_id = root_folder[0]
 
 # ---------------------
 # CREATE PATIENT
@@ -63,6 +61,8 @@ def create_patient(patient: dict, db: Session = Depends(get_db)):
     db.add(new_patient)
     db.commit()
     db.refresh(new_patient)
+
+    m.create_folder(f"lymphtrack-data/{patient_id}")
 
     return new_patient
 
@@ -124,29 +124,13 @@ def delete_patient(patient_id: str, db: Session = Depends(get_db)):
     db.delete(patient)
     db.commit()
 
-    prefix = f"{patient_id}/"
     try:
-        continuation_token = None
-        deleted_files = []
-
-        while True:
-            if continuation_token:
-                response = s3.list_objects_v2(
-                    Bucket=B2_BUCKET, Prefix=prefix, ContinuationToken=continuation_token
-                )
-            else:
-                response = s3.list_objects_v2(Bucket=B2_BUCKET, Prefix=prefix)
-
-            if "Contents" in response:
-                delete_keys = [{"Key": obj["Key"]} for obj in response["Contents"]]
-                deleted_files.extend([obj["Key"] for obj in response["Contents"]])
-
-                s3.delete_objects(Bucket=B2_BUCKET, Delete={"Objects": delete_keys})
-
-            if response.get("IsTruncated"):
-                continuation_token = response.get("NextContinuationToken")
-            else:
-                break
+        folder = m.find(f"lymphtrack-data/{patient_id}")
+        if folder:
+            m.delete(folder[0])
+            deleted_files = [patient_id]
+        else:
+            deleted_files = []
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error deleting files: {str(e)}")
@@ -164,29 +148,25 @@ def delete_patient(patient_id: str, db: Session = Depends(get_db)):
 @router.get("/export-folder/{patient_id}")
 def export_patient_folder(patient_id: str):
     try:
-        prefix = f"{patient_id}/"
+        folder = m.find(f"lymphtrack-data/{patient_id}")
+        if not folder:
+            return {"status": "error", "message": f"No files found for {patient_id}"}
 
-        objects = s3.list_objects_v2(Bucket=B2_BUCKET, Prefix=prefix)
-
-        if "Contents" not in objects or len(objects["Contents"]) == 0:
+        files = m.get_files_in_node(folder[0])
+        if not files:
             return {"status": "error", "message": f"No files found for {patient_id}"}
 
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zipf:
-            for obj in objects["Contents"]:
-                key = obj["Key"]
-
-                if key.endswith("/"):
-                    continue  
-
-                file_obj = s3.get_object(Bucket=B2_BUCKET, Key=key)
-                file_data = file_obj["Body"].read()
-
-                arcname = key.replace(prefix, "")
-                zipf.writestr(arcname, file_data)
+            for f in files:
+                file_name = f['a']['n']
+                temp_path = f"tmp_{file_name}"
+                m.download(f, temp_path)
+                with open(temp_path, "rb") as temp_file:
+                    zipf.writestr(file_name, temp_file.read())
+                os.remove(temp_path)
 
         zip_buffer.seek(0)
-
         return Response(
             content=zip_buffer.read(),
             media_type="application/zip",
