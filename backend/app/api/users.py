@@ -45,6 +45,7 @@ def create_user(user_data: dict = Body(...), db: Session = Depends(get_db)):
         if not auth_user:
             raise Exception("Failed to create user in Supabase auth")
     except Exception as e:
+        print("DEBUG SUPABASE ERROR:", e)
         if "already been registered" in str(e):
             auth_user = db.query(User).filter(User.email == email).first()
             if not auth_user:
@@ -105,6 +106,9 @@ def get_user(user_id: str, db: Session = Depends(get_db)):
     return {
         "id": str(user.id),
         "email": user.email,
+        "name" : user.name,
+        "role": user.role,
+        "institution" : user.institution,
         "user_type": user.user_type
     }
 
