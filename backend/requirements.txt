@@ -12,4 +12,5 @@ xlrd==2.0.1
 requests
 supabase
 mega.py
+pycryptodome>=3.9.6
 tenacity>=8.2
