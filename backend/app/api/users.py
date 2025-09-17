@@ -91,7 +91,14 @@ def create_user(user_data: dict = Body(...), db: Session = Depends(get_db)):
 
 @router.get("/{user_id}")
 def get_user(user_id: str, db: Session = Depends(get_db)):
-    return db.query(User).filter(User.id == user_id).first()
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        return {"error": "User not found"}
+    return {
+        "id": str(user.id),
+        "email": user.email,
+        "user_type": user.user_type
+    }
 
 
 # ---------------------

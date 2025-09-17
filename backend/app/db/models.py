@@ -1,10 +1,16 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime
+from sqlalchemy import Column, Integer, String, Float, DateTime, Enum
 from app.db.database import Base
+import enum
 
 
 # ---------------------
 # USERS
 # ---------------------
+
+class UserTypeEnum(str, enum.Enum):
+    admin = "admin"
+    user = "user"
+
 class User(Base):
     __tablename__ = "users"
 
@@ -14,6 +20,7 @@ class User(Base):
     role = Column(String)
     created_at = Column(DateTime) 
     institution = Column(String)
+    user_type = Column(Enum(UserTypeEnum), nullable=False, default=UserTypeEnum.user)
 
 
 # ---------------------

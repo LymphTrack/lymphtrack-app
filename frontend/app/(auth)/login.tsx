@@ -3,6 +3,8 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, Image } fro
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { Eye, EyeOff } from 'lucide-react-native';
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -19,14 +21,15 @@ export default function LoginScreen() {
 
     setLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
       if (error) {
         Alert.alert('Login Failed', error.message);
-      } else {
+      } else if (data.user) {
+        await AsyncStorage.setItem("userId", data.user.id);
         router.replace('/(tabs)/patients');
       }
     } catch (error) {
