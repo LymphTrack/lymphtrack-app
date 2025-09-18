@@ -152,7 +152,7 @@ export default function AdminScreen() {
         <Text style={styles.headerTitle}>Admin</Text>
         <TouchableOpacity
           style={styles.addButton}
-          onPress={() => router.push('/admin/create_user')}
+          onPress={() => router.push('../create_user/create_user')}
         >
           <Plus size={24} color="#FFFFFF" />
         </TouchableOpacity>

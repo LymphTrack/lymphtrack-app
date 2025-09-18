@@ -1,7 +1,7 @@
 import React, { useState, useCallback} from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { useRouter} from 'expo-router';
-import { User, LogOut, ChevronRight, Mail, Briefcase, Building, Lock , ShieldCheck, ScrollText, } from 'lucide-react-native';
+import { User, Shield, LogOut, ChevronRight, Mail, Briefcase, Building, Lock , ShieldCheck, ScrollText, } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { useFocusEffect } from "@react-navigation/native";
 import { API_URL } from "@/constants/api";
@@ -12,6 +12,7 @@ interface UserProfile {
   name: string;
   role: string;
   institution: string;
+  user_type : string;
 }
 
 export default function SettingsScreen() {
@@ -26,35 +27,36 @@ export default function SettingsScreen() {
   );
 
   const loadUserProfile = async () => {
-  try {
-    setLoading(true);
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    try {
+      setLoading(true);
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
 
-    if (userError || !user) {
-      console.error("Error getting user:", userError);
-      return;
+      if (userError || !user) {
+        console.error("Error getting user:", userError);
+        return;
+      }
+
+    const res = await fetch(`${API_URL}/users/${user.id}`);
+      if (!res.ok) {
+        console.error("Error fetching user profile:", res.statusText);
+        return;
+      }
+      const profile = await res.json();
+
+      setUserProfile({
+        id: profile.id,
+        email: profile.email || user.email, 
+        name: profile.name || "Unknown Doctor",
+        role: profile.role || "General Medicine",
+        institution: profile.institution || "Unknown Institution",
+        user_type: profile.user_type,
+      });
+    } catch (error) {
+      console.error("Error:", error);
+    } finally {
+      setLoading(false);
     }
-
-  const res = await fetch(`${API_URL}/users/${user.id}`);
-    if (!res.ok) {
-      console.error("Error fetching user profile:", res.statusText);
-      return;
-    }
-    const profile = await res.json();
-
-    setUserProfile({
-      id: profile.id,
-      email: profile.email || user.email, 
-      name: profile.name || "Unknown Doctor",
-      role: profile.role || "General Medicine",
-      institution: profile.institution || "Unknown Institution",
-    });
-  } catch (error) {
-    console.error("Error:", error);
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   const handleSignOut = async () => {
     Alert.alert(
@@ -213,6 +215,20 @@ export default function SettingsScreen() {
             onPress={() => router.push("../setting/security/terms_of_use")}
           />
         </View>
+
+      
+        {userProfile?.user_type === "admin" && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Administrator</Text>
+
+            <SettingItem
+              icon={Shield}
+              title="User Management"
+              subtitle="Update or create User"
+              onPress={() => router.push("../setting/admin/admin")}
+            />
+          </View>
+        )}
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>About</Text>

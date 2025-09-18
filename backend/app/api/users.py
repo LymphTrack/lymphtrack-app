@@ -19,10 +19,6 @@ supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 # CREATE USER
 # ---------------------
 
-# ---------------------
-# CREATE USER
-# ---------------------
-
 @router.post("/")
 def create_user(user_data: dict = Body(...), db: Session = Depends(get_db)):
     email = user_data.get("email")
@@ -45,7 +41,6 @@ def create_user(user_data: dict = Body(...), db: Session = Depends(get_db)):
         if not auth_user:
             raise Exception("Failed to create user in Supabase auth")
     except Exception as e:
-        print("DEBUG SUPABASE ERROR:", e)
         if "already been registered" in str(e):
             auth_user = db.query(User).filter(User.email == email).first()
             if not auth_user:
@@ -62,7 +57,7 @@ def create_user(user_data: dict = Body(...), db: Session = Depends(get_db)):
         existing.institution = institution or existing.institution
         existing.user_type = user_type or existing.user_type
         if not existing.created_at:
-            existing.created_at = datetime.utcnow()
+            existing.created_at = datetime.now(datetime.timezone.utc)
         db.commit()
         db.refresh(existing)
 

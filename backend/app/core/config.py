@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     APP_NAME: str = "LymphTrack Backend"
     DEBUG: bool = True
 
+    SUPABASE_URL: str
+    SUPABASE_SERVICE_KEY: str
+
     class Config:
         env_file = "backend/.env" 
 
