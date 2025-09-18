@@ -89,6 +89,9 @@ export default function CreateFollowUp() {
     return (
       <View style={{ flex: 1, backgroundColor: "#FFFFFF", justifyContent: "center", alignItems: "center" }}>
         <ActivityIndicator size="large" color="#6a90db" />
+        <Text style={{ marginTop: 20, fontSize: 16, color: "#1F2937" }}>
+          Creating FollowUp...
+        </Text>
       </View>
     );
   }

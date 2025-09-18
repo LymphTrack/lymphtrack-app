@@ -2,9 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.orm import Session
 from app.db.models import Operation
 from app.db.database import get_db
-import boto3, os
+import os
 from dotenv import load_dotenv
-from botocore.config import Config
 from mega import Mega
 
 load_dotenv()
@@ -28,14 +27,15 @@ root_id = root_folder[0]
 
 @router.post("/")
 def create_operation(op_data: dict = Body(...), db: Session = Depends(get_db)):
+    patient_id = op_data.get("patient_id")
+    created_folders = []
+
     try:
-        new_op = Operation(**op_data)
-        db.add(new_op)
-        db.commit()
-        db.refresh(new_op)
+        patient_folder = f"lymphtrack-data/{patient_id}"
+        if not m.folder_exists(patient_folder):
+            m.create_folder(patient_folder)
 
-        patient_id = new_op.patient_id
-
+        temp_op = Operation(**op_data)
         all_ops = (
             db.query(Operation)
             .filter(Operation.patient_id == patient_id)
@@ -43,23 +43,37 @@ def create_operation(op_data: dict = Body(...), db: Session = Depends(get_db)):
             .all()
         )
 
-        visit_number = {o.id_operation: idx + 1 for idx, o in enumerate(all_ops)}[new_op.id_operation]
-        visit_str = f"{visit_number}_{new_op.name.replace(' ', '_')}_{new_op.operation_date.strftime('%d%m%Y')}"
-        visit_folder = m.create_folder(f"lymphtrack-data/{patient_id}/{visit_str}")
+        visit_number = len(all_ops) + 1
+        visit_str = f"{visit_number}_{temp_op.name.replace(' ', '_')}_{temp_op.operation_date.strftime('%d%m%Y')}"
+        visit_folder = f"{patient_folder}/{visit_str}"
+
+        m.create_folder(visit_folder)
+        created_folders.append(visit_folder)
 
         for pos in range(1, 7):
-            m.create_folder(f"lymphtrack-data/{patient_id}/{visit_str}/{pos}")
+            pos_folder = f"{visit_folder}/{pos}"
+            m.create_folder(pos_folder)
+            created_folders.append(pos_folder)
+
+        db.add(temp_op)
+        db.commit()
+        db.refresh(temp_op)
 
         return {
             "status": "success",
-            "operation": new_op,
+            "operation": temp_op,
             "patient_id": patient_id,
-            "id_operation": new_op.id_operation,
+            "id_operation": temp_op.id_operation,
             "visit_str": visit_str,
         }
 
     except Exception as e:
         db.rollback()
+        for folder in reversed(created_folders):
+            try:
+                m.delete_folder(folder)
+            except Exception:
+                pass
         raise HTTPException(status_code=400, detail=f"Error creating operation: {e}")
 
 
