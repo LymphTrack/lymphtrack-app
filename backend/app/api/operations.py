@@ -5,6 +5,7 @@ from app.db.database import get_db
 import os
 from dotenv import load_dotenv
 from mega import Mega
+from datetime import datetime
 
 load_dotenv()
 
@@ -39,7 +40,11 @@ def create_operation(op_data: dict = Body(...), db: Session = Depends(get_db)):
         )
 
         visit_number = len(all_ops) + 1
-        visit_str = f"{visit_number}_{temp_op.name.replace(' ', '_')}_{temp_op.operation_date.strftime('%d%m%Y')}"
+        date_obj = temp_op.operation_date
+        if isinstance(date_obj, str):
+            date_obj = datetime.fromisoformat(date_obj)
+
+        visit_str = f"{visit_number}_{temp_op.name.replace(' ', '_')}_{date_obj.strftime('%d%m%Y')}"
 
         # Créer le dossier de la visite
         m.create_folder(f"{visit_str}", patient_folder[0])
