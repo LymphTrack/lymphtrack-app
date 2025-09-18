@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     DEBUG: bool = True
 
     SUPABASE_URL: str
-    SUPABASE_SERVICE_KEY: str
+    SUPABASE_SERVICE_ROLE_KEY: str
 
     class Config:
         env_file = "backend/.env" 
