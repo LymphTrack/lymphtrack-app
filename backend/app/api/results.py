@@ -59,32 +59,12 @@ async def create_results(
             .order_by(Operation.operation_date.asc())
             .all()
         )
+
         visit_number = {op.id_operation: idx + 1 for idx, op in enumerate(all_ops)}[operation.id_operation]
         visit_name = operation.name.replace(" ", "_")
         visit_str = f"{visit_number}_{visit_name}_{operation.operation_date.strftime('%d%m%Y')}"
 
         processed_results = []
-
-        old_results = (
-            db.query(Result)
-            .filter(Result.id_operation == id_operation, Result.position == position)
-            .all()
-        )
-
-        for r in old_results:
-            try:
-                file_name = r.file_path.split("/")[-1]
-                file_node = m.find(file_name)
-                if file_node:
-                    m.delete(file_node[0])
-                else:
-                    logging.warning(f"File {file_name} not found in Mega, skipping deletion")
-            except Exception as e:
-                logging.warning(f"Could not delete old file {r.file_path}: {e}")
-
-            db.delete(r)
-
-        db.commit()
 
         for idx, file in enumerate(files, start=1):
             df = None
@@ -159,16 +139,18 @@ async def create_results(
             bw = freqs.max() - freqs.min()
 
         file.file.seek(0)
-
         archive_path = f"{patient_id}/{visit_str}/{position}/{file.filename}"
+
+
 
         tmp_path = f"tmp_{file.filename}"
         with open(tmp_path, "wb") as tmp_f:
             tmp_f.write(file.file.read())
 
+        visit_folder = m.find(f"lymphtrack-data/{patient_id}/{visit_str}")
         dest_folder = m.find(f"lymphtrack-data/{patient_id}/{visit_str}/{position}")
         if not dest_folder:
-            dest_folder = m.create_folder(f"lymphtrack-data/{patient_id}/{visit_str}/{position}")
+            dest_folder = m.create_folder(f"{position}", visit_folder[0])
 
         m.upload(tmp_path, dest_folder[0])
 
