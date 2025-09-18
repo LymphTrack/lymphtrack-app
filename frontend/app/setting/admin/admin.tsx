@@ -1,5 +1,5 @@
-import { View, Text, StyleSheet, Alert,TouchableOpacity, ActivityIndicator, FlatList} from "react-native";
-import { Mail, Briefcase, Building, Trash, Plus} from 'lucide-react-native';
+import { View, Text, StyleSheet, Alert,TouchableOpacity, ActivityIndicator, FlatList, } from "react-native";
+import { Mail, Briefcase, Building, Trash, Plus,ArrowLeft} from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useState, useCallback} from 'react';
 import { useFocusEffect } from "@react-navigation/native";
@@ -84,6 +84,23 @@ export default function AdminScreen() {
     }
   };
 
+  const handleBack = () => {
+    Alert.alert(
+      'Unsaved Changes',
+      'If you leave now, your modifications will not be saved. Do you want to continue?',
+      [
+        { text: 'Stay', style: 'cancel' },
+        {
+          text: 'Leave',
+          style: 'destructive',
+          onPress: () => {
+            router.push('../../(tabs)/settings');
+          },
+        },
+      ]
+    );
+  };
+
   if (loading) {
     return (
       <View style={{ flex: 1, backgroundColor: "#FFFFFF", justifyContent: "center", alignItems: "center" }}>
@@ -149,10 +166,13 @@ export default function AdminScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
+        <TouchableOpacity onPress={() => router.push("../../(tabs)/settings")}>
+          <ArrowLeft size={24} color="#1F2937" />
+        </TouchableOpacity>
         <Text style={styles.headerTitle}>Admin</Text>
         <TouchableOpacity
           style={styles.addButton}
-          onPress={() => router.push('../create_user/create_user')}
+          onPress={() => router.push('../admin/user/create_user')}
         >
           <Plus size={24} color="#FFFFFF" />
         </TouchableOpacity>

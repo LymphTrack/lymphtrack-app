@@ -43,7 +43,7 @@ export default function CreateUserScreen() {
       Alert.alert("Success", "User created successfully", [
         {
           text: "OK",
-          onPress: () => router.replace("/(tabs)/admin"),
+          onPress: () => router.replace("../admin"),
         },
       ]);
     } catch (error) {
@@ -75,7 +75,7 @@ export default function CreateUserScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.push('../(tabs)/admin')}>
+        <TouchableOpacity onPress={() => router.push('../admin')}>
           <ArrowLeft size={24} color="#1F2937" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>New User</Text>

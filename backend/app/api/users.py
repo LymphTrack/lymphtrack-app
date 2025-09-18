@@ -4,7 +4,7 @@ from app.db.database import get_db
 from app.db.models import User
 from fastapi import APIRouter, Depends, HTTPException, Body
 from supabase import create_client
-from datetime import datetime
+from datetime import datetime, timezone
 
 import os
 
@@ -57,7 +57,8 @@ def create_user(user_data: dict = Body(...), db: Session = Depends(get_db)):
         existing.institution = institution or existing.institution
         existing.user_type = user_type or existing.user_type
         if not existing.created_at:
-            existing.created_at = datetime.now(datetime.timezone.utc)
+            existing.created_at = datetime.now(timezone.utc)
+
         db.commit()
         db.refresh(existing)
 
@@ -75,7 +76,7 @@ def create_user(user_data: dict = Body(...), db: Session = Depends(get_db)):
         role=role,
         institution=institution,
         user_type=user_type,
-        created_at=datetime.now(datetime.timezone.utc)
+        created_at=datetime.now(timezone.utc)
     )
 
     db.add(new_user)
