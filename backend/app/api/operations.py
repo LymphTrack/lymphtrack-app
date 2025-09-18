@@ -26,7 +26,6 @@ def create_operation(op_data: dict = Body(...), db: Session = Depends(get_db)):
     patient_id = op_data.get("patient_id")
 
     try:
-        # Vérifier si le dossier patient existe déjà
         patient_folder = m.find(f"lymphtrack-data/{patient_id}")
         if not patient_folder:
             patient_folder = [m.create_folder(f"lymphtrack-data/{patient_id}")]
@@ -46,18 +45,8 @@ def create_operation(op_data: dict = Body(...), db: Session = Depends(get_db)):
 
         visit_str = f"{visit_number}_{temp_op.name.replace(' ', '_')}_{date_obj.strftime('%d%m%Y')}"
 
-        # Créer le dossier de la visite
         m.create_folder(f"{visit_str}", patient_folder[0])
 
-        visit_folder = m.find(f"lymphtrack-data/{patient_id}/{visit_str}")
-        if not visit_folder:
-            raise HTTPException(status_code=400, detail="Visit folder not created")
-
-        # Créer les 6 sous-dossiers
-        for pos in range(1, 7):
-            m.create_folder(f"{pos}", visit_folder[0])
-
-        # Commit en base seulement si tout est OK côté dossiers
         db.add(temp_op)
         db.commit()
         db.refresh(temp_op)
