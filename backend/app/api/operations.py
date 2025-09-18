@@ -16,11 +16,6 @@ PASSWORD = os.getenv("MEGA_PASSWORD")
 mega = Mega()
 m = mega.login(EMAIL, PASSWORD)
 
-root_folder = m.find("lymphtrack-data")
-if not root_folder:
-    raise Exception("Folder 'lymphtrack-data' was not found in Mega.nz")
-root_id = root_folder[0]
-
 # ---------------------
 # CREATE OPERATION
 # ---------------------
@@ -28,12 +23,9 @@ root_id = root_folder[0]
 @router.post("/")
 def create_operation(op_data: dict = Body(...), db: Session = Depends(get_db)):
     patient_id = op_data.get("patient_id")
-    created_folders = []
 
     try:
-        patient_folder = f"lymphtrack-data/{patient_id}"
-        if not m.folder_exists(patient_folder):
-            m.create_folder(patient_folder)
+        patient_folder = m.find("lymphtrack-data/{patient_id}")
 
         temp_op = Operation(**op_data)
         all_ops = (
@@ -45,15 +37,14 @@ def create_operation(op_data: dict = Body(...), db: Session = Depends(get_db)):
 
         visit_number = len(all_ops) + 1
         visit_str = f"{visit_number}_{temp_op.name.replace(' ', '_')}_{temp_op.operation_date.strftime('%d%m%Y')}"
-        visit_folder = f"{patient_folder}/{visit_str}"
 
-        m.create_folder(visit_folder)
-        created_folders.append(visit_folder)
+        m.create_folder("{visit_str}", patient_folder[0])
+
+        visit_folder = m.find("lymphtrack-data/{patient_id}/{visit_str}")
 
         for pos in range(1, 7):
-            pos_folder = f"{visit_folder}/{pos}"
-            m.create_folder(pos_folder)
-            created_folders.append(pos_folder)
+            pos_folder = f"{pos}"
+            m.create_folder(pos_folder, visit_folder[0])
 
         db.add(temp_op)
         db.commit()
