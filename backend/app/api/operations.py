@@ -60,12 +60,6 @@ def create_operation(op_data: dict = Body(...), db: Session = Depends(get_db)):
 
     except Exception as e:
         db.rollback()
-        for folder in reversed(created_folders):
-            try:
-                m.delete_folder(folder)
-            except Exception:
-                pass
-        raise HTTPException(status_code=400, detail=f"Error creating operation: {e}")
 
 
 # -----------------------
