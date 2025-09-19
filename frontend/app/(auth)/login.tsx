@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, Image } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, Image, Platform, useWindowDimensions, } from 'react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { Eye, EyeOff } from 'lucide-react-native';
@@ -12,10 +12,27 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const { width } = useWindowDimensions();
+
+  const showAlert = (title: string, message: string) => {
+    if (Platform.OS === 'web') {
+      window.alert(`${title}: ${message}`);
+    } else {
+      Alert.alert(title, message);
+    }
+  };
+
+  const saveUserId = async (id: string) => {
+    if (Platform.OS === 'web') {
+      localStorage.setItem("userId", id);
+    } else {
+      await AsyncStorage.setItem("userId", id);
+    }
+  };
 
   const handleLogin = async () => {
     if (!email || !password) {
-      Alert.alert('Error', 'Please fill in all fields');
+      showAlert('Error', 'Please fill in all fields');
       return;
     }
 
@@ -27,13 +44,13 @@ export default function LoginScreen() {
       });
 
       if (error) {
-        Alert.alert('Login Failed', error.message);
+        showAlert('Login Failed', error.message);
       } else if (data.user) {
-        await AsyncStorage.setItem("userId", data.user.id);
+        await saveUserId(data.user.id);
         router.replace('/(tabs)/patients');
       }
     } catch (error) {
-      Alert.alert('Error', 'An unexpected error occurred');
+      showAlert('Error', 'An unexpected error occurred');
     } finally {
       setLoading(false);
     }
@@ -41,17 +58,18 @@ export default function LoginScreen() {
 
   const handleForgotPassword = async () => {
     if (!email) {
-      Alert.alert('Email Required', 'Please enter your email address');
+      showAlert('Email Required', 'Please enter your email address');
       return;
     }
 
     const { error } = await supabase.auth.resetPasswordForEmail(email);
     if (error) {
-      Alert.alert('Error', error.message);
+      showAlert('Error', error.message);
     } else {
-      Alert.alert('Success', 'Password reset email sent');
+      showAlert('Success', 'Password reset email sent');
     }
   };
+
 
   return (
     <View style={styles.container}>
@@ -64,7 +82,7 @@ export default function LoginScreen() {
         <Text style={styles.subtitle}>Secure Medical Data Management</Text>
       </View>
 
-      <View style={styles.form}>
+      <View style={[styles.form, width >=600 && { maxWidth: 400, alignSelf: 'center' }]}>
         <TextInput
           style={styles.input}
           placeholder="Email Address"

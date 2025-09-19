@@ -141,8 +141,6 @@ async def create_results(
         file.file.seek(0)
         archive_path = f"{patient_id}/{visit_str}/{position}/{file.filename}"
 
-
-
         tmp_path = f"tmp_{file.filename}"
         with open(tmp_path, "wb") as tmp_f:
             tmp_f.write(file.file.read())

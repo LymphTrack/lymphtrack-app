@@ -8,11 +8,12 @@ API_URL = "http://localhost:8000/users"
 
 def test_create_user():
     payload = {
-        "email": "testuser2@example.com",
+        "email": "testuser@example.com",
         "password": "TestPass123!",
         "name": "Test User",
         "role": "Researcher",
-        "institution": "LymphTrack Lab"
+        "institution": "LymphTrack Lab",
+        "user_type": "admin"
     }
     r = requests.post(API_URL + "/", json=payload)
 
@@ -37,7 +38,8 @@ def test_update_user(user_id):
     payload = {
         "name": "Updated User",
         "role": "Doctor",
-        "institution": "Updated Institution"
+        "institution": "Updated Institution",
+        "user_type": "user"
     }
     r = requests.put(f"{API_URL}/{user_id}", json=payload)
     print("UPDATE:", r.status_code, r.json())

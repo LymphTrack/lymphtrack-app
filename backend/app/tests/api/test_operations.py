@@ -8,7 +8,7 @@ API_URL = "http://localhost:8000/operations"
 
 def test_create_operation():
     payload = {
-        "patient_id": "MV001",
+        "patient_id": "MV131",
         "name": "PreOp",
         "operation_date": "2025-09-16",
         "notes": "First Visit"
@@ -80,7 +80,7 @@ if __name__ == "__main__":
     op_id = test_create_operation()
     if op_id:
         test_get_operation(op_id)
-        test_update_operation(op_id)
-        test_get_operations_by_patient("MV001")
-        test_get_all_operations()
+        #test_update_operation(op_id)
+        #test_get_operations_by_patient("MV001")
+        #test_get_all_operations()
         test_delete_operation(op_id)

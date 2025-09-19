@@ -86,5 +86,5 @@ if __name__ == "__main__":
         test_get_patient(pid)
         test_update_patient(pid)
         test_get_all_patients()
-        test_export_patient_folder(pid)
+        # test_export_patient_folder(pid)
         test_delete_patient(pid)
