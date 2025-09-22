@@ -1,4 +1,4 @@
-import { View, Text, ScrollView, StyleSheet, ActivityIndicator, Alert, TouchableOpacity } from "react-native";
+import { Platform, View, Text, ScrollView, StyleSheet, ActivityIndicator, Alert, TouchableOpacity, useWindowDimensions } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { ArrowLeft, Save, Trash } from "lucide-react-native";
 import { API_URL } from "@/constants/api";
@@ -12,6 +12,7 @@ export default function PatientResultsScreen() {
   const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
+  const {width} = useWindowDimensions();
 
 
   useFocusEffect(
@@ -42,38 +43,65 @@ export default function PatientResultsScreen() {
   };
 
   const handleDelete = async () => {
-    Alert.alert(
-      "Confirm deletion",
-      "Are you sure you want to delete this operation?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              const res = await fetch(`${API_URL}/operations/${id_operation}`, {
-                method: "DELETE",
-              });
+    if (Platform.OS === "web") {
+      const confirm = window.confirm(
+        "Confirm deletion\n\nAre you sure you want to delete this operation?"
+      );
+      if (confirm) {
+        try {
+          const res = await fetch(`${API_URL}/operations/${id_operation}`, {
+            method: "DELETE",
+          });
 
-              if (!res.ok) {
-                const errData = await res.json();
-                Alert.alert("Error", errData.detail || "Unable to delete the operation");
-                return;
+          if (!res.ok) {
+            const errData = await res.json();
+            window.alert(`Error\n\n${errData.detail || "Unable to delete the operation"}`);
+            return;
+          }
+
+          const data = await res.json();
+          window.alert(`Success\n\n${data.message || "Operation deleted successfully"}`);
+
+          router.push(`../${data.patient_id}`);
+        } catch (err) {
+          console.error("Unexpected error:", err);
+          window.alert("Error\n\nSomething went wrong during deletion");
+        }
+      }
+    } else {
+      Alert.alert(
+        "Confirm deletion",
+        "Are you sure you want to delete this operation?",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Delete",
+            style: "destructive",
+            onPress: async () => {
+              try {
+                const res = await fetch(`${API_URL}/operations/${id_operation}`, {
+                  method: "DELETE",
+                });
+
+                if (!res.ok) {
+                  const errData = await res.json();
+                  Alert.alert("Error", errData.detail || "Unable to delete the operation");
+                  return;
+                }
+
+                const data = await res.json();
+                Alert.alert("Success", data.message || "Operation deleted successfully");
+
+                router.push(`../${data.patient_id}`);
+              } catch (err) {
+                console.error("Unexpected error:", err);
+                Alert.alert("Error", "Something went wrong during deletion");
               }
-              
-              const data = await res.json();
-              Alert.alert("Success", data.message || "Operation deleted successfully");
-              
-              router.push(`../${data.patient_id}`);
-            } catch (err) {
-              console.error("Unexpected error:", err);
-              Alert.alert("Error", "Something went wrong during deletion");
-            }
+            },
           },
-        },
-      ]
-    );
+        ]
+      );
+    }
   };
 
   const renderMeasurements = (position: number) => {
@@ -151,16 +179,38 @@ export default function PatientResultsScreen() {
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.push(
+
+        <View
+          style={{
+            width: width >= 700 ? 700 : "100%",
+             alignSelf: "center",
+            flexDirection: "row",
+            paddingHorizontal: width >= 700 ? 30 : 10,
+            position: "relative",
+          }}
+        >
+          <TouchableOpacity onPress={() => router.push(
               `/patient/${operation.patient_id}`
             )}>
-          <ArrowLeft size={28} color="#1F2937" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Visit patient : {operation.patient_id}</Text>
-      <View style={{ width: 28 }} />
-    </View>
+            <ArrowLeft size={24} color="#1F2937" />
+          </TouchableOpacity>
+          <Text
+            pointerEvents="none"
+            style={[
+              styles.headerTitle,
+              { 
+                position: "absolute",
+                left: 0,
+                right: 0,
+                textAlign: "center",
+              },
+            ]}
+          >
+          Visit patient : {operation.patient_id}</Text>
+        </View>
+      </View>
 
-      <View style={styles.operationBlock}>
+      <View style={[styles.operationBlock, width>=700 && {width : 700, alignSelf: "center"}]}>
         <Text style={styles.operationTitle}>{operation.name}</Text>
         <Text style={styles.operationDate}>({new Date(operation.operation_date).toLocaleDateString()})</Text>
         <Text style={styles.operationNotes}>{operation.notes || "No notes available for this visit"}</Text>
@@ -168,7 +218,7 @@ export default function PatientResultsScreen() {
       </View>
 
       
-      <View style={styles.buttonContainer}>
+      <View style={[styles.buttonContainer,  width>=700 && {width : 700, alignSelf: "center"}]}>
         <TouchableOpacity
           style={styles.modifyButton}
           onPress={() =>
@@ -202,11 +252,8 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
     paddingHorizontal: 20,
-    paddingTop: 60,
+    paddingTop : Platform.OS === 'web' ? 20 : 60,
     paddingBottom: 20,
     backgroundColor: "#FFFFFF",
     borderBottomWidth: 1,

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView, ActivityIndicator } from "react-native";
+import { Platform , useWindowDimensions, View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView, ActivityIndicator } from "react-native";
 import { ArrowLeft } from "lucide-react-native";
 import { useRouter} from "expo-router";
 import { supabase } from "@/lib/supabase";
@@ -12,10 +12,12 @@ export default function ModifyAccountScreen() {
   const [institution, setInstitution] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const {width} = useWindowDimensions();
 
   useEffect(() => {
     loadUserProfile();
   }, []);
+
 
   const loadUserProfile = async () => {
     try {
@@ -29,7 +31,11 @@ export default function ModifyAccountScreen() {
       });
 
       if (!res.ok) {
-        Alert.alert("Error", "Failed to load user profile");
+        if (Platform.OS === 'web') {
+          window.alert("Error\n\nFailed to load user profile");
+        }else {
+          Alert.alert("Error", "Failed to load user profile");
+        } 
         return;
       }
 
@@ -42,7 +48,12 @@ export default function ModifyAccountScreen() {
 
     } catch (error) {
       console.error("Error loading profile:", error);
-      Alert.alert("Error", "Unexpected error occurred while loading profile");
+      if (Platform.OS === 'web') {
+        window.alert("Error\n\nUnexpected error occurred while loading profil");
+      }else {
+        Alert.alert("Error", "Unexpected error occurred while loading profile");
+      } 
+      
     } finally {
       setLoading(false);
     }
@@ -57,11 +68,15 @@ export default function ModifyAccountScreen() {
       if (email && email !== user.email) {
         const { error: authError } = await supabase.auth.updateUser({ email });
         if (authError) {
-          Alert.alert("Error", authError.message);
+          if (Platform.OS === "web") {
+            window.alert(`Error\n\n${authError.message}`);
+          } else {
+            Alert.alert("Error", authError.message);
+          }
           return;
         }
       }
-      
+
       const res = await fetch(`${API_URL}/users/${user.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -75,37 +90,58 @@ export default function ModifyAccountScreen() {
 
       if (!res.ok) {
         const errorData = await res.json();
-        Alert.alert("Error", errorData.detail || "Failed to update user");
+        if (Platform.OS === "web") {
+          window.alert(`Error\n\n${errorData.detail || "Failed to update user"}`);
+        } else {
+          Alert.alert("Error", errorData.detail || "Failed to update user");
+        }
         return;
       }
 
-      Alert.alert("Success", "Account updated successfully!");
+      if (Platform.OS === "web") {
+        window.alert("Success\n\nAccount updated successfully!");
+      } else {
+        Alert.alert("Success", "Account updated successfully!");
+      }
       router.back();
+
     } catch (err) {
       console.error(err);
-      Alert.alert("Error", "Unexpected error occurred");
+      if (Platform.OS === "web") {
+        window.alert("Error\n\nUnexpected error occurred");
+      } else {
+        Alert.alert("Error", "Unexpected error occurred");
+      }
     } finally {
       setLoading(false);
     }
   };
 
   const handleBack = () => {
-    Alert.alert(
-      'Unsaved Changes',
-      'If you leave now, your modifications will not be saved. Do you want to continue?',
-      [
-        { text: 'Stay', style: 'cancel' },
-        {
-          text: 'Leave',
-          style: 'destructive',
-          onPress: () => {
-            router.push('../../(tabs)/settings');
+    if (Platform.OS === "web") {
+      const confirm = window.confirm(
+        "Unsaved Changes\n\nIf you leave now, your modifications will not be saved. Do you want to continue?"
+      );
+      if (confirm) {
+        router.push("../../(tabs)/settings");
+      }
+    } else {
+      Alert.alert(
+        "Unsaved Changes",
+        "If you leave now, your modifications will not be saved. Do you want to continue?",
+        [
+          { text: "Stay", style: "cancel" },
+          {
+            text: "Leave",
+            style: "destructive",
+            onPress: () => {
+              router.push("../../(tabs)/settings");
+            },
           },
-        },
-      ]
-    );
+        ]
+      );
+    }
   };
-
 
   if (loading) {
     return (
@@ -119,17 +155,39 @@ export default function ModifyAccountScreen() {
 
   return (
     
-    <View style={styles.container}>
-      <View style={styles.header}>
+  <View style={styles.container}>
+    <View style={styles.header}>
+      
+      <View
+        style={{
+          width: width >= 700 ? 700 : "100%",
+          alignSelf: "center",
+          flexDirection: "row",
+          paddingHorizontal: width >= 700 ? 30 : 10,
+          position: "relative",
+        }}
+      >
         <TouchableOpacity onPress={handleBack}>
           <ArrowLeft size={24} color="#1F2937" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Modify Account</Text>
-        <View style={{ width: 24 }} />
+        <Text
+          pointerEvents="none"
+          style={[
+            styles.headerTitle,
+            { 
+              position: "absolute",
+              left: 0,
+              right: 0,
+              textAlign: "center",
+            },
+          ]}
+        >
+          Modify Account
+        </Text>
       </View>
-
-      {/* Form */}
-      <ScrollView contentContainerStyle={styles.form}>
+      </View>
+      
+      <ScrollView contentContainerStyle={[styles.form , width >= 700 && {width : 700 , alignSelf : "center"}]}>
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Full Name</Text>
           <TextInput
@@ -186,11 +244,9 @@ export default function ModifyAccountScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F8FAFC" },
   header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 20,
-    paddingTop: 60,
+    paddingTop : Platform.OS === 'web' ? 20 : 60,
     paddingBottom: 20,
     backgroundColor: "#FFFFFF",
     borderBottomWidth: 1,

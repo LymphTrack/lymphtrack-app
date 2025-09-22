@@ -1,6 +1,6 @@
-import React, { useState } from "react";
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView } from "react-native";
-import { ArrowLeft, Lock } from "lucide-react-native";
+import { useState } from "react";
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView, Platform, useWindowDimensions } from "react-native";
+import { ArrowLeft } from "lucide-react-native";
 import { useRouter } from "expo-router";
 import { supabase } from "@/lib/supabase";
 
@@ -10,27 +10,46 @@ export default function ModifyPasswordScreen() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const {width} = useWindowDimensions();
 
   const handleSave = async () => {
     if (!currentPassword || !newPassword || !confirmPassword) {
-      Alert.alert("Error", "All fields are required.");
+      if (Platform.OS === "web") {
+        window.alert("Error\n\nAll fields are required.");
+      } else {
+        Alert.alert("Error", "All fields are required.");
+      }
       return;
     }
+
     if (newPassword === currentPassword) {
-      Alert.alert("Error", "New password must be different from current password.");
+      if (Platform.OS === "web") {
+        window.alert("Error\n\nNew password must be different from current password.");
+      } else {
+        Alert.alert("Error", "New password must be different from current password.");
+      }
       return;
     }
+
     if (newPassword !== confirmPassword) {
-      Alert.alert("Error", "New passwords do not match.");
+      if (Platform.OS === "web") {
+        window.alert("Error\n\nNew passwords do not match.");
+      } else {
+        Alert.alert("Error", "New passwords do not match.");
+      }
       return;
     }
 
     try {
       setLoading(true);
-      
+
       const { data: { user }, error: authError } = await supabase.auth.getUser();
       if (authError || !user) {
-        Alert.alert("Error", "Unable to fetch user session.");
+        if (Platform.OS === "web") {
+          window.alert("Error\n\nUnable to fetch user session.");
+        } else {
+          Alert.alert("Error", "Unable to fetch user session.");
+        }
         return;
       }
 
@@ -40,7 +59,11 @@ export default function ModifyPasswordScreen() {
       });
 
       if (signInError) {
-        Alert.alert("Error", "Current password is incorrect.");
+        if (Platform.OS === "web") {
+          window.alert("Error\n\nCurrent password is incorrect.");
+        } else {
+          Alert.alert("Error", "Current password is incorrect.");
+        }
         return;
       }
 
@@ -49,31 +72,91 @@ export default function ModifyPasswordScreen() {
       });
 
       if (updateError) {
-        Alert.alert("Error", updateError.message);
+        if (Platform.OS === "web") {
+          window.alert(`Error\n\n${updateError.message}`);
+        } else {
+          Alert.alert("Error", updateError.message);
+        }
         return;
       }
 
-      Alert.alert("Success", "Password updated successfully!");
+      if (Platform.OS === "web") {
+        window.alert("Success\n\nPassword updated successfully!");
+      } else {
+        Alert.alert("Success", "Password updated successfully!");
+      }
       router.back();
+
     } catch (err) {
       console.error(err);
-      Alert.alert("Error", "Unexpected error occurred.");
+      if (Platform.OS === "web") {
+        window.alert("Error\n\nUnexpected error occurred.");
+      } else {
+        Alert.alert("Error", "Unexpected error occurred.");
+      }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleBack = () => {
+    if (Platform.OS === "web") {
+      const confirm = window.confirm(
+        "Unsaved Changes\n\nIf you leave now, your modifications will not be saved. Do you want to continue?"
+      );
+      if (confirm) {
+        router.push("../../(tabs)/settings");
+      }
+    } else {
+      Alert.alert(
+        "Unsaved Changes",
+        "If you leave now, your modifications will not be saved. Do you want to continue?",
+        [
+          { text: "Stay", style: "cancel" },
+          {
+            text: "Leave",
+            style: "destructive",
+            onPress: () => {
+              router.push("../../(tabs)/settings");
+            },
+          },
+        ]
+      );
     }
   };
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <ArrowLeft size={24} color="#1F2937" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Change Password</Text>
-        <View style={{ width: 24 }} />
+        <View
+          style={{
+            width: width >= 700 ? 700 : "100%",
+             alignSelf: "center",
+            flexDirection: "row",
+            paddingHorizontal: width >= 700 ? 30 : 10,
+            position: "relative",
+          }}
+        >
+          <TouchableOpacity onPress={handleBack}>
+            <ArrowLeft size={24} color="#1F2937" />
+          </TouchableOpacity>
+          <Text
+            pointerEvents="none"
+            style={[
+              styles.headerTitle,
+              { 
+                position: "absolute",
+                left: 0,
+                right: 0,
+                textAlign: "center",
+              },
+            ]}
+          >
+          Change Password</Text>
+        </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.form}>
+      <ScrollView contentContainerStyle={[styles.form, width >= 700 && {width : 700, alignSelf : "center"}]}>
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Current Password</Text>
           <TextInput
@@ -124,11 +207,8 @@ export default function ModifyPasswordScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F8FAFC" },
   header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
     paddingHorizontal: 20,
-    paddingTop: 60,
+    paddingTop : Platform.OS === 'web' ? 20 : 60,
     paddingBottom: 20,
     backgroundColor: "#FFFFFF",
     borderBottomWidth: 1,

@@ -1,11 +1,13 @@
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, StyleSheet, useWindowDimensions, Platform } from "react-native";
 import { useRouter } from 'expo-router';
 
 export default function OutcomesScreen() {
+  const { width } = useWindowDimensions();
+
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Outcomes</Text>
+      <View style={[styles.header, width >=700 && {justifyContent: "center"}]}>
+        <Text style={[styles.headerTitle, width >= 700 && {width : 700,}]}>Outcomes</Text>
       </View>
       <View style={styles.content}>
         <Text style={styles.constructionIcon}>🚧</Text>
@@ -25,7 +27,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 60,
+    paddingTop : Platform.OS === 'web' ? 20 : 60,
     paddingBottom: 20,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,

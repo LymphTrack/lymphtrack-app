@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView, ActivityIndicator} from "react-native";
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView, ActivityIndicator, useWindowDimensions} from "react-native";
 import { ArrowLeft, Trash, Save } from "lucide-react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { KeyboardAvoidingView, Platform } from "react-native";
@@ -19,6 +19,7 @@ export default function ModifyPatientScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const {width} = useWindowDimensions();
 
   useEffect(() => {
     if (patient_id) {
@@ -39,53 +40,90 @@ export default function ModifyPatientScreen() {
       setNotes(data.notes || "");
     } catch (error) {
       console.error("Error loading patient:", error);
-      Alert.alert("Error", "Failed to load patient data");
+      if (Platform.OS === "web") {
+        window.alert("Error\n\nFailed to load patient data");
+      } else {
+        Alert.alert("Error", "Failed to load patient data");
+      }
     } finally {
       setLoading(false);
     }
   };
 
   const deletePatient = async () => {
-    Alert.alert(
-      "Confirm deletion",
-      "Are you sure you want to delete this patient?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            setDeleting(true);
-            try {
-              const res = await fetch(`${API_URL}/patients/${patient_id}`, {
-                method: "DELETE",
-              });
+    if (Platform.OS === "web") {
+      const confirm = window.confirm(
+        "Confirm deletion\n\nAre you sure you want to delete this patient?"
+      );
+      if (confirm) {
+        setDeleting(true);
+        try {
+          const res = await fetch(`${API_URL}/patients/${patient_id}`, {
+            method: "DELETE",
+          });
 
-              if (!res.ok) {
-                const errorData = await res.json();
-                Alert.alert("Error", errorData.detail || "Failed to delete patient");
-                return;
+          if (!res.ok) {
+            const errorData = await res.json();
+            window.alert(`Error\n\n${errorData.detail || "Failed to delete patient"}`);
+            return;
+          }
+
+          window.alert("Success\n\nPatient deleted successfully!");
+          router.replace("/patients");
+        } catch (err) {
+          console.error("Error deleting patient:", err);
+          window.alert("Error\n\nUnexpected error occurred");
+        } finally {
+          setDeleting(false);
+        }
+      }
+    } else {
+      Alert.alert(
+        "Confirm deletion",
+        "Are you sure you want to delete this patient?",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Delete",
+            style: "destructive",
+            onPress: async () => {
+              setDeleting(true);
+              try {
+                const res = await fetch(`${API_URL}/patients/${patient_id}`, {
+                  method: "DELETE",
+                });
+
+                if (!res.ok) {
+                  const errorData = await res.json();
+                  Alert.alert("Error", errorData.detail || "Failed to delete patient");
+                  return;
+                }
+
+                Alert.alert("Success", "Patient deleted successfully!");
+                router.replace("/patients");
+              } catch (err) {
+                console.error("Error deleting patient:", err);
+                Alert.alert("Error", "Unexpected error occurred");
+              } finally {
+                setDeleting(false);
               }
-
-              Alert.alert("Success", "Patient deleted successfully!");
-              router.replace("/patients");
-            } catch (err) {
-              console.error("Error deleting patient:", err);
-              Alert.alert("Error", "Unexpected error occurred");
-            } finally {
-              setDeleting(false);
-            }
+            },
           },
-        },
-      ]
-    );
+        ]
+      );
+    }
   };
+
 
   const handleSave = async () => {
     const { valid, error, age: ageValue, bmi: bmiValue } = validatePatientData(age, bmi);
 
     if (!valid) {
-      Alert.alert("Error", error || "Invalid data");
+      if (Platform.OS === "web") {
+        window.alert(`Error\n\n${error || "Invalid data"}`);
+      } else {
+        Alert.alert("Error", error || "Invalid data");
+      }
       return;
     }
 
@@ -105,35 +143,56 @@ export default function ModifyPatientScreen() {
 
       if (!res.ok) {
         const errorData = await res.json();
-        Alert.alert("Error", errorData.detail || "Failed to update patient");
+        if (Platform.OS === "web") {
+          window.alert(`Error\n\n${errorData.detail || "Failed to update patient"}`);
+        } else {
+          Alert.alert("Error", errorData.detail || "Failed to update patient");
+        }
         return;
       }
 
-      Alert.alert("Success", "Patient updated successfully!");
+      if (Platform.OS === "web") {
+        window.alert("Success\n\nPatient updated successfully!");
+      } else {
+        Alert.alert("Success", "Patient updated successfully!");
+      }
       router.push(`../${patient_id}`);
     } catch (err) {
       console.error("Error:", err);
-      Alert.alert("Error", "Unexpected error occurred");
+      if (Platform.OS === "web") {
+        window.alert("Error\n\nUnexpected error occurred");
+      } else {
+        Alert.alert("Error", "Unexpected error occurred");
+      }
     } finally {
       setSaving(false);
     }
   };
 
   const handleBack = () => {
-    Alert.alert(
-      'Unsaved Changes',
-      'If you leave now, your modifications will not be saved. Do you want to continue?',
-      [
-        { text: 'Stay', style: 'cancel' },
-        {
-          text: 'Leave',
-          style: 'destructive',
-          onPress: () => {
-            router.push(`../${patient_id}`);
+    if (Platform.OS === "web") {
+      const confirm = window.confirm(
+        "Unsaved Changes\n\nIf you leave now, your modifications will not be saved. Do you want to continue?"
+      );
+      if (confirm) {
+        router.push(`../${patient_id}`);
+      }
+    } else {
+      Alert.alert(
+        "Unsaved Changes",
+        "If you leave now, your modifications will not be saved. Do you want to continue?",
+        [
+          { text: "Stay", style: "cancel" },
+          {
+            text: "Leave",
+            style: "destructive",
+            onPress: () => {
+              router.push(`../${patient_id}`);
+            },
           },
-        },
-      ]
-    );
+        ]
+      );
+    }
   };
 
   if (loading) {
@@ -179,19 +238,39 @@ export default function ModifyPatientScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={handleBack}>
-          <ArrowLeft size={24} color="#1F2937" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Modify Patient {patient_id}</Text>
-        <View style={{ width: 24 }} />
+        <View
+          style={{
+            width: width >= 700 ? 700 : "100%",
+             alignSelf: "center",
+            flexDirection: "row",
+            paddingHorizontal: width >= 700 ? 30 : 10,
+            position: "relative",
+          }}
+        >
+          <TouchableOpacity onPress={handleBack}>
+            <ArrowLeft size={24} color="#1F2937" />
+          </TouchableOpacity>
+          <Text
+            pointerEvents="none"
+            style={[
+              styles.headerTitle,
+              { 
+                position: "absolute",
+                left: 0,
+                right: 0,
+                textAlign: "center",
+              },
+            ]}
+          >
+          Modify Patient: {patient_id}</Text>
+        </View>
       </View>
       <KeyboardAvoidingView
               style={{ flex: 1 }}
               behavior={Platform.OS === "ios" ? "padding" : undefined}
             >
 
-      {/* Form */}
-      <ScrollView contentContainerStyle={styles.form}>
+      <ScrollView contentContainerStyle={[styles.form, width >= 700 && {width : 700, alignSelf:"center"}]}>
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Age</Text>
           <TextInput
@@ -281,11 +360,8 @@ export default function ModifyPatientScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F8FAFC" },
   header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
     paddingHorizontal: 20,
-    paddingTop: 60,
+    paddingTop : Platform.OS === 'web' ? 20 : 60,
     paddingBottom: 20,
     backgroundColor: "#FFFFFF",
     borderBottomWidth: 1,

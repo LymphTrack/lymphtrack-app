@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, Alert,TouchableOpacity, ActivityIndicator, FlatList, } from "react-native";
+import { View, Text, StyleSheet, Alert,TouchableOpacity, Platform, ActivityIndicator, FlatList, useWindowDimensions, } from "react-native";
 import { Mail, Briefcase, Building, Trash, Plus,ArrowLeft} from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useState, useCallback} from 'react';
@@ -19,6 +19,7 @@ export default function AdminScreen() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const {width} = useWindowDimensions();
 
   useFocusEffect(
     useCallback(() => {
@@ -43,21 +44,30 @@ export default function AdminScreen() {
   };
 
   const confirmDeleteUser = (id: string) => {
-    Alert.alert(
-      "Confirm deletion",
-      "Are you sure you want to delete this user?",
-      [
-        {
-          text: "Cancel",
-          style: "cancel",
-        },
-        {
-          text: "Delete",
-          style: "destructive", 
-          onPress: () => deleteUser(id),
-        },
-      ]
-    );
+    if (Platform.OS === "web") {
+      const confirm = window.confirm(
+        "Confirm deletion\n\nAre you sure you want to delete this user?"
+      );
+      if (confirm) {
+        deleteUser(id);
+      }
+    } else {
+      Alert.alert(
+        "Confirm deletion",
+        "Are you sure you want to delete this user?",
+        [
+          {
+            text: "Cancel",
+            style: "cancel",
+          },
+          {
+            text: "Delete",
+            style: "destructive",
+            onPress: () => deleteUser(id),
+          },
+        ]
+      );
+    }
   };
 
   const deleteUser = async (id: string) => {
@@ -68,37 +78,34 @@ export default function AdminScreen() {
       });
 
       if (!res.ok) {
-        Alert.alert("Error", "Failed to delete patient");
+        if (Platform.OS === "web") {
+          window.alert("Error\n\nFailed to delete patient");
+        } else {
+          Alert.alert("Error", "Failed to delete patient");
+        }
       } else {
-        Alert.alert("Success", "Patient deleted successfully");
-        loadUsers(); 
+        if (Platform.OS === "web") {
+          window.alert("Success\n\nPatient deleted successfully");
+        } else {
+          Alert.alert("Success", "Patient deleted successfully");
+        }
+        loadUsers();
       }
     } catch (err) {
       console.error("Erreur:", err);
-      Alert.alert(
-        "Error",
-        "Unable to delete patient. Please check your internet connection."
-      );
+      if (Platform.OS === "web") {
+        window.alert(
+          "Error\n\nUnable to delete patient. Please check your internet connection."
+        );
+      } else {
+        Alert.alert(
+          "Error",
+          "Unable to delete patient. Please check your internet connection."
+        );
+      }
     } finally {
       setDeletingId(null);
     }
-  };
-
-  const handleBack = () => {
-    Alert.alert(
-      'Unsaved Changes',
-      'If you leave now, your modifications will not be saved. Do you want to continue?',
-      [
-        { text: 'Stay', style: 'cancel' },
-        {
-          text: 'Leave',
-          style: 'destructive',
-          onPress: () => {
-            router.push('../../(tabs)/settings');
-          },
-        },
-      ]
-    );
   };
 
   if (loading) {
@@ -166,23 +173,50 @@ export default function AdminScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.push("../../(tabs)/settings")}>
-          <ArrowLeft size={24} color="#1F2937" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Admin</Text>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => router.push('../admin/user/create_user')}
+        <View
+          style={{
+            width: width >= 700 ? 700 : "100%",
+            alignSelf: "center",
+            flexDirection: "row",
+            alignItems: "center",
+            paddingHorizontal: width >= 700 ? 30 : 10,
+            position: "relative",
+          }}
         >
-          <Plus size={24} color="#FFFFFF" />
-        </TouchableOpacity>
+          <TouchableOpacity onPress={() => router.push("../../(tabs)/settings")}>
+            <ArrowLeft size={24} color="#1F2937" />
+          </TouchableOpacity>
+
+          <Text
+            pointerEvents="none"
+            style={[
+              styles.headerTitle,
+              {
+                position: "absolute",
+                left: 0,
+                right: 0,
+                textAlign: "center",
+              },
+            ]}
+          >
+            Admin
+          </Text>
+
+          <TouchableOpacity
+            style={[styles.addButton, { marginLeft: "auto" }]}
+            onPress={() => router.push("../admin/user/create_user")}
+          >
+            <Plus size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
       </View>
+   
       <FlatList
         data={users}
         renderItem={renderUserItem}
         keyExtractor={(item) => item.id}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.listContainer}
+        contentContainerStyle={[styles.listContainer, width>=700 && {width : 700, alignSelf: "center"}]}
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Text style={styles.emptyText}>No users found</Text>
@@ -200,11 +234,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 60,
+    paddingTop : Platform.OS === 'web' ? 20 : 60,
     paddingBottom: 20,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,

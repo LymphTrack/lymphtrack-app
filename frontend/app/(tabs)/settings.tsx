@@ -1,5 +1,5 @@
 import React, { useState, useCallback} from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import { useWindowDimensions, Platform ,View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { useRouter} from 'expo-router';
 import { User, Shield, LogOut, ChevronRight, Mail, Briefcase, Building, Lock , ShieldCheck, ScrollText, } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
@@ -19,12 +19,14 @@ export default function SettingsScreen() {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const {width} = useWindowDimensions();
 
   useFocusEffect(
     useCallback(() => {
       loadUserProfile();
     }, [])
   );
+
 
   const loadUserProfile = async () => {
     try {
@@ -59,21 +61,29 @@ export default function SettingsScreen() {
   };
 
   const handleSignOut = async () => {
-    Alert.alert(
-      'Sign Out',
-      'Are you sure you want to sign out?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Sign Out',
-          style: 'destructive',
-          onPress: async () => {
-            await supabase.auth.signOut();
-            router.replace('/(auth)/login');
+    if (Platform.OS === 'web') {
+      const confirm = window.confirm("Are you sure you want to sign out?");
+      if (confirm) {
+        await supabase.auth.signOut();
+        router.replace('/(auth)/login');
+      }
+    } else {
+      Alert.alert(
+        'Sign Out',
+        'Are you sure you want to sign out?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Sign Out',
+            style: 'destructive',
+            onPress: async () => {
+              await supabase.auth.signOut();
+              router.replace('/(auth)/login');
+            },
           },
-        },
-      ]
-    );
+        ]
+      );
+    }
   };
 
   const SettingItem = ({ 
@@ -115,11 +125,11 @@ export default function SettingsScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Settings</Text>
+      <View style={[styles.header, width >=700 && {justifyContent: "center"}]}>
+        <Text style={[styles.headerTitle, width >= 700 && {width : 700, marginLeft : 60}]}>Settings</Text>
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView style={[styles.content, width >= 700 && {width : 700 , alignSelf :"center"}]} showsVerticalScrollIndicator={false}>
 
         <View style={styles.profileCard}>
           <View style={styles.avatarContainer}>
@@ -261,7 +271,10 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: 20,
-    paddingTop: 60,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop : Platform.OS === 'web' ? 20 : 60,
     paddingBottom: 20,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,

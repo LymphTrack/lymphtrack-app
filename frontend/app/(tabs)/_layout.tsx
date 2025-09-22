@@ -1,7 +1,11 @@
 import { Tabs } from 'expo-router';
 import { Users, Settings, BarChart3, Shield } from 'lucide-react-native';
+import { Platform,useWindowDimensions, View} from 'react-native';
+
 
 export default function TabLayout() {
+  const { width } = useWindowDimensions();
+
   return (
     <Tabs
       screenOptions={{
@@ -12,8 +16,8 @@ export default function TabLayout() {
           backgroundColor: '#FFFFFF',
           borderTopColor: '#E5E7EB',
           paddingBottom: 8,
-          paddingTop: 12,
-          height: 90,
+          paddingTop: Platform.OS === 'web' ? 8 : 12,
+          height: Platform.OS === 'web' ? 70 : 90,
         },
       }}
     >

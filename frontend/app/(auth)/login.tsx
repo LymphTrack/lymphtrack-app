@@ -8,17 +8,21 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
+  const [message,setMessage] = useState<{text : string; type: 'error' | 'success' | null }>({
+    text: '',
+    type: null
+  });
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const { width } = useWindowDimensions();
 
-  const showAlert = (title: string, message: string) => {
+  const showAlert = (title: string, messageText: string, type: 'error' | 'success' = 'error') => {
     if (Platform.OS === 'web') {
-      window.alert(`${title}: ${message}`);
+      setMessage({ text: `${title}: ${messageText}`, type });
     } else {
-      Alert.alert(title, message);
+      Alert.alert(title, messageText);
     }
   };
 
@@ -31,6 +35,7 @@ export default function LoginScreen() {
   };
 
   const handleLogin = async () => {
+    setMessage({ text: '', type: null });
     if (!email || !password) {
       showAlert('Error', 'Please fill in all fields');
       return;
@@ -47,6 +52,7 @@ export default function LoginScreen() {
         showAlert('Login Failed', error.message);
       } else if (data.user) {
         await saveUserId(data.user.id);
+        setMessage({ text: '', type: null });
         router.replace('/(tabs)/patients');
       }
     } catch (error) {
@@ -57,6 +63,7 @@ export default function LoginScreen() {
   };
 
   const handleForgotPassword = async () => {
+    setMessage({ text: '', type: null });
     if (!email) {
       showAlert('Email Required', 'Please enter your email address');
       return;
@@ -67,6 +74,7 @@ export default function LoginScreen() {
       showAlert('Error', error.message);
     } else {
       showAlert('Success', 'Password reset email sent');
+      setMessage({ text: '', type: null });
     }
   };
 
@@ -82,7 +90,7 @@ export default function LoginScreen() {
         <Text style={styles.subtitle}>Secure Medical Data Management</Text>
       </View>
 
-      <View style={[styles.form, width >=600 && { maxWidth: 400, alignSelf: 'center' }]}>
+      <View style={[styles.form, width >=500 && { width : 450, alignSelf: 'center' }]}>
         <TextInput
           style={styles.input}
           placeholder="Email Address"
@@ -117,6 +125,12 @@ export default function LoginScreen() {
             <Text style={styles.forgotPassword}>Forgot Password?</Text>
           </TouchableOpacity>
         </View>
+
+        {Platform.OS === 'web' && message.text ? (
+          <Text style={{ color: message.type === 'error' ? 'red' : 'green', textAlign: 'center', marginBottom: 20, marginTop : -20 }}>
+            {message.text}
+          </Text>
+        ) : null}
 
         <TouchableOpacity
           style={[styles.loginButton, loading && styles.loginButtonDisabled]}

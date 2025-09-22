@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView, ActivityIndicator } from "react-native";
+import { Platform, View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView, ActivityIndicator, useWindowDimensions } from "react-native";
 import { ArrowLeft, FileUp, Plus, Save, Edit, Trash } from "lucide-react-native";
 import * as DocumentPicker from "expo-document-picker";
 import { API_URL } from "@/constants/api";
@@ -18,6 +18,7 @@ export default function CreatePositionFollowUp() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const {width} = useWindowDimensions();
 
   const maxMeasurements = 6;
 
@@ -38,7 +39,11 @@ export default function CreatePositionFollowUp() {
       setMeasurements(data || []);
     } catch (err) {
       console.error("Error loading measurements:", err);
-      Alert.alert("Error", "Unable to load measurements");
+      if (Platform.OS === "web") {
+        window.alert("Error\n\nUnable to load measurements");
+      } else {
+        Alert.alert("Error", "Unable to load measurements");
+      }
     } finally {
       setLoading(false);
     }
@@ -68,7 +73,11 @@ export default function CreatePositionFollowUp() {
       );
     } catch (err) {
       console.error("Import error:", err);
-      Alert.alert("Error", "Unable to import file");
+      if (Platform.OS === "web") {
+        window.alert("Error\n\nUnable to import file");
+      } else {
+        Alert.alert("Error", "Unable to import file");
+      }
     }
   };
 
@@ -80,7 +89,11 @@ export default function CreatePositionFollowUp() {
         { id: null, measurement_number: nextIndex },
       ]);
     } else {
-      Alert.alert("Limit", "You can only add up to 6 measurements");
+      if (Platform.OS === "web") {
+        window.alert("Limit\n\nYou can only add up to 6 measurements");
+      } else {
+        Alert.alert("Limit", "You can only add up to 6 measurements");
+      }
     }
   };
 
@@ -112,21 +125,29 @@ export default function CreatePositionFollowUp() {
       const data = await res.json();
 
       if (data.status === "error") {
-        Alert.alert("Error", data.message || "Processing failed");
+        if (Platform.OS === "web") {
+          window.alert(`Error\n\n${data.message || "Processing failed"}`);
+        } else {
+          Alert.alert("Error", data.message || "Processing failed");
+        }
         return;
       }
 
-      Alert.alert(
-        "Success",
-        `Measurements processed and saved`
-      );
+      if (Platform.OS === "web") {
+        window.alert("Success\n\nMeasurements processed and saved");
+      } else {
+        Alert.alert("Success", "Measurements processed and saved");
+      }
       router.push(`/patient/followup/${operation_id}`);
-
     } catch (err) {
       console.error("Save error:", err);
-      Alert.alert("Error", "Unable to save measurements");
+      if (Platform.OS === "web") {
+        window.alert("Error\n\nUnable to save measurements");
+      } else {
+        Alert.alert("Error", "Unable to save measurements");
+      }
     } finally {
-    setSaving(false);
+      setSaving(false);
     }
   };
 
@@ -144,14 +165,43 @@ export default function CreatePositionFollowUp() {
       }
 
       setMeasurements((prev) => prev.filter((m) => m.measurement_number !== index));
-
     } catch (err) {
       console.error("Delete error:", err);
-      Alert.alert("Error", "Unable to delete measurement");
+      if (Platform.OS === "web") {
+        window.alert("Error\n\nUnable to delete measurement");
+      } else {
+        Alert.alert("Error", "Unable to delete measurement");
+      }
     }
     setDeleting(false);
   };
 
+  const handleBack = () => {
+    if (Platform.OS === "web") {
+      const confirm = window.confirm(
+        "Unsaved Changes\n\nIf you leave now, your modifications will not be saved. Do you want to continue?"
+      );
+      if (confirm) {
+        router.back();
+      }
+    } else {
+      Alert.alert(
+        "Unsaved Changes",
+        "If you leave now, your modifications will not be saved. Do you want to continue?",
+        [
+          { text: "Stay", style: "cancel" },
+          {
+            text: "Leave",
+            style: "destructive",
+            onPress: () => {
+              router.back();
+            },
+          },
+        ]
+      );
+    }
+  };
+ 
 
   if (loading) {
     return (
@@ -187,32 +237,36 @@ export default function CreatePositionFollowUp() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => {
-            Alert.alert(
-              "Confirmation",
-              "Are you sure you want to leave this page without saving? All imported files will be lost.",
-              [
-                { text: "Cancel", style: "cancel" },
-                {
-                  text: "Yes, leave",
-                  style: "destructive",
-                  onPress: async () => {
-                    router.push(`../../${operation_id}`);
-                  },
-                },
-              ]
-            );
+
+        <View
+          style={{
+            width: width >= 700 ? 700 : "100%",
+             alignSelf: "center",
+            flexDirection: "row",
+            paddingHorizontal: width >= 700 ? 30 : 10,
+            position: "relative",
           }}
         >
-          <ArrowLeft size={28} color="#1F2937" />
-        </TouchableOpacity>
-
-        <Text style={styles.headerTitle}>Position {position}</Text>
-        <View style={{ width: 28 }} />
+          <TouchableOpacity onPress={handleBack}>
+            <ArrowLeft size={24} color="#1F2937" />
+          </TouchableOpacity>
+          <Text
+            pointerEvents="none"
+            style={[
+              styles.headerTitle,
+              { 
+                position: "absolute",
+                left: 0,
+                right: 0,
+                textAlign: "center",
+              },
+            ]}
+          >
+          Position {position}</Text>
+        </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={[styles.content, width >= 700 && {width : 700, alignSelf:"center"}]}>
 
         {measurements.map((m, idx) => (
           <View key={idx} style={{ flexDirection: "row", alignItems: "center", gap : 10 }}>
@@ -257,7 +311,7 @@ export default function CreatePositionFollowUp() {
 
       
 
-      <View style={styles.footer}>
+      <View style={[styles.footer , width >= 700 && {width : 700, alignSelf:"center"}]}>
         <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
           <Save size={20} color="#FFFFFF" />
           <Text style={styles.saveButtonText}>Save Measurements</Text>
@@ -270,11 +324,8 @@ export default function CreatePositionFollowUp() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F8FAFC" },
   header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
     paddingHorizontal: 20,
-    paddingTop: 60,
+    paddingTop : Platform.OS === 'web' ? 20 : 60,
     paddingBottom: 20,
     backgroundColor: "#FFFFFF",
     borderBottomWidth: 1,

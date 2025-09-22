@@ -1,6 +1,6 @@
 import { useState} from 'react';
 import { useFocusEffect } from "@react-navigation/native";
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, TextInput , ActivityIndicator} from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, TextInput , ActivityIndicator, Platform, useWindowDimensions,} from 'react-native';
 import { useRouter } from 'expo-router';
 import { Search, Plus,MapPin, Trash  } from 'lucide-react-native';
 import { Alert } from "react-native";
@@ -23,6 +23,7 @@ export default function PatientsScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();            
+  const { width } = useWindowDimensions();
 
   useFocusEffect(
     useCallback(() => {
@@ -47,21 +48,30 @@ export default function PatientsScreen() {
   };
 
   const confirmDeletePatient = (patient_id: string) => {
-    Alert.alert(
-      "Confirm deletion",
-      "Are you sure you want to delete this patient?",
-      [
-        {
-          text: "Cancel",
-          style: "cancel",
-        },
-        {
-          text: "Delete",
-          style: "destructive", 
-          onPress: () => deletePatient(patient_id),
-        },
-      ]
-    );
+    if (Platform.OS === "web") {
+      const confirm = window.confirm(
+        "Confirm deletion\n\nAre you sure you want to delete this patient?"
+      );
+      if (confirm) {
+        deletePatient(patient_id);
+      }
+    } else {
+      Alert.alert(
+        "Confirm deletion",
+        "Are you sure you want to delete this patient?",
+        [
+          {
+            text: "Cancel",
+            style: "cancel",
+          },
+          {
+            text: "Delete",
+            style: "destructive",
+            onPress: () => deletePatient(patient_id),
+          },
+        ]
+      );
+    }
   };
 
   const deletePatient = async (patient_id: string) => {
@@ -72,17 +82,29 @@ export default function PatientsScreen() {
       });
 
       if (!res.ok) {
-        Alert.alert("Error", "Failed to delete patient");
+        if (Platform.OS === "web") {
+          window.alert("Error\n\nFailed to delete patient");
+        } else {
+          Alert.alert("Error", "Failed to delete patient");
+        }
       } else {
-        Alert.alert("Success", "Patient deleted successfully");
-        loadPatients(); 
+        if (Platform.OS === "web") {
+          window.alert("Success\n\nPatient deleted successfully");
+        } else {
+          Alert.alert("Success", "Patient deleted successfully");
+        }
+        loadPatients();
       }
     } catch (err) {
       console.error("Erreur:", err);
-      Alert.alert(
-        "Error",
-        "Unable to delete patient. Please check your internet connection."
-      );
+      if (Platform.OS === "web") {
+        window.alert("Error\n\nUnable to delete patient. Please check your internet connection.");
+      } else {
+        Alert.alert(
+          "Error",
+          "Unable to delete patient. Please check your internet connection."
+        );
+      }
     } finally {
       setDeletingId(null);
     }
@@ -178,92 +200,130 @@ export default function PatientsScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Patients</Text>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => router.push('/patient/create')}
-        >
-          <Plus size={24} color="#FFFFFF" />
-        </TouchableOpacity>
+        <View style = {{ width : width>= 700 ? 700 : "100%", 
+          alignSelf: width >= 700 ? "center" : "stretch", 
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          paddingHorizontal: width >= 700 ? 30 : 10,}}>
+          <Text style={styles.headerTitle}>Patients</Text>
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={() => router.push('/patient/create')}
+          >
+            <Plus size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
       </View>
 
-      <View style={styles.searchContainer}>
-        <Search size={20} color="#6a90db" style={styles.searchIcon} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search by Patient ID..."
-          value={searchQuery}
-          onChangeText={setSearchQuery}
+        <FlatList
+          data={filteredPatients}
+          renderItem={renderPatientItem}
+          keyExtractor={(item) => item.patient_id}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={[
+            styles.listContainer,
+            width >= 700 && { width: 700, alignSelf: "center" }
+          ]}
+          ListHeaderComponent={
+            <>
+              <View
+                style={[
+                  styles.searchContainer,
+                  {
+                    width: width >= 700 ? 660 : "100%",
+                    alignSelf: width >= 700 ? "center" : "stretch",
+                  },
+                ]}
+              >
+                <Search size={20} color="#6a90db" style={styles.searchIcon} />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Search by Patient ID..."
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                />
+              </View>
+
+              <View
+                style={{
+                  marginTop: -5,
+                  marginBottom: 10,
+                  zIndex: 1000,
+                  width: width >= 700 ? 700 : "100%",
+                  alignSelf: width >= 700 ? "center" : "stretch",
+                }}
+              >
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    marginHorizontal: width >= 700 ? 14 : -5,
+                    marginTop: -5,
+                    marginBottom: 10,
+                  }}
+                >
+                  <View style={styles.pickerWrapper}>
+                    <DropDownPicker
+                      open={openSide}
+                      value={sideFilter}
+                      items={side}
+                      setOpen={setOpenSide}
+                      setValue={(callback) => {
+                        const val = callback(sideFilter);
+                        setSideFilter(val);
+                      }}
+                      setItems={setSide}
+                      placeholder="Select side"
+                      style={styles.dropdown}
+                      dropDownContainerStyle={styles.dropdownContainer}
+                      textStyle={{ fontSize: 16, color: "gray" }}
+                      listMode='MODAL'
+                    />
+                  </View>
+
+                  <View style={styles.pickerWrapper}>
+                    <DropDownPicker
+                      open={openGender}
+                      value={genderFilter}
+                      items={gender}
+                      setOpen={setOpenGender}
+                      setValue={(callback) => {
+                        const val = callback(genderFilter);
+                        setGenderFilter(val);
+                      }}
+                      setItems={setGender}
+                      placeholder="Select gender"
+                      style={styles.dropdown}
+                      dropDownContainerStyle={styles.dropdownContainer}
+                      textStyle={{ fontSize: 16, color: "gray" }}
+                      listMode='MODAL'
+                    />
+                  </View>
+                </View>
+              </View>
+
+              <View
+                style={[
+                  styles.counterContainer,
+                  width >= 700 && { width: 700, marginRight: 70, alignSelf: "center" },
+                ]}
+              >
+                <Text style={styles.counterText}>
+                  Patients: {filteredPatients.length}
+                </Text>
+              </View>
+            </>
+          }
+          ListEmptyComponent={
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyText}>No patients found</Text>
+              <Text style={styles.emptySubtext}>
+                Add your first patient to get started
+              </Text>
+            </View>
+          }
         />
-      </View>
-
-      <View
-        style={{
-          marginTop: -5,
-          marginBottom: 10,
-          zIndex: 1000, 
-        }}
-      >
-        <View style={{ flexDirection: "row", justifyContent: "space-between", marginHorizontal: 16, marginTop: -5, marginBottom : 10 }}>
-          <View style={styles.pickerWrapper}>
-            <DropDownPicker
-              open={openSide}
-              value={sideFilter}
-              items={side}
-              setOpen={setOpenSide}
-              setValue={(callback) => {
-                const val = callback(sideFilter);
-                setSideFilter(val);
-              }}
-              setItems={setSide}
-              placeholder="Select side"
-              style={styles.dropdown}
-              dropDownContainerStyle={styles.dropdownContainer}
-              textStyle={{ fontSize: 16, color: "gray" }}
-            />
-          </View>
-
-          <View style={styles.pickerWrapper}>
-            <DropDownPicker
-              open={openGender}
-              value={genderFilter}
-              items={gender}
-              setOpen={setOpenGender}
-              setValue={(callback) => {
-                const val = callback(genderFilter);
-                setGenderFilter(val);             
-              }}
-              setItems={setGender}
-              placeholder="Select gender"
-              style={styles.dropdown}
-              dropDownContainerStyle={styles.dropdownContainer}
-              textStyle={{ fontSize: 16, color: "gray" }}
-            />
-          </View>
-        </View>
-      </View>
-
-      <View>
-        <View style={styles.counterContainer}>
-          <Text style={styles.counterText}>
-            Patients: {filteredPatients.length}
-          </Text>
-        </View>
-      </View>
-    
-      <FlatList
-        data={filteredPatients}
-        renderItem={renderPatientItem}
-        keyExtractor={(item) => item.patient_id}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.listContainer}
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyText}>No patients found</Text>
-            <Text style={styles.emptySubtext}>Add your first patient to get started</Text>
-          </View>
-        }
-      />
     </View>
   );
 }
@@ -274,11 +334,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 60,
+    paddingHorizontal: 10,
+    paddingTop: Platform.OS === 'web' ? 20 : 60,
     paddingBottom: 20,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
@@ -306,7 +363,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    marginHorizontal: 20,
     marginTop: 16,
     marginBottom: 16,
     paddingHorizontal: 16,
@@ -319,9 +375,9 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: Platform.OS === 'web' ? 7 : 12,
     fontSize: 16,
-    color: '#1F2937',
+    color: "gray",
   },
   listContainer: {
     paddingHorizontal: 20,
@@ -391,7 +447,7 @@ const styles = StyleSheet.create({
   },
   counterContainer: {
     alignItems: "flex-end", 
-    marginTop : 12,
+    marginTop : Platform.OS === 'web' ? -5 : 12,
     marginRight: 30,
     marginBottom: 10,
   },
@@ -409,10 +465,10 @@ const styles = StyleSheet.create({
   dropdown: {
     borderColor: "#E5E7EB",
     borderRadius: 12,
-    minHeight: 45, 
+    minHeight: Platform.OS === 'web' ? 35 : 45, 
   },
   dropdownContainer: {
     borderColor: "#E5E7EB",
-    minHeight: 45, 
+    minHeight: Platform.OS === 'web' ? 35 : 45,  
   },
 });

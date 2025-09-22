@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { View, Text, StyleSheet, Alert, TouchableOpacity, ActivityIndicator, ScrollView } from "react-native";
+import { Platform , View, Text, StyleSheet, Alert, TouchableOpacity, ActivityIndicator, ScrollView, useWindowDimensions } from "react-native";
 import { ArrowLeft, MapPin,Notebook, Share } from "lucide-react-native";
 import { useState, useCallback } from "react";
 import { useFocusEffect } from "@react-navigation/native";
@@ -29,6 +29,7 @@ export default function PatientDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [operations, setOperations] = useState<Operation[]>([]);
   const [exporting, setExporting] = useState(false);
+  const {width} = useWindowDimensions();
 
   const fetchPatient = async () => {
     try {
@@ -74,7 +75,11 @@ export default function PatientDetailScreen() {
         try {
           const errorJson = JSON.parse(errorText);
           if (errorJson.status === "error") {
-            Alert.alert("No Files", errorJson.message || "No files found for this patient");
+            if (Platform.OS === "web") {
+              window.alert(`No Files\n\n${errorJson.message || "No files found for this patient"}`);
+            } else {
+              Alert.alert("No Files", errorJson.message || "No files found for this patient");
+            }
             return;
           }
         } catch {
@@ -86,22 +91,35 @@ export default function PatientDetailScreen() {
       if (isAvailable) {
         await Sharing.shareAsync(res.uri);
       } else {
-        Alert.alert("Download complete", `Saved to ${res.uri}`);
+        if (Platform.OS === "web") {
+          window.alert(`Download complete\n\nSaved to ${res.uri}`);
+        } else {
+          Alert.alert("Download complete", `Saved to ${res.uri}`);
+        }
       }
     } catch (error) {
       console.error("Export error:", error);
-      Alert.alert(
-        "Error",
-        "Unable to export patient folder",
-        [
-          { text: "Cancel", style: "cancel" },
-          { text: "Retry", onPress: () => handleExport() },
-        ]
-      );
+
+      if (Platform.OS === "web") {
+        const retry = window.confirm("Error\n\nUnable to export patient folder.\n\nDo you want to retry?");
+        if (retry) {
+          handleExport();
+        }
+      } else {
+        Alert.alert(
+          "Error",
+          "Unable to export patient folder",
+          [
+            { text: "Cancel", style: "cancel" },
+            { text: "Retry", onPress: () => handleExport() },
+          ]
+        );
+      }
     } finally {
       setExporting(false);
     }
   };
+
 
   useFocusEffect(
     useCallback(() => {
@@ -147,17 +165,37 @@ export default function PatientDetailScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.push(`../(tabs)/patients`)}>
-          <ArrowLeft size={28} color="#1F2937" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Patient: {patient.patient_id}</Text>
-        <View style={{ width: 28 }} />
+
+        <View
+          style={{
+            width: width >= 700 ? 700 : "100%",
+             alignSelf: "center",
+            flexDirection: "row",
+            paddingHorizontal: width >= 700 ? 30 : 10,
+            position: "relative",
+          }}
+        >
+          <TouchableOpacity onPress={() => router.push(`../(tabs)/patients`)}>
+            <ArrowLeft size={24} color="#1F2937" />
+          </TouchableOpacity>
+          <Text
+            pointerEvents="none"
+            style={[
+              styles.headerTitle,
+              { 
+                position: "absolute",
+                left: 0,
+                right: 0,
+                textAlign: "center",
+              },
+            ]}
+          >
+          Patient: {patient.patient_id}</Text>
+        </View>
       </View>
 
-      <ScrollView>
-        {/* Patient Card */}
+      <ScrollView style = {width>= 700 && {width : 700, alignSelf : "center"}}>
         <TouchableOpacity
           style={styles.patientCard}
           onPress={() => router.push(`/patient/modify/${patient.patient_id}`)}
@@ -229,7 +267,7 @@ export default function PatientDetailScreen() {
       </ScrollView>
 
       <View style={styles.footer}>
-        <TouchableOpacity style={styles.exportButton} onPress={handleExport}>
+        <TouchableOpacity style={[styles.exportButton, width >= 700 && {width : 700, alignSelf: "center"}]} onPress={handleExport}>
           <Share size={20} color="#FFFFFF" />
           <Text style={styles.exportButtonText}>Export Patient Folder</Text>
         </TouchableOpacity>
@@ -241,11 +279,8 @@ export default function PatientDetailScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F8FAFC" },
   header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
     paddingHorizontal: 20,
-    paddingTop: 60,
+    paddingTop : Platform.OS === 'web' ? 20 : 60,
     paddingBottom: 20,
     backgroundColor: "#FFFFFF",
     borderBottomWidth: 1,
