@@ -62,7 +62,7 @@ async def create_results(
 
         visit_number = {op.id_operation: idx + 1 for idx, op in enumerate(all_ops)}[operation.id_operation]
         visit_name = operation.name.replace(" ", "_")
-        visit_str = f"{visit_number}_{visit_name}_{operation.operation_date.strftime('%d%m%Y')}"
+        visit_str = f"{visit_number}-{visit_name}_{operation.operation_date.strftime('%d%m%Y')}"
 
         processed_results = []
 
@@ -145,12 +145,34 @@ async def create_results(
         with open(tmp_path, "wb") as tmp_f:
             tmp_f.write(file.file.read())
 
-        visit_folder = m.find(f"lymphtrack-data/{patient_id}/{visit_str}")
-        dest_folder = m.find(f"lymphtrack-data/{patient_id}/{visit_str}/{position}")
-        if not dest_folder:
-            dest_folder = m.create_folder(f"{position}", visit_folder[0])
+        patient_folder = m.find(f"lymphtrack-data/{patient_id}")
+        if not patient_folder:
+            raise HTTPException(status_code=404, detail="Patient folder not found in Mega")
 
-        m.upload(tmp_path, dest_folder[0])
+        visit_folder = None
+        subfolders = m.get_files_in_node(patient_folder[0])
+        for fid, meta in subfolders.items():
+            if meta["t"] == 1 and meta["a"]["n"] == visit_str:
+                visit_folder = (fid, meta)
+                break
+
+        if not visit_folder:
+            raise HTTPException(status_code=404, detail=f"Visit folder {visit_str} not found in Mega")
+
+        dest_folder = None
+        subfolders = m.get_files_in_node(visit_folder[0])
+        for fid, meta in subfolders.items():
+            if meta["t"] == 1 and meta["a"]["n"] == str(position):
+                dest_folder = (fid, meta)
+                break
+
+        if not dest_folder:
+            node = m.create_folder(str(position), visit_folder[0])
+            folder_id = node["f"][0]["h"]
+            folder_meta = node["f"][0]
+            dest_folder = (folder_id, folder_meta)
+
+        m.upload(tmp_path, dest_folder[0], dest_filename=file.filename)
 
         os.remove(tmp_path)
 
@@ -191,7 +213,7 @@ def get_results(db: Session = Depends(get_db)):
 # READ RESULT BY ID
 # ---------------------
 
-@router.get("/{id_operation}")
+@router.get("/by_operation/{id_operation}")
 def get_results(id_operation: int, db: Session = Depends(get_db)):
     results = (
         db.query(Result)
@@ -206,14 +228,16 @@ def get_results(id_operation: int, db: Session = Depends(get_db)):
 # READ RESULT BY PATIENT
 # ------------------------
 
-@router.get("/{patient_id}")
-def get_results(patient_id: str, db: Session = Depends(get_db)):
+@router.get("/by_patient/{patient_id}")
+def get_results_by_patient(patient_id: str, db: Session = Depends(get_db)):
     results = (
         db.query(Result)
-        .filter(Result.patient_id == patient_id)
+        .join(Operation, Result.id_operation == Operation.id_operation)
+        .filter(Operation.patient_id == patient_id)
         .all()
     )
     return results
+
 
 
 # -----------------------------------
@@ -253,16 +277,46 @@ def delete_measurements(payload: dict, db: Session = Depends(get_db)):
         if not file_path:
             return {"status": "error", "message": "No file_path provided"}
 
-        file_name = file_path.split("/")[-1]
+        parts = file_path.split("/")
+        if len(parts) < 4:
+            return {"status": "error", "message": f"Invalid file_path format: {file_path}"}
 
-        try:
-            file_node = m.find(file_name)
-            if file_node:
-                m.delete(file_node[0])
-            else:
-                print(f"[INFO] File {file_name} not found in Mega, skipping deletion")
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Error deleting file from Mega: {e}")
+        patient_id, visit_str, position, file_name = parts[-4:]
+
+        patient_folder = m.find(f"lymphtrack-data/{patient_id}")
+        if not patient_folder:
+            return {"status": "error", "message": f"Patient folder {patient_id} not found in Mega"}
+
+        visit_folder = None
+        subfolders = m.get_files_in_node(patient_folder[0])
+        for fid, meta in subfolders.items():
+            if meta["t"] == 1 and meta["a"]["n"] == visit_str:
+                visit_folder = (fid, meta)
+                break
+        if not visit_folder:
+            return {"status": "error", "message": f"Visit folder {visit_str} not found in Mega"}
+
+        pos_folder = None
+        subfolders = m.get_files_in_node(visit_folder[0])
+        for fid, meta in subfolders.items():
+            if meta["t"] == 1 and meta["a"]["n"] == position:
+                pos_folder = (fid, meta)
+                break
+        if not pos_folder:
+            return {"status": "error", "message": f"Position folder {position} not found in Mega"}
+
+        file_node = None
+        files = m.get_files_in_node(pos_folder[0])
+        for fid, meta in files.items():
+            if meta["t"] == 0 and meta["a"]["n"] == file_name:
+                file_node = (fid, meta)
+                break
+
+        if file_node:
+            m.delete(file_node[0])
+            print(f"[INFO] Deleted {file_name} from Mega")
+        else:
+            print(f"[INFO] File {file_name} not found in Mega, skipping deletion")
 
         results = db.query(Result).filter(Result.file_path == file_path).all()
         if results:
@@ -277,6 +331,7 @@ def delete_measurements(payload: dict, db: Session = Depends(get_db)):
     except Exception as e:
         db.rollback()
         return {"status": "error", "message": str(e)}
+
 
 
 

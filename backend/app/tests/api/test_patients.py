@@ -82,9 +82,9 @@ def test_delete_patient(patient_id):
 
 if __name__ == "__main__":
     pid = test_create_patient()
+    #test_export_patient_folder("MV001")
     if pid:
         test_get_patient(pid)
         test_update_patient(pid)
-        test_get_all_patients()
-        # test_export_patient_folder(pid)
+        test_get_all_patients()       
         test_delete_patient(pid)

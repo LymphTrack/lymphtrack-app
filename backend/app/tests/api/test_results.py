@@ -1,6 +1,22 @@
-import requests
+import requests, os
 
 API_URL = "http://localhost:8000/results"
+
+
+# ---------------------
+# CREATE RESULT
+# ---------------------
+
+def test_create_results(id_operation, position, file_path):
+    files = {
+        "files": (os.path.basename(file_path), open(file_path, "rb"), "application/vnd.ms-excel")
+    }
+    r = requests.post(f"{API_URL}/process-results/{id_operation}/{position}", files=files)
+    try:
+        print("CREATE RESULTS:", r.status_code, r.json())
+    except Exception:
+        print("CREATE RESULTS (raw):", r.status_code, r.text)
+
 
 
 # ---------------------
@@ -24,7 +40,7 @@ def test_get_all_results(limit=20):
 # ---------------------
 
 def test_get_results_by_operation(id_operation):
-    r = requests.get(f"{API_URL}/{id_operation}")
+    r = requests.get(f"{API_URL}/by_operation/{id_operation}")
     print("GET RESULTS BY OPERATION:", r.status_code, r.json())
 
 
@@ -33,8 +49,8 @@ def test_get_results_by_operation(id_operation):
 # ---------------------
 
 def test_get_results_by_patient(patient_id):
-    r = requests.get(f"{API_URL}/{patient_id}")
-    print("GET RESULTS BY PATIENT:", r.status_code, r.json())
+    r = requests.get(f"{API_URL}/by_patient/{patient_id}")
+    print("GET RESULTS BY PATIENT:", r.status_code, r.text)
 
 
 # ---------------------
@@ -61,19 +77,12 @@ def test_delete_measurement(file_path):
 # ---------------------
 
 if __name__ == "__main__":
-    results = test_get_all_results()
+    test_file = "backend/VNA_test.xls"      
+    test_operation_id = 6625               
+    test_position = 1
 
-    if results:
-        sample = results[0]
-        id_operation = sample.get("id_operation")
-        position = sample.get("position")
-        file_path = sample.get("file_path")
+    #test_create_results(test_operation_id, test_position, test_file)
+    #test_get_results_by_patient(test_patient)
+    test_delete_measurement("MV131/1-PreOp_19082025/1/VNA_test.xls")
 
-        if id_operation:
-            test_get_results_by_operation(id_operation)
-        if "patient_id" in sample:
-            test_get_results_by_patient(sample["patient_id"])
-        if id_operation and position:
-            test_get_results_by_operation_position(id_operation, position)
-        if file_path:
-            test_delete_measurement(file_path)
+

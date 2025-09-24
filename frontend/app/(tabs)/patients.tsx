@@ -114,6 +114,9 @@ export default function PatientsScreen() {
   const [sideFilter, setSideFilter] = useState<"" | "1" | "2" | "3">("");
 
   const filteredPatients = patients
+    .slice()
+    .sort((a, b) => a.patient_id.localeCompare(b.patient_id))
+    
     .filter((p) =>
       p.patient_id.toLowerCase().includes(searchQuery.toLowerCase())
     )
@@ -220,7 +223,7 @@ export default function PatientsScreen() {
           data={filteredPatients}
           renderItem={renderPatientItem}
           keyExtractor={(item) => item.patient_id}
-          showsVerticalScrollIndicator={false}
+          showsVerticalScrollIndicator={true}
           contentContainerStyle={[
             styles.listContainer,
             width >= 700 && { width: 700, alignSelf: "center" }

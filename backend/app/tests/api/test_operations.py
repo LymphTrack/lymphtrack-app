@@ -10,8 +10,8 @@ def test_create_operation():
     payload = {
         "patient_id": "MV131",
         "name": "PreOp",
-        "operation_date": "2025-09-16",
-        "notes": "First Visit"
+        "operation_date": "2025-08-19",
+        "notes" : "First Visit",
     }
     r = requests.post(API_URL + "/", json=payload)
     print("CREATE:", r.status_code, r.json())
@@ -81,6 +81,6 @@ if __name__ == "__main__":
     if op_id:
         test_get_operation(op_id)
         #test_update_operation(op_id)
-        #test_get_operations_by_patient("MV001")
+        #test_get_operations_by_patient("MV131")
         #test_get_all_operations()
-        test_delete_operation(op_id)
+        #test_delete_operation(op_id)

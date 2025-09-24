@@ -8,6 +8,7 @@ import os
 from dotenv import load_dotenv
 from botocore.config import Config
 from mega import Mega
+import time, shutil, pathlib
 
 router = APIRouter()
 
@@ -145,34 +146,72 @@ def delete_patient(patient_id: str, db: Session = Depends(get_db)):
 # EXPORT PATIENT FOLDER
 # ------------------------
 
+def add_node_to_zip(node_id, meta, zipf, base_path=""):
+    try:
+        name = meta["a"].get("n", str(node_id))
+        node_type = meta.get("t")
+
+        zip_path = os.path.join(base_path, name)
+
+        if node_type == 0:  # fichier
+            if name == ".DS_Store":
+                return
+
+            print(f"➡️ [DEBUG] Téléchargement fichier: {zip_path}")
+
+            try:
+                # On télécharge directement dans un fichier temporaire
+                downloaded_path = m.download((node_id, meta),
+                                             dest_path=".",
+                                             dest_filename=f"tmp_{name}")
+
+                # Ici le fichier est déjà fermé correctement par _download_file
+                with open(downloaded_path, "rb") as f:
+                    zipf.writestr(zip_path, f.read())
+
+                # Nettoyage
+                os.remove(downloaded_path)
+
+                print(f"✅ [DEBUG] Fichier ajouté: {zip_path}")
+
+            except Exception as e:
+                print(f"❌ [DEBUG] Echec download {name}: {e}")
+                return
+
+        elif node_type == 1:  # dossier
+            print(f"➡️ [DEBUG] Descente dans dossier: {zip_path}")
+            children = m.get_files_in_node(node_id)
+            for child_id, child_meta in children.items():
+                add_node_to_zip(child_id, child_meta, zipf, base_path=zip_path)
+
+    except Exception as e:
+        print(f"❌ [DEBUG] Erreur dans add_node_to_zip pour {node_id}: {e}")
+
+
+
+
 @router.get("/export-folder/{patient_id}")
 def export_patient_folder(patient_id: str):
     try:
         folder = m.find(f"lymphtrack-data/{patient_id}")
         if not folder:
-            return {"status": "error", "message": f"No files found for {patient_id}"}
+            return {"status": "error", "message": f"No folder found for {patient_id}"}
 
         files = m.get_files_in_node(folder[0])
+
         if not files:
             return {"status": "error", "message": f"No files found for {patient_id}"}
 
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zipf:
-            for f in files:
-                file_name = f['a']['n']
-                temp_path = f"tmp_{file_name}"
-                m.download(f, temp_path)
-                with open(temp_path, "rb") as temp_file:
-                    zipf.writestr(file_name, temp_file.read())
-                os.remove(temp_path)
+            for file_id, meta in files.items():
+                add_node_to_zip(file_id, meta, zipf, base_path=patient_id)
 
         zip_buffer.seek(0)
         return Response(
             content=zip_buffer.read(),
             media_type="application/zip",
-            headers={
-                "Content-Disposition": f"attachment; filename={patient_id}.zip"
-            },
+            headers={"Content-Disposition": f"attachment; filename={patient_id}.zip"},
         )
 
     except Exception as e:
