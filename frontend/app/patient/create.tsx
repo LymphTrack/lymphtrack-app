@@ -9,15 +9,15 @@ import { mapGenderToDb, mapSideToDb, validatePatientData } from "@/utils/patient
 export default function CreatePatientScreen() {
   const [formData, setFormData] = useState({
     age: '',
-    gender: 'Male' as 'Male' | 'Female',
-    lymphedema_side: 'Right' as 'Right' | 'Left' | 'Both',
+    gender: 'Male' as 'Male' | 'Female' | 'Unknown',
+    lymphedema_side: 'Right' as 'Right' | 'Left' | 'Both' | 'Unknown',
     bmi : '',
     notes :'',
   });
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const {width} = useWindowDimensions();
-
+  const [isFocused, setIsFocused] = useState(false);
   const [noteHeight, setNoteHeight] = useState(100);
 
   <TextInput
@@ -68,13 +68,11 @@ export default function CreatePatientScreen() {
       const createdPatient = await res.json();
 
       if (Platform.OS === "web") {
-        window.alert("Success\n\nPatient created successfully");
         router.replace(`/patient/${createdPatient.patient_id}`);
       } else {
-        Alert.alert("Success", "Patient created successfully", [
-          { text: "OK", onPress: () => router.replace(`/patient/${createdPatient.patient_id}`) },
-        ]);
+        router.replace(`/patient/${createdPatient.patient_id}`) 
       }
+        
     } catch (error) {
       console.error("Error creating patient:", error);
       if (Platform.OS === "web") {
@@ -197,16 +195,24 @@ export default function CreatePatientScreen() {
           <Text style={styles.sectionTitle}>Patient Demographics</Text>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Age</Text>
+            <Text style={styles.label}>Age (optional)</Text>
             <View style={styles.inputContainer}>
               <User size={20} color="#6B7280" style={styles.inputIcon} />
               <TextInput
-                style={styles.input}
+                style={[
+                    styles.input,
+                    { 
+                      borderColor: isFocused ? "red" : "#D1D5DB",
+                      ...(Platform.OS === "web" ? { outlineWidth: 0 } : {}),
+                    },
+                  ]}
                 placeholder="Enter age"
                 placeholderTextColor={"#9CA3AF"}
                 value={formData.age}
                 onChangeText={(text) => setFormData(prev => ({ ...prev, age: text }))}
                 keyboardType="numeric"
+                onFocus={() => setIsFocused(true)}
+                onBlur={() => setIsFocused(false)}
               />
             </View>
           </View>
@@ -214,9 +220,9 @@ export default function CreatePatientScreen() {
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Gender</Text>
             <SegmentedControl
-              options={['Male', 'Female']}
+              options={['Male', 'Female', 'Unknown']}
               value={formData.gender}
-              onValueChange={(value) => setFormData(prev => ({ ...prev, gender: value as 'Male' | 'Female' }))}
+              onValueChange={(value) => setFormData(prev => ({ ...prev, gender: value as 'Male' | 'Female' | 'Unknown' }))}
             />
           </View>
         </View>
@@ -226,11 +232,17 @@ export default function CreatePatientScreen() {
 
           <View style={styles.inputRow}>
             <View style={[styles.inputGroup, { flex: 1, marginRight: 8 }]}>
-              <Text style={styles.label}>Bmi</Text>
+              <Text style={styles.label}>Bmi (optional)</Text>
               <View style={styles.inputContainer}>
                 <Weight size={20} color="#6B7280" style={styles.inputIcon} />
                 <TextInput
-                  style={styles.input}
+                  style={[
+                    styles.input,
+                    { 
+                      borderColor: isFocused ? "red" : "#D1D5DB",
+                      ...(Platform.OS === "web" ? { outlineWidth: 0 } : {}),
+                    },
+                  ]}
                   placeholder="0.0"
                   placeholderTextColor={"#9CA3AF"}
                   value={formData.bmi}
@@ -248,18 +260,18 @@ export default function CreatePatientScreen() {
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Side</Text>
             <SegmentedControl
-              options={['Right', 'Left', 'Both']}
+              options={['Right', 'Left', 'Both', 'Unknown']}
               value={formData.lymphedema_side}
               onValueChange={(value) => setFormData(prev => ({ 
                 ...prev, 
-                lymphedema_side: value as 'Left' | 'Right' | 'Both'
+                lymphedema_side: value as 'Left' | 'Right' | 'Both' | 'Unknown'
               }))}
             />
           </View>
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Notes</Text>
+          <Text style={styles.sectionTitle}>Notes (optional)</Text>
 
           <View style={styles.inputGroup}>
             <View style={styles.inputContainer}>
@@ -269,6 +281,9 @@ export default function CreatePatientScreen() {
                   {
                     minHeight: 100,       
                     textAlignVertical: "top",
+                    borderColor: isFocused ? "red" : "#D1D5DB",
+                    ...(Platform.OS === "web" ? { outlineWidth: 0 } : {}),
+                    
                   },
                 ]}
                 multiline={true}         

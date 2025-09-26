@@ -1,29 +1,34 @@
-export type Gender = "Male" | "Female";
-export type LymphedemaSide = "Right" | "Left" | "Both";
+export type Gender = "Male" | "Female" | "Unknown";
+export type LymphedemaSide = "Right" | "Left" | "Both" | "Unknown";
 
-export const mapGenderToDb = (gender: Gender): number => {
+export const mapGenderToDb = (gender: Gender): number | null => {
+  if (gender === "Unknown") return null;
   return gender === "Female" ? 1 : 2;
 };
 
-export const mapDbToGender = (gender: number): Gender => {
+export const mapDbToGender = (gender: number | null): Gender => {
+  if (gender === null) return "Unknown";
   return gender === 1 ? "Female" : "Male";
 };
 
-export const mapSideToDb = (side: LymphedemaSide): number => {
-  return side === "Right" ? 1 : side === "Left" ? 2 : 3;
+export const mapSideToDb = (side: LymphedemaSide): number | null => {
+  if (side === "Unknown") return null;
+  if (side === "Right") return 1;
+  if (side === "Left") return 2;
+  return 3; 
 };
 
-export const mapDbToSide = (side: number): LymphedemaSide => {
-  return side === 1 ? "Right" : side === 2 ? "Left" : "Both";
+export const mapDbToSide = (side: number | null): LymphedemaSide => {
+  if (side === null) return "Unknown";
+  if (side === 1) return "Right";
+  if (side === 2) return "Left";
+  return "Both";
 };
+
 
 export const validatePatientData = (ageStr: string, bmiStr: string): { valid: boolean; error?: string; age?: number; bmi?: number } => {
   const age = parseInt(ageStr, 10);
   const bmi = parseFloat(bmiStr.replace(",", "."));
-
-  if (!ageStr || !bmiStr) {
-    return { valid: false, error: "Please fill in all required fields" };
-  }
 
   if (isNaN(age) || age < 10 || age > 100) {
     return { valid: false, error: "Incorrect age" };

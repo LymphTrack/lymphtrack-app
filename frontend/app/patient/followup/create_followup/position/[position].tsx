@@ -311,8 +311,8 @@ export default function CreatePositionFollowUp() {
 
       
 
-      <View style={[styles.footer , width >= 700 && {width : 700, alignSelf:"center"}]}>
-        <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
+      <View style={styles.footer }>
+        <TouchableOpacity style={[styles.saveButton , width >= 700 && {width : 700, alignSelf:"center"}]} onPress={handleSave}>
           <Save size={20} color="#FFFFFF" />
           <Text style={styles.saveButtonText}>Save Measurements</Text>
         </TouchableOpacity>

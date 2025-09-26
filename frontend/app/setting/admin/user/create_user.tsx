@@ -17,6 +17,7 @@ export default function CreateUserScreen() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const {width} = useWindowDimensions();
+  const [isFocused, setIsFocused] = useState(false);
 
   const handleSubmit = async () => {
     if (!formData.name || !formData.email || !formData.password) {
@@ -153,70 +154,129 @@ export default function CreateUserScreen() {
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <ScrollView style={[styles.form,width >=700 && {width : 700, alignSelf: "center"}]} showsVerticalScrollIndicator={false}>
-          <View style={styles.inputContainer}>
-            <User size={18} color="#6B7280" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Full Name"
-              placeholderTextColor={"#9CA3AF"}
-              value={formData.name}
-              onChangeText={(text) =>
-                setFormData((prev) => ({ ...prev, name: text }))
-              }
-            />
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>
+              Email <Text style={{ color: "red" }}>*</Text>
+            </Text>
+            <View style={styles.inputContainer}>
+              <User size={18} color="#6B7280" style={styles.inputIcon} />
+              <TextInput
+                style={[
+                  styles.input,
+                  { 
+                    borderColor: isFocused ? "red" : "#D1D5DB",
+                    ...(Platform.OS === "web" ? { outlineWidth: 0 } : {}),
+                  },
+                ]}
+                placeholder="Enter email ..."
+                placeholderTextColor={"#9CA3AF"}
+                keyboardType="email-address"
+                value={formData.email}
+                onChangeText={(text) =>
+                  setFormData((prev) => ({ ...prev, email: text }))
+                }
+                onFocus={() => setIsFocused(true)}
+                onBlur={() => setIsFocused(false)}
+              />
+            </View>
           </View>
 
-          <View style={styles.inputContainer}>
-            <User size={18} color="#6B7280" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Email"
-              placeholderTextColor={"#9CA3AF"}
-              keyboardType="email-address"
-              value={formData.email}
-              onChangeText={(text) =>
-                setFormData((prev) => ({ ...prev, email: text }))
-              }
-            />
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>
+              Password <Text style={{ color: "red" }}>*</Text>
+            </Text>
+            <View style={styles.inputContainer}>
+              <Lock size={18} color="#6B7280" style={styles.inputIcon} />
+              <TextInput
+                style={[
+                  styles.input,
+                  { 
+                    borderColor: isFocused ? "red" : "#D1D5DB",
+                    ...(Platform.OS === "web" ? { outlineWidth: 0 } : {}),
+                  },
+                ]}
+                placeholder="Enter password ..."
+                placeholderTextColor={"#9CA3AF"}
+                value={formData.password}
+                onChangeText={(text) =>
+                  setFormData((prev) => ({ ...prev, password: text }))
+                }
+                onFocus={() => setIsFocused(true)}
+                onBlur={() => setIsFocused(false)}
+              />
+            </View>
           </View>
 
-          <View style={styles.inputContainer}>
-            <Lock size={18} color="#6B7280" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Password"
-              placeholderTextColor={"#9CA3AF"}
-              value={formData.password}
-              onChangeText={(text) =>
-                setFormData((prev) => ({ ...prev, password: text }))
-              }
-            />
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Name (optional)</Text>
+            <View style={styles.inputContainer}>
+              <User size={18} color="#6B7280" style={styles.inputIcon} />
+              <TextInput
+                style={[
+                  styles.input,
+                  { 
+                    borderColor: isFocused ? "red" : "#D1D5DB",
+                    ...(Platform.OS === "web" ? { outlineWidth: 0 } : {}),
+                  },
+                ]}
+                placeholder="Enter full name ..."
+                placeholderTextColor={"#9CA3AF"}
+                value={formData.name}
+                onChangeText={(text) =>
+                  setFormData((prev) => ({ ...prev, name: text }))                 
+                }
+                onFocus={() => setIsFocused(true)}
+                onBlur={() => setIsFocused(false)}                 
+              />
+            </View>
           </View>
 
-          <View style={styles.inputContainer}>
-            <Briefcase size={18} color="#6B7280" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Role (ex: Doctor)"
-              placeholderTextColor={"#9CA3AF"}
-              value={formData.role}
-              onChangeText={(text) =>
-                setFormData((prev) => ({ ...prev, role: text }))
-              }
-            />
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Role (optional)</Text>
+            <View style={styles.inputContainer}>
+              <Briefcase size={18} color="#6B7280" style={styles.inputIcon} />
+              <TextInput
+                style={[
+                  styles.input,
+                  { 
+                    borderColor: isFocused ? "red" : "#D1D5DB",
+                    ...(Platform.OS === "web" ? { outlineWidth: 0 } : {}),
+                  },
+                ]}
+                placeholder="Enter role (ex: Doctor) ..."
+                placeholderTextColor={"#9CA3AF"}
+                value={formData.role}
+                onChangeText={(text) =>
+                  setFormData((prev) => ({ ...prev, role: text }))
+                }
+                onFocus={() => setIsFocused(true)}
+                onBlur={() => setIsFocused(false)}                
+              />
+            </View>
           </View>
 
-          <View style={styles.inputContainer}>
-            <Building size={18} color="#6B7280" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Institution"
-              placeholderTextColor={"#9CA3AF"}
-              value={formData.institution}
-              onChangeText={(text) =>
-                setFormData((prev) => ({ ...prev, institution: text }))
-              }
-            />
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Institution (optional)</Text>
+            <View style={styles.inputContainer}>
+              <Building size={18} color="#6B7280" style={styles.inputIcon} />
+              <TextInput
+                style={[
+                  styles.input,
+                  { 
+                    borderColor: isFocused ? "red" : "#D1D5DB",
+                    ...(Platform.OS === "web" ? { outlineWidth: 0 } : {}),
+                  },
+                ]}
+                placeholder="Enter institution"
+                placeholderTextColor={"#9CA3AF"}
+                value={formData.institution}
+                onChangeText={(text) =>
+                  setFormData((prev) => ({ ...prev, institution: text }))
+                }
+                onFocus={() => setIsFocused(true)}
+                onBlur={() => setIsFocused(false)} 
+              />
+            </View>
           </View>
 
           <View style={styles.segmentedControl}>
@@ -293,6 +353,16 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 16,
     color: "#1F2937",
+  },
+  inputGroup: {
+    marginBottom: 10,
+  },
+  label: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#374151',
+    marginBottom: 8,
+    marginLeft : 5,
   },
   segmentedControl: {
     flexDirection: "row",

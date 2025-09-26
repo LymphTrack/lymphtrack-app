@@ -14,6 +14,7 @@ export default function ModifyFollowUpScreen() {
   const [loading, setLoading] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const {width} = useWindowDimensions();
+  const [isFocused, setIsFocused] = useState(false);
 
   const router = useRouter();
 
@@ -168,42 +169,74 @@ export default function ModifyFollowUpScreen() {
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Follow-Up Name</Text>
           <TextInput
-            style={styles.input}
+            style={[
+              styles.input,
+              { 
+                borderColor: isFocused ? "red" : "#D1D5DB",
+                ...(Platform.OS === "web" ? { outlineWidth: 0 } : {}),
+              },
+            ]}
             placeholder="Enter follow-up name"
             value={name}
             onChangeText={setName}
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setIsFocused(false)}
           />
         </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Date</Text>
-          <TouchableOpacity
-            style={styles.input}
-            onPress={() => setShowDatePicker(true)}
-          >
-            <Text>{date.toLocaleDateString()}</Text>
-          </TouchableOpacity>
-          {showDatePicker && (
-            <DateTimePicker
-              value={date}
-              mode="date"
-              display="default"
-              onChange={(event, selectedDate) => {
-                setShowDatePicker(false);
-                if (selectedDate) setDate(selectedDate);
-              }}
+        
+        {Platform.OS === "web" ? (
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Date</Text>
+            <input
+              type="date"
+              value={date.toISOString().substring(0, 10)}
+              onChange={(e) => setDate(new Date(e.target.value))}
+              style={{ padding : 10, borderRadius: 12, borderWidth : 1, borderColor : "#E5E7EB", color : "#1F2937"}}
             />
-          )}
-        </View>
+          </View>
+        ) : (
+          <>
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Date</Text>
+              <TouchableOpacity
+                style={styles.input}
+                onPress={() => setShowDatePicker(true)}
+              >
+                <Text>{date.toLocaleDateString()}</Text>
+              </TouchableOpacity>
+              {showDatePicker && (
+                <DateTimePicker
+                  value={date}
+                  mode="date"
+                  display="default"
+                  onChange={(event, selectedDate) => {
+                    setShowDatePicker(false);
+                    if (selectedDate) setDate(selectedDate);
+                  }}
+                />
+              )}
+            </View>
+          </>
+        )}
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Notes</Text>
           <TextInput
-            style={[styles.input, { height: 100, textAlignVertical: "top" }]}
+            style={[
+              styles.input,
+              { 
+                textAlignVertical: "top",
+                padding: 10,
+                borderColor: isFocused ? "red" : "#D1D5DB",
+                ...(Platform.OS === "web" ? { outlineWidth: 0 } : {}),
+              },
+            ]}
             placeholder="Enter notes..."
             multiline
             value={notes}
             onChangeText={setNotes}
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setIsFocused(false)}
           />
         </View>
 

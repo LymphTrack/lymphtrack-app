@@ -13,6 +13,7 @@ export default function ModifyAccountScreen() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const {width} = useWindowDimensions();
+  const [isFocused, setIsFocused] = useState(false);
 
   useEffect(() => {
     loadUserProfile();
@@ -191,42 +192,74 @@ export default function ModifyAccountScreen() {
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Full Name</Text>
           <TextInput
-            style={styles.input}
+            style={[
+              styles.input,
+              { 
+                borderColor: isFocused ? "red" : "#D1D5DB",
+                ...(Platform.OS === "web" ? { outlineWidth: 0 } : {}),
+              },
+            ]}
             placeholder="Enter your name"
             value={name}
             onChangeText={setName}
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setIsFocused(false)}
           />
         </View>
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Email</Text>
           <TextInput
-            style={styles.input}
+            style={[
+              styles.input,
+              { 
+                borderColor: isFocused ? "red" : "#D1D5DB",
+                ...(Platform.OS === "web" ? { outlineWidth: 0 } : {}),
+              },
+            ]}
             placeholder="Enter your email"
             keyboardType="email-address"
             autoCapitalize="none"
             value={email}
             onChangeText={setEmail}
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setIsFocused(false)}
           />
         </View>
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Role</Text>
           <TextInput
-            style={styles.input}
+            style={[
+              styles.input,
+              { 
+                borderColor: isFocused ? "red" : "#D1D5DB",
+                ...(Platform.OS === "web" ? { outlineWidth: 0 } : {}),
+              },
+            ]}
             placeholder="Doctor, Researcher, Student..."
             value={role}
             onChangeText={setRole}
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setIsFocused(false)}
           />
         </View>
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Institution</Text>
           <TextInput
-            style={styles.input}
+            style={[
+              styles.input,
+              { 
+                borderColor: isFocused ? "red" : "#D1D5DB",
+                ...(Platform.OS === "web" ? { outlineWidth: 0 } : {}),
+              },
+            ]}
             placeholder="University / Hospital"
             value={institution}
             onChangeText={setInstitution}
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setIsFocused(false)}
           />
         </View>
 

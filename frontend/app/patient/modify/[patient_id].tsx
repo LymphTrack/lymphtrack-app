@@ -12,14 +12,15 @@ export default function ModifyPatientScreen() {
   const router = useRouter();
 
   const [age, setAge] = useState("");
-  const [gender, setGender] = useState<"Male" | "Female">("Male");
+  const [gender, setGender] = useState<"Male" | "Female" | "Unknown">("Male");
   const [bmi, setBmi] = useState("");
-  const [lymphedemaSide, setLymphedemaSide] = useState<"Right" | "Left" | "Both">("Right");
+  const [lymphedemaSide, setLymphedemaSide] = useState<"Right" | "Left" | "Both" | "Unknown">("Right");
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const {width} = useWindowDimensions();
+  const [isFocused, setIsFocused] = useState(false);
 
   useEffect(() => {
     if (patient_id) {
@@ -274,54 +275,80 @@ export default function ModifyPatientScreen() {
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Age</Text>
           <TextInput
-            style={styles.input}
+            style={[
+              styles.input,
+              { 
+                borderColor: isFocused ? "red" : "#D1D5DB",
+                ...(Platform.OS === "web" ? { outlineWidth: 0 } : {}),
+              },
+            ]}
             placeholder="Enter age"
             placeholderTextColor={"#9CA3AF"}
             keyboardType="numeric"
             value={age}
             onChangeText={setAge}
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setIsFocused(false)}
           />
         </View>
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Gender</Text>
           <SegmentedControl
-            options={["Male", "Female"]}
+            options={["Male", "Female", "Unknown"]}
             value={gender}
-            onValueChange={(val) => setGender(val as "Male" | "Female")}
+            onValueChange={(val) => setGender(val as "Male" | "Female" | "Unknown")}
           />
         </View>
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>BMI</Text>
           <TextInput
-            style={styles.input}
+            style={[
+              styles.input,
+              { 
+                borderColor: isFocused ? "red" : "#D1D5DB",
+                ...(Platform.OS === "web" ? { outlineWidth: 0 } : {}),
+              },
+            ]}
             placeholder="Enter BMI"
             placeholderTextColor={"#9CA3AF"}
             keyboardType="decimal-pad"
             value={bmi}
             onChangeText={setBmi}
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setIsFocused(false)}
           />
         </View>
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Lymphedema Side</Text>
           <SegmentedControl
-            options={["Right", "Left", "Both"]}
+            options={["Right", "Left", "Both" , "Unknown"]}
             value={lymphedemaSide}
-            onValueChange={(val) => setLymphedemaSide(val as "Right" | "Left" | "Both")}
+            onValueChange={(val) => setLymphedemaSide(val as "Right" | "Left" | "Both" | "Unknown")}
           />
         </View>
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Notes</Text>
           <TextInput
-            style={[styles.input, { height: 100, textAlignVertical: "top" }]}
+            style={[
+              styles.input,
+              { 
+                height : 100,
+                textAlignVertical : "top",
+                borderColor: isFocused ? "red" : "#D1D5DB",
+                ...(Platform.OS === "web" ? { outlineWidth: 0 } : {}),
+              },
+            ]}
             placeholder="Enter notes..."
             placeholderTextColor={"#9CA3AF"}
             multiline
             value={notes}
             onChangeText={setNotes}
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setIsFocused(false)}
           />
         </View>
 

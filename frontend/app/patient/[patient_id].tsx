@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Platform , View, Text, StyleSheet, Alert, TouchableOpacity, ActivityIndicator, ScrollView, useWindowDimensions } from "react-native";
-import { ArrowLeft, MapPin,Notebook, Share } from "lucide-react-native";
+import { ArrowLeft, MapPin,Notebook, Share, Plus } from "lucide-react-native";
 import { useState, useCallback } from "react";
 import { useFocusEffect } from "@react-navigation/native";
 import { API_URL } from "@/constants/api";
@@ -63,36 +63,60 @@ export default function PatientDetailScreen() {
     try {
       setExporting(true);
 
-      const fileUri = FileSystem.documentDirectory + `patient_${patient_id}.zip`;
+      if (Platform.OS === "web") {
+        const res = await fetch(`${API_URL}/patients/export-folder/${patient_id}`);
 
-      const res = await FileSystem.downloadAsync(
-        `${API_URL}/patients/export-folder/${patient_id}`,
-        fileUri
-      );
-
-      if (res.status !== 200) {
-        const errorText = await FileSystem.readAsStringAsync(res.uri);
-        try {
-          const errorJson = JSON.parse(errorText);
-          if (errorJson.status === "error") {
-            if (Platform.OS === "web") {
-              window.alert(`No Files\n\n${errorJson.message || "No files found for this patient"}`);
-            } else {
-              Alert.alert("No Files", errorJson.message || "No files found for this patient");
+        if (!res.ok) {
+          const errorText = await res.text();
+          try {
+            const errorJson = JSON.parse(errorText);
+            if (errorJson.status === "error") {
+              window.alert(
+                `No Files\n\n${errorJson.message || "No files found for this patient"}`
+              );
+              return;
             }
-            return;
+          } catch {
           }
-        } catch {
+          throw new Error("Failed to download patient zip");
         }
-        throw new Error("Failed to download patient zip");
-      }
 
-      const isAvailable = await Sharing.isAvailableAsync();
-      if (isAvailable) {
-        await Sharing.shareAsync(res.uri);
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `patient_${patient_id}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+
+        window.URL.revokeObjectURL(url);
+        window.alert("Download complete\n\nThe patient zip has been saved.");
       } else {
-        if (Platform.OS === "web") {
-          window.alert(`Download complete\n\nSaved to ${res.uri}`);
+        const fileUri = FileSystem.documentDirectory + `patient_${patient_id}.zip`;
+
+        const res = await FileSystem.downloadAsync(
+          `${API_URL}/patients/export-folder/${patient_id}`,
+          fileUri
+        );
+
+        if (res.status !== 200) {
+          const errorText = await FileSystem.readAsStringAsync(res.uri);
+          try {
+            const errorJson = JSON.parse(errorText);
+            if (errorJson.status === "error") {
+              Alert.alert("No Files", errorJson.message || "No files found for this patient");
+              return;
+            }
+          } catch {
+          }
+          throw new Error("Failed to download patient zip");
+        }
+
+        const isAvailable = await Sharing.isAvailableAsync();
+        if (isAvailable) {
+          await Sharing.shareAsync(res.uri);
         } else {
           Alert.alert("Download complete", `Saved to ${res.uri}`);
         }
@@ -101,19 +125,15 @@ export default function PatientDetailScreen() {
       console.error("Export error:", error);
 
       if (Platform.OS === "web") {
-        const retry = window.confirm("Error\n\nUnable to export patient folder.\n\nDo you want to retry?");
-        if (retry) {
-          handleExport();
-        }
-      } else {
-        Alert.alert(
-          "Error",
-          "Unable to export patient folder",
-          [
-            { text: "Cancel", style: "cancel" },
-            { text: "Retry", onPress: () => handleExport() },
-          ]
+        const retry = window.confirm(
+          "Error\n\nUnable to export patient folder.\n\nDo you want to retry?"
         );
+        if (retry) handleExport();
+      } else {
+        Alert.alert("Error", "Unable to export patient folder", [
+          { text: "Cancel", style: "cancel" },
+          { text: "Retry", onPress: () => handleExport() },
+        ]);
       }
     } finally {
       setExporting(false);
@@ -195,82 +215,88 @@ export default function PatientDetailScreen() {
         </View>
       </View>
 
-      <ScrollView style = {width>= 700 && {width : 700, alignSelf : "center"}}>
-        <TouchableOpacity
-          style={styles.patientCard}
-          onPress={() => router.push(`/patient/modify/${patient.patient_id}`)}
-        >
-          <View style={styles.patientHeader}>
-            <Text style={styles.patientId}>ID: {patient.patient_id}</Text>
-            <View style={styles.patientInfo}>
-              <Text style={styles.patientDetail}>
-                {patient.age ? `${patient.age}y` : '?'} • {patient.gender === 1 ? 'Female' : patient.gender === 2 ? 'Male' : '?'}
-              </Text>
-              <Text style={styles.patientDetail}>
-                BMI: {patient.bmi ? patient.bmi.toFixed(1) : '?'}
+      <ScrollView 
+        showsVerticalScrollIndicator={false}
+      >
+        <View style = {width>= 700 && {width : 700, alignSelf : "center"}}>
+          <TouchableOpacity
+            style={styles.patientCard}
+            onPress={() => router.push(`/patient/modify/${patient.patient_id}`)}
+          >
+            <View style={styles.patientHeader}>
+              <Text style={styles.patientId}>ID: {patient.patient_id}</Text>
+              <View style={styles.patientInfo}>
+                <Text style={styles.patientDetail}>
+                  {patient.age ? `${patient.age}y` : '?'} • {patient.gender === 1 ? 'Female' : patient.gender === 2 ? 'Male' : '?'}
+                </Text>
+                <Text style={styles.patientDetail}>
+                  BMI: {patient.bmi ? patient.bmi.toFixed(1) : '?'}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.locationRow}>
+              <MapPin size={16} color="#6B7280" />
+              <Text style={styles.locationText}>
+                Lymphedema side: {
+                  patient.lymphedema_side === 1 ? 'Right' :
+                  patient.lymphedema_side === 2 ? 'Left' :
+                  patient.lymphedema_side === 3 ? 'Bilateral' : '?'
+                }
               </Text>
             </View>
-          </View>
 
-          <View style={styles.locationRow}>
-            <MapPin size={16} color="#6B7280" />
-            <Text style={styles.locationText}>
-              Lymphedema side: {
-                patient.lymphedema_side === 1 ? 'Right' :
-                patient.lymphedema_side === 2 ? 'Left' :
-                patient.lymphedema_side === 3 ? 'Bilateral' : '?'
-              }
-            </Text>
-          </View>
-
-          <View style={styles.locationRow}>
-            <View style ={{marginTop : 10}}>
-              <Notebook size={16} color="#6B7280" />
-            </View>
-            <Text 
-              style={[styles.patientNotes, { flexWrap: "wrap" }]} 
-              numberOfLines={0}
-            >
-              Notes: {patient.notes || "No notes available for this patient"}
-            </Text>
-          </View>
-        </TouchableOpacity>
-
-        <Text style={styles.followUpTitle}>Follow-up</Text>
-        <View style={styles.timeline}>
-          {operations.length === 0 ? (
-            <Text style={styles.noFollowUp}>No follow-up available</Text>
-          ) : (
-            operations.map((op) => (
-              <TouchableOpacity
-                key={op.id_operation}
-                style={styles.timelineItem}
-                onPress={() => router.push(`/patient/followup/${op.id_operation}`)}
+            <View style={styles.locationRow}>
+              <View style ={{marginTop : 10}}>
+                <Notebook size={16} color="#6B7280" />
+              </View>
+              <Text 
+                style={[styles.patientNotes, { flexWrap: "wrap" }]} 
+                numberOfLines={0}
               >
-                <View style={styles.timelineDot} />
-                <View style={styles.timelineContent}>
-                  <Text style={styles.timelineOperation}>{op.name}</Text>
-                  <Text style={styles.timelineDate}>{new Date(op.operation_date).toLocaleDateString()}</Text>
-                </View>
-              </TouchableOpacity>
-            ))
-          )}
+                Notes: {patient.notes || "No notes available for this patient"}
+              </Text>
+            </View>
+          </TouchableOpacity>
+
+          <Text style={styles.followUpTitle}>Follow-up</Text>
+          <View style={styles.timeline}>
+            {operations.length === 0 ? (
+              <Text style={styles.noFollowUp}>No follow-up available</Text>
+            ) : (
+              operations.map((op) => (
+                <TouchableOpacity
+                  key={op.id_operation}
+                  style={styles.timelineItem}
+                  onPress={() => router.push(`/patient/followup/${op.id_operation}`)}
+                >
+                  <View style={styles.timelineDot} />
+                  <View style={styles.timelineContent}>
+                    <Text style={styles.timelineOperation}>{op.name}</Text>
+                    <Text style={styles.timelineDate}>{new Date(op.operation_date).toLocaleDateString()}</Text>
+                  </View>
+                </TouchableOpacity>
+              ))
+            )}
+          </View>
+
+          <TouchableOpacity
+            style={styles.addFollowUpButton}
+            onPress={() => router.push(`/patient/followup/create_followup/${patient.patient_id}`)}
+          >
+            <Plus size={25} color="#2563EB" />
+            <Text style={styles.addFollowUpButtonText}>Add Follow-Up</Text>
+          </TouchableOpacity>
         </View>
-
-
-        <TouchableOpacity
-          style={styles.addFollowUpButton}
-          onPress={() => router.push(`/patient/followup/create_followup/${patient.patient_id}`)}
-        >
-          <Text style={styles.addFollowUpButtonText}>Add Follow-Up</Text>
-        </TouchableOpacity>
       </ScrollView>
 
       <View style={styles.footer}>
-        <TouchableOpacity style={[styles.exportButton, width >= 700 && {width : 700, alignSelf: "center"}]} onPress={handleExport}>
-          <Share size={20} color="#FFFFFF" />
-          <Text style={styles.exportButtonText}>Export Patient Folder</Text>
-        </TouchableOpacity>
+        <View style={ width >= 700 && {width : 700, alignSelf: "center", paddingHorizontal : 20}}>
+          <TouchableOpacity style={styles.exportButton} onPress={handleExport}>
+            <Share size={20} color="#FFFFFF" />
+            <Text style={styles.exportButtonText}>Export Patient Folder</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
@@ -372,6 +398,8 @@ const styles = StyleSheet.create({
     color: "#6B7280",
   },
   addFollowUpButton: {
+    flexDirection: "row",
+    gap : 10,
     backgroundColor: '#c9def9ff',
     borderRadius: 12,
     paddingVertical: 16,
@@ -380,6 +408,7 @@ const styles = StyleSheet.create({
     marginBottom: 60,
     width: '50%',
     alignSelf: 'center',
+    justifyContent: "center",
   },
   addFollowUpButtonText: {
     color: '#2563EB',
