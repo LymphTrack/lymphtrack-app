@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView, ActivityIndicator, useWindowDimensions} from "react-native";
+import { Switch, View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView, ActivityIndicator, useWindowDimensions} from "react-native";
 import { ArrowLeft, Trash, Save } from "lucide-react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { KeyboardAvoidingView, Platform } from "react-native";
@@ -21,6 +21,9 @@ export default function ModifyPatientScreen() {
   const [deleting, setDeleting] = useState(false);
   const {width} = useWindowDimensions();
   const [isFocused, setIsFocused] = useState(false);
+  const [skipAge, setSkipAge] = useState(false);
+  const [skipBmi, setSkipBmi] = useState(false);
+
 
   useEffect(() => {
     if (patient_id) {
@@ -35,7 +38,11 @@ export default function ModifyPatientScreen() {
 
       const data = await res.json();
       setAge(data.age?.toString() || "");
+      setSkipAge(data.age === null);
+
       setBmi(data.bmi?.toString() || "");
+      setSkipBmi(data.bmi === null);
+
       setGender(mapDbToGender(data.gender));
       setLymphedemaSide(mapDbToSide(data.lymphedema_side));
       setNotes(data.notes || "");
@@ -117,7 +124,10 @@ export default function ModifyPatientScreen() {
 
 
   const handleSave = async () => {
-    const { valid, error, age: ageValue, bmi: bmiValue } = validatePatientData(age, bmi);
+    const { valid, error, age: ageValue, bmi: bmiValue } = validatePatientData(
+      skipAge ? null : age,
+      skipBmi ? null : bmi
+    );
 
     if (!valid) {
       if (Platform.OS === "web") {
@@ -134,9 +144,9 @@ export default function ModifyPatientScreen() {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          age: ageValue,
+          age: skipAge ? null : ageValue,
           gender: mapGenderToDb(gender),
-          bmi: bmiValue,
+          bmi: skipBmi ? null : bmiValue,
           lymphedema_side: mapSideToDb(lymphedemaSide),
           notes,
         }),
@@ -198,8 +208,19 @@ export default function ModifyPatientScreen() {
 
   if (loading) {
     return (
-      <View style={styles.container}>
-        <ActivityIndicator size="large" color="#6a90db" style={{ marginTop: 50 }} />
+      <View style={{ flex: 1, backgroundColor: "#FFFFFF", justifyContent: "center", alignItems: "center" }}>
+        <ActivityIndicator size="large" color="#6a90db" />
+      </View>
+    );
+  }
+
+  if (deleting) {
+    return (
+      <View style={{ flex: 1, backgroundColor: "#FFFFFF", justifyContent: "center", alignItems: "center" }}>
+        <ActivityIndicator size="large" color="#6a90db" />
+        <Text style={{ marginTop: 20, fontSize: 16, color: "#1F2937", textAlign: "center", paddingHorizontal: 30 }}>
+          Deleting Patient ...
+        </Text>
       </View>
     );
   }
@@ -273,12 +294,12 @@ export default function ModifyPatientScreen() {
 
       <ScrollView contentContainerStyle={[styles.form, width >= 700 && {width : 700, alignSelf:"center"}]}>
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Age</Text>
+          <Text style={styles.label}>Age (optional)</Text>
           <TextInput
             style={[
               styles.input,
               { 
-                borderColor: isFocused ? "red" : "#D1D5DB",
+                borderColor: isFocused ? "#D1D5DB" : "#D1D5DB",
                 ...(Platform.OS === "web" ? { outlineWidth: 0 } : {}),
               },
             ]}
@@ -290,6 +311,29 @@ export default function ModifyPatientScreen() {
             onFocus={() => setIsFocused(true)}
             onBlur={() => setIsFocused(false)}
           />
+
+            <View style={{ flexDirection: "row", alignItems: "center", marginTop: 8 }}>
+              <Text style={{ marginRight: 8, color: "#374151" }}>Do not provide age</Text>
+              <Switch
+                value={skipAge}
+                onValueChange={(val) => {
+                  setSkipAge(val);
+                  if (val) setAge("");
+                }}
+                {...(Platform.OS === "web"
+                  ? ({
+                      activeThumbColor: "#2563EB",
+                      activeTrackColor: "#93C5FD",
+                      thumbColor: "#f4f3f4",
+                      trackColor: "#D1D5DB",
+                    } as any)
+                  : {
+                      trackColor: { false: "#D1D5DB", true: "#93C5FD" },
+                      thumbColor: skipAge ? "#2563EB" : "#f4f3f4",
+                      ios_backgroundColor: "#D1D5DB",
+                    })}
+              />
+            </View>          
         </View>
 
         <View style={styles.inputGroup}>
@@ -302,12 +346,12 @@ export default function ModifyPatientScreen() {
         </View>
 
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>BMI</Text>
+          <Text style={styles.label}>BMI (optional)</Text>
           <TextInput
             style={[
               styles.input,
               { 
-                borderColor: isFocused ? "red" : "#D1D5DB",
+                borderColor: isFocused ? "#D1D5DB" : "#D1D5DB",
                 ...(Platform.OS === "web" ? { outlineWidth: 0 } : {}),
               },
             ]}
@@ -319,6 +363,25 @@ export default function ModifyPatientScreen() {
             onFocus={() => setIsFocused(true)}
             onBlur={() => setIsFocused(false)}
           />
+              <Switch
+                value={skipAge}
+                onValueChange={(val) => {
+                  setSkipAge(val);
+                  if (val) setAge("");
+                }}
+                {...(Platform.OS === "web"
+                  ? ({
+                      activeThumbColor: "#2563EB",
+                      activeTrackColor: "#93C5FD",
+                      thumbColor: "#f4f3f4",
+                      trackColor: "#D1D5DB",
+                    } as any)
+                  : {
+                      trackColor: { false: "#D1D5DB", true: "#93C5FD" },
+                      thumbColor: skipAge ? "#2563EB" : "#f4f3f4",
+                      ios_backgroundColor: "#D1D5DB",
+                    })}
+              />        
         </View>
 
         <View style={styles.inputGroup}>
@@ -331,14 +394,14 @@ export default function ModifyPatientScreen() {
         </View>
 
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Notes</Text>
+          <Text style={styles.label}>Notes (optional)</Text>
           <TextInput
             style={[
               styles.input,
               { 
                 height : 100,
                 textAlignVertical : "top",
-                borderColor: isFocused ? "red" : "#D1D5DB",
+                borderColor: isFocused ? "#D1D5DB" : "#D1D5DB",
                 ...(Platform.OS === "web" ? { outlineWidth: 0 } : {}),
               },
             ]}
@@ -365,16 +428,13 @@ export default function ModifyPatientScreen() {
           </View>
         </TouchableOpacity>
 
-        <TouchableOpacity
+        <TouchableOpacity 
           style={[styles.saveButton, { backgroundColor: "#f38181ff" }]}
           onPress={deletePatient}
-          disabled={deleting}
-        >
+          >
           <View style={{ flexDirection: "row", alignItems: "center" }}>
             <Trash size={16} color="#891111ff" style={{ marginRight: 8 }} />
-            <Text style={[styles.saveButtonText, { color: "#891111ff" }]}>
-               {deleting ? "Deleting..." : "Delete Patient"}
-            </Text>
+            <Text style={[styles.saveButtonText, { color: "#891111ff" }]}>Delete</Text>
           </View>
         </TouchableOpacity>
 

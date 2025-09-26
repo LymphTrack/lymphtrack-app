@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator, useWindowDimensions } from 'react-native';
+import { Switch, View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator, useWindowDimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ArrowLeft,User, Weight} from 'lucide-react-native';
 import { KeyboardAvoidingView, Platform } from "react-native";
@@ -13,23 +13,19 @@ export default function CreatePatientScreen() {
     lymphedema_side: 'Right' as 'Right' | 'Left' | 'Both' | 'Unknown',
     bmi : '',
     notes :'',
+    skipAge : false,
+    skipBmi : false,
   });
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const {width} = useWindowDimensions();
   const [isFocused, setIsFocused] = useState(false);
-  const [noteHeight, setNoteHeight] = useState(100);
-
-  <TextInput
-    style={[styles.input, { height: noteHeight, textAlignVertical: "top" }]}
-    multiline
-    onContentSizeChange={(e) =>
-      setNoteHeight(Math.max(100, e.nativeEvent.contentSize.height))
-    }
-  />
 
   const handleSubmit = async () => {
-    const { valid, error, age, bmi } = validatePatientData(formData.age, formData.bmi);
+    const { valid, error, age, bmi } = validatePatientData(
+      formData.skipAge ? null : formData.age,
+      formData.skipBmi ? null : formData.bmi
+    );
 
     if (!valid) {
       if (Platform.OS === "web") {
@@ -47,9 +43,9 @@ export default function CreatePatientScreen() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          age: age,
           gender: mapGenderToDb(formData.gender),
-          bmi: bmi,
+          age: formData.skipAge ? null : age,
+          bmi: formData.skipBmi ? null : bmi,
           lymphedema_side: mapSideToDb(formData.lymphedema_side),
           notes: formData.notes,
         }),
@@ -196,26 +192,52 @@ export default function CreatePatientScreen() {
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Age (optional)</Text>
-            <View style={styles.inputContainer}>
-              <User size={20} color="#6B7280" style={styles.inputIcon} />
-              <TextInput
-                style={[
+
+            {!formData.skipAge && (
+              <View style={styles.inputContainer}>
+                <User size={20} color="#6B7280" style={styles.inputIcon} />
+                <TextInput
+                  style={[
                     styles.input,
-                    { 
-                      borderColor: isFocused ? "red" : "#D1D5DB",
+                    {
+                      borderColor: isFocused ? "#D1D5DB" : "#D1D5DB",
                       ...(Platform.OS === "web" ? { outlineWidth: 0 } : {}),
                     },
                   ]}
-                placeholder="Enter age"
-                placeholderTextColor={"#9CA3AF"}
-                value={formData.age}
-                onChangeText={(text) => setFormData(prev => ({ ...prev, age: text }))}
-                keyboardType="numeric"
-                onFocus={() => setIsFocused(true)}
-                onBlur={() => setIsFocused(false)}
+                  placeholder="Enter age"
+                  placeholderTextColor={"#9CA3AF"}
+                  value={formData.age}
+                  onChangeText={(text) => setFormData((prev) => ({ ...prev, age: text }))}
+                  keyboardType="numeric"
+                  onFocus={() => setIsFocused(true)}
+                  onBlur={() => setIsFocused(false)}
+                />
+              </View>
+            )}
+            <View style={{ flexDirection: "row", alignItems: "center", marginTop: 8 }}>
+              <Text style={{ marginRight: 8, color: "#374151" }}>Do not provide age</Text>
+
+              <Switch
+                value={formData.skipAge}
+                onValueChange={(val) =>
+                  setFormData((prev) => ({ ...prev, skipAge: val, age: val ? "" : prev.age }))
+                }
+                {...(Platform.OS === "web"
+                  ? ({
+                      activeThumbColor: "#2563EB",
+                      activeTrackColor: "#93C5FD",
+                      thumbColor: "#f4f3f4",
+                      trackColor: "#D1D5DB",
+                    } as any)
+                  : {
+                      trackColor: { false: "#D1D5DB", true: "#93C5FD" },
+                      thumbColor: formData.skipAge ? "#2563EB" : "#f4f3f4",
+                      ios_backgroundColor: "#D1D5DB",
+                    })}
               />
             </View>
           </View>
+
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Gender</Text>
@@ -232,26 +254,53 @@ export default function CreatePatientScreen() {
 
           <View style={styles.inputRow}>
             <View style={[styles.inputGroup, { flex: 1, marginRight: 8 }]}>
-              <Text style={styles.label}>Bmi (optional)</Text>
-              <View style={styles.inputContainer}>
-                <Weight size={20} color="#6B7280" style={styles.inputIcon} />
-                <TextInput
-                  style={[
-                    styles.input,
-                    { 
-                      borderColor: isFocused ? "red" : "#D1D5DB",
-                      ...(Platform.OS === "web" ? { outlineWidth: 0 } : {}),
-                    },
-                  ]}
-                  placeholder="0.0"
-                  placeholderTextColor={"#9CA3AF"}
-                  value={formData.bmi}
-                  onChangeText={(text) => setFormData(prev => ({ ...prev, bmi: text }))}
-                  keyboardType="decimal-pad"
-                />
-              </View>
+              <Text style={styles.label}>BMI (optional)</Text>
+
+              {!formData.skipBmi && (
+                <View style={styles.inputContainer}>
+                  <Weight size={20} color="#6B7280" style={styles.inputIcon} />
+                  <TextInput
+                    style={[
+                      styles.input,
+                      {
+                        borderColor: isFocused ? "red" : "#D1D5DB",
+                        ...(Platform.OS === "web" ? { outlineWidth: 0 } : {}),
+                      },
+                    ]}
+                    placeholder="0.0"
+                    placeholderTextColor={"#9CA3AF"}
+                    value={formData.bmi}
+                    onChangeText={(text) => setFormData((prev) => ({ ...prev, bmi: text }))}
+                    keyboardType="decimal-pad"
+                  />
+                </View>
+              )}
             </View>
           </View>
+
+          <View style={{ flexDirection: "row", alignItems: "center",}}>
+              <Text style={{ marginRight: 8, color: "#374151" }}>Do not provide BMI</Text>
+
+              <Switch
+                value={formData.skipBmi}
+                onValueChange={(val) =>
+                  setFormData((prev) => ({ ...prev, skipBmi: val, age: val ? "" : prev.age }))
+                }
+                {...(Platform.OS === "web"
+                  ? ({
+                      activeThumbColor: "#2563EB",
+                      activeTrackColor: "#93C5FD",
+                      thumbColor: "#f4f3f4",
+                      trackColor: "#D1D5DB",
+                    } as any)
+                  : {
+                      trackColor: { false: "#D1D5DB", true: "#93C5FD" },
+                      thumbColor: formData.skipBmi ? "#2563EB" : "#f4f3f4",
+                      ios_backgroundColor: "#D1D5DB",
+                    })}
+              />
+            </View>
+
         </View>
 
         <View style={styles.section}>

@@ -201,7 +201,7 @@ export default function CreateFollowUp() {
         ) : (
           <>
             <View style={styles.card}> 
-              <Text style={styles.label}>Date</Text> 
+              <Text style={styles.label}>Date <Text style={{ color: "red" }}>*</Text></Text> 
               <TouchableOpacity 
                 style={styles.inputRow} 
                 onPress={() => setShowDatePicker(true)} 

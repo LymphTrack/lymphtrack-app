@@ -24,6 +24,7 @@ export default function PatientsScreen() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();            
   const { width } = useWindowDimensions();
+  const [isFocused, setIsFocused] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -241,8 +242,15 @@ export default function PatientsScreen() {
               >
                 <Search size={20} color="#6a90db" style={styles.searchIcon} />
                 <TextInput
-                  style={styles.searchInput}
+                  style={[
+                    styles.searchInput,
+                    { 
+                      borderColor: isFocused ? "red" : "#D1D5DB",
+                      ...(Platform.OS === "web" ? { outlineWidth: 0 } : {}),
+                    },
+                  ]}
                   placeholder="Search by Patient ID..."
+                  placeholderTextColor={"gray"}
                   value={searchQuery}
                   onChangeText={setSearchQuery}
                 />
@@ -380,7 +388,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: Platform.OS === 'web' ? 7 : 12,
     fontSize: 16,
-    color: "gray",
+    color: "black",
   },
   listContainer: {
     paddingHorizontal: 20,
