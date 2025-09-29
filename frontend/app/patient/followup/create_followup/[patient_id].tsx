@@ -95,9 +95,12 @@ export default function CreateFollowUp() {
       console.log("[DEBUG] Success, navigating with id:", data?.operation?.id_operation);
 
       if (Platform.OS === "web") {
+        setLoading(false);
         window.alert("Success\n\nFollow-up saved successfully");
+        
         router.push(`/patient/${patient_id}/followup/${data.operation.id_operation}`);
       } else {
+        setLoading(false);
         Alert.alert("Success", "Follow-up saved successfully", [
           {
             text: "OK",

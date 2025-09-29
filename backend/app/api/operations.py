@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Body
+from fastapi import APIRouter, Depends, HTTPException, Body, BackgroundTasks
 from sqlalchemy.orm import Session
 from app.db.models import Operation
 from app.db.database import get_db
@@ -21,9 +21,36 @@ m = mega.login(EMAIL, PASSWORD)
 # CREATE OPERATION
 # ---------------------
 
+def sync_operation_with_mega(patient_id: str, visit_str: str):
+    try:
+        print(f"[DEBUG][Mega] Start sync for {patient_id} / {visit_str}")
+
+        patient_folder = m.find(f"lymphtrack-data/{patient_id}")
+        if not patient_folder:
+            print(f"[DEBUG][Mega] Creating patient folder: {patient_id}")
+            patient_folder = [m.create_folder(f"lymphtrack-data/{patient_id}")]
+
+        existing_folder = m.find(f"{patient_folder[0]}/{visit_str}")
+        if not existing_folder:
+            print(f"[DEBUG][Mega] Creating folder for operation: {visit_str}")
+            m.create_folder(visit_str, patient_folder[0])
+        else:
+            print(f"[DEBUG][Mega] Folder already exists: {visit_str}")
+
+        print(f"[DEBUG][Mega] Sync done for {visit_str}")
+
+    except Exception as e:
+        print(f"[DEBUG][Mega] Error during sync for {visit_str}: {e}")
+
+
+# --- Route principale ---
 @router.post("/")
-def create_operation(op_data: dict = Body(...), db: Session = Depends(get_db)):
-    print("[DEBUG] create_operation called with:", op_data)  # payload reçu
+def create_operation(
+    op_data: dict = Body(...),
+    db: Session = Depends(get_db),
+    background_tasks: BackgroundTasks = None
+):
+    print("[DEBUG] create_operation called with:", op_data)
     patient_id = op_data.get("patient_id")
 
     try:
@@ -31,17 +58,13 @@ def create_operation(op_data: dict = Body(...), db: Session = Depends(get_db)):
         # 1. Vérification et parsing
         # ---------------------------
         op_date = op_data.get("operation_date")
-        print("[DEBUG] Raw operation_date:", op_date)
-
         if isinstance(op_date, str):
             try:
                 op_date = datetime.fromisoformat(op_date)
-                print("[DEBUG] Parsed operation_date with fromisoformat:", op_date)
             except ValueError:
                 op_date = datetime.strptime(op_date, "%Y-%m-%d")
-                print("[DEBUG] Parsed operation_date with strptime:", op_date)
 
-        print("[DEBUG] Checking for existing operation in DB...")
+        # Vérifier doublon
         existing = (
             db.query(Operation)
             .filter(
@@ -52,7 +75,6 @@ def create_operation(op_data: dict = Body(...), db: Session = Depends(get_db)):
             .first()
         )
         if existing:
-            print("[DEBUG] Existing operation found:", existing.id_operation)
             raise HTTPException(
                 status_code=400,
                 detail="An operation with the same name and date already exists for this patient.",
@@ -61,66 +83,42 @@ def create_operation(op_data: dict = Body(...), db: Session = Depends(get_db)):
         # ---------------------------
         # 2. Création en base
         # ---------------------------
-        print("[DEBUG] Creating new Operation object...")
         temp_op = Operation(**op_data)
         temp_op.operation_date = op_date
 
         db.add(temp_op)
         db.flush()
-        print("[DEBUG] Operation added to session:", temp_op.id_operation)
 
-        print("[DEBUG] Fetching all operations for patient:", patient_id)
         all_ops = (
             db.query(Operation)
             .filter(Operation.patient_id == patient_id)
             .order_by(Operation.operation_date.asc())
             .all()
         )
-        print("[DEBUG] Found", len(all_ops), "operations")
 
-        visit_map = {}
-        for i, op in enumerate(all_ops, start=1):
-            new_visit_str = f"{i}-{op.name.replace(' ', '_')}_{op.operation_date.strftime('%d%m%Y')}"
-            visit_map[op.id_operation] = (i, new_visit_str)
-            print(f"[DEBUG] Visit map updated: {op.id_operation} → {new_visit_str}")
+        visit_map = {
+            op.id_operation: (
+                i,
+                f"{i}-{op.name.replace(' ', '_')}_{op.operation_date.strftime('%d%m%Y')}"
+            )
+            for i, op in enumerate(all_ops, start=1)
+        }
 
         # ✅ Commit AVANT Mega
         db.commit()
         db.refresh(temp_op)
-        print("[DEBUG] Operation committed with id:", temp_op.id_operation)
 
         visit_number, visit_str = visit_map[temp_op.id_operation]
-        print("[DEBUG] Final visit_number/visit_str:", visit_number, visit_str)
+        print(f"[DEBUG] Operation {temp_op.id_operation} committed with visit_str {visit_str}")
 
         # ---------------------------
-        # 3. Interaction avec Mega (non bloquante)
+        # 3. Mega en tâche de fond
         # ---------------------------
-        try:
-            print("[DEBUG] Checking Mega for patient folder:", patient_id)
-            patient_folder = m.find(f"lymphtrack-data/{patient_id}")
-            print("[DEBUG] m.find result:", patient_folder)
-
-            if not patient_folder:
-                print("[DEBUG] Creating new folder for patient:", patient_id)
-                patient_folder = [m.create_folder(f"lymphtrack-data/{patient_id}")]
-                print("[DEBUG] Folder created:", patient_folder)
-
-            # Vérifier/Créer dossier pour la nouvelle opération
-            try:
-                existing_folder = m.find(f"{patient_folder[0]}/{visit_str}")
-                print(f"[DEBUG] Check if folder exists for {visit_str}:", existing_folder)
-
-                if not existing_folder:
-                    print("[DEBUG] Creating folder for new operation:", visit_str)
-                    m.create_folder(visit_str, patient_folder[0])
-            except Exception as e:
-                print(f"[DEBUG] Mega error while creating folder for {visit_str}:", e)
-
-        except Exception as e:
-            print("[DEBUG] Mega global error:", e)
+        if background_tasks:
+            background_tasks.add_task(sync_operation_with_mega, patient_id, visit_str)
 
         # ---------------------------
-        # 4. Retour au frontend
+        # 4. Réponse immédiate
         # ---------------------------
         return {
             "status": "success",
@@ -141,7 +139,6 @@ def create_operation(op_data: dict = Body(...), db: Session = Depends(get_db)):
         db.rollback()
         print("[DEBUG] Exception occurred:", e)
         raise HTTPException(status_code=400, detail=f"Error creating operation: {e}")
-
 
 # -----------------------
 # READ OPERATION BY ID
