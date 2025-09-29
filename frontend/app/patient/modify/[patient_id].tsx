@@ -363,11 +363,14 @@ export default function ModifyPatientScreen() {
             onFocus={() => setIsFocused(true)}
             onBlur={() => setIsFocused(false)}
           />
+           <View style={{ flexDirection: "row", alignItems: "center", marginTop : 8}}>
+              <Text style={{ marginRight: 8, color: "#374151" }}>Do not provide BMI</Text>
+
               <Switch
-                value={skipAge}
+                value={skipBmi}
                 onValueChange={(val) => {
-                  setSkipAge(val);
-                  if (val) setAge("");
+                  setSkipBmi(val);
+                  if (val) setBmi("");
                 }}
                 {...(Platform.OS === "web"
                   ? ({
@@ -378,10 +381,11 @@ export default function ModifyPatientScreen() {
                     } as any)
                   : {
                       trackColor: { false: "#D1D5DB", true: "#93C5FD" },
-                      thumbColor: skipAge ? "#2563EB" : "#f4f3f4",
+                      thumbColor: skipBmi ? "#2563EB" : "#f4f3f4",
                       ios_backgroundColor: "#D1D5DB",
                     })}
-              />        
+              /> 
+            </View>       
         </View>
 
         <View style={styles.inputGroup}>
