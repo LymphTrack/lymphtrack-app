@@ -43,40 +43,45 @@ export default function CreateFollowUp() {
 
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/operations/`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          patient_id: patient_id,
-          name: name,
-          operation_date: date.toISOString().split("T")[0],
-          notes: formData.notes,
-        }),
-      });
+    const res = await fetch(`${API_URL}/operations/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        patient_id: patient_id,
+        name: name,
+        operation_date: date.toISOString().split("T")[0],
+        notes: formData.notes,
+      }),
+    });
 
-      if (!res.ok) {
-        const errorData = await res.json();
-        if (Platform.OS === "web") {
-          window.alert(`Error\n\n${errorData.detail || "Unable to save follow-up"}`);
-        } else {
-          Alert.alert("Error", errorData.detail || "Unable to save follow-up");
-        }
-        return;
-      }
+    let data;
+    try {
+      data = await res.json(); 
+    } catch (err) {
+      data = null;
+    }
 
-      const data = await res.json();
-
+    if (!res.ok) {
       if (Platform.OS === "web") {
-        window.alert("Success\n\nFollow-up saved successfully");
-        router.push(`/patient/followup/${data.operation.id_operation}`);
+        window.alert(`Error\n\n${data?.detail || "Unable to save follow-up"}`);
       } else {
-        Alert.alert("Success", "Follow-up saved successfully", [
-          {
-            text: "OK",
-            onPress: () => router.push(`/patient/followup/${data.operation.id_operation}`),
-          },
-        ]);
+        Alert.alert("Error", data?.detail || "Unable to save follow-up");
       }
+      return;
+    }
+
+    if (Platform.OS === "web") {
+      window.alert("Success\n\nFollow-up saved successfully");
+      router.push(`/patient/followup/${data.operation.id_operation}`);
+    } else {
+      Alert.alert("Success", "Follow-up saved successfully", [
+        {
+          text: "OK",
+          onPress: () => router.push(`/patient/followup/${data.operation.id_operation}`),
+        },
+      ]);
+    }
+
 
     } catch (err) {
       console.error("Error:", err);
