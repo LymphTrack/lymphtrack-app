@@ -23,20 +23,31 @@ m = mega.login(EMAIL, PASSWORD)
 
 @router.post("/")
 def create_operation(op_data: dict = Body(...), db: Session = Depends(get_db)):
+    print("[DEBUG] create_operation called with:", op_data)  # <-- payload reçu
     patient_id = op_data.get("patient_id")
 
     try:
+        print("[DEBUG] Checking Mega for patient folder:", patient_id)
         patient_folder = m.find(f"lymphtrack-data/{patient_id}")
+        print("[DEBUG] m.find result:", patient_folder)
+
         if not patient_folder:
+            print("[DEBUG] Creating new folder for patient:", patient_id)
             patient_folder = [m.create_folder(f"lymphtrack-data/{patient_id}")]
+            print("[DEBUG] Folder created:", patient_folder)
 
         op_date = op_data.get("operation_date")
+        print("[DEBUG] Raw operation_date:", op_date)
+
         if isinstance(op_date, str):
             try:
                 op_date = datetime.fromisoformat(op_date)
+                print("[DEBUG] Parsed operation_date with fromisoformat:", op_date)
             except ValueError:
                 op_date = datetime.strptime(op_date, "%Y-%m-%d")
+                print("[DEBUG] Parsed operation_date with strptime:", op_date)
 
+        print("[DEBUG] Checking for existing operation in DB...")
         existing = (
             db.query(Operation)
             .filter(
@@ -47,48 +58,58 @@ def create_operation(op_data: dict = Body(...), db: Session = Depends(get_db)):
             .first()
         )
         if existing:
+            print("[DEBUG] Existing operation found:", existing.id_operation)
             raise HTTPException(
                 status_code=400,
                 detail="An operation with the same name and date already exists for this patient.",
             )
 
+        print("[DEBUG] Creating new Operation object...")
         temp_op = Operation(**op_data)
         temp_op.operation_date = op_date
 
         db.add(temp_op)
         db.flush()
+        print("[DEBUG] Operation added to session:", temp_op.id_operation)
 
+        print("[DEBUG] Fetching all operations for patient:", patient_id)
         all_ops = (
             db.query(Operation)
             .filter(Operation.patient_id == patient_id)
             .order_by(Operation.operation_date.asc())
             .all()
         )
+        print("[DEBUG] Found", len(all_ops), "operations")
 
         visit_map = {}
-
         for i, op in enumerate(all_ops, start=1):
             new_visit_str = f"{i}-{op.name.replace(' ', '_')}_{op.operation_date.strftime('%d%m%Y')}"
             visit_map[op.id_operation] = (i, new_visit_str)
+            print(f"[DEBUG] Visit map updated: {op.id_operation} → {new_visit_str}")
 
             existing_folder = m.find(f"{patient_folder[0]}/{new_visit_str}")
+            print(f"[DEBUG] Check if folder exists for {new_visit_str}:", existing_folder)
 
             if op.id_operation == temp_op.id_operation:
                 if not existing_folder:
+                    print("[DEBUG] Creating folder for new operation:", new_visit_str)
                     m.create_folder(new_visit_str, patient_folder[0])
             else:
+                print("[DEBUG] Renaming old folders if needed...")
                 old_folders = m.get_files_in_node(patient_folder[0])
                 for folder_id, folder_meta in old_folders.items():
                     if folder_meta["t"] == 1 and folder_meta["a"]["n"].endswith(op.operation_date.strftime("%d%m%Y")):
                         old_name = folder_meta["a"]["n"]
                         if old_name != new_visit_str:
+                            print(f"[DEBUG] Renaming {old_name} → {new_visit_str}")
                             m.rename((folder_id, folder_meta), new_visit_str)
-
 
         db.commit()
         db.refresh(temp_op)
+        print("[DEBUG] Operation committed with id:", temp_op.id_operation)
 
         visit_number, visit_str = visit_map[temp_op.id_operation]
+        print("[DEBUG] Final visit_number/visit_str:", visit_number, visit_str)
 
         return {
             "status": "success",
@@ -107,6 +128,7 @@ def create_operation(op_data: dict = Body(...), db: Session = Depends(get_db)):
         raise
     except Exception as e:
         db.rollback()
+        print("[DEBUG] Exception occurred:", e)
         raise HTTPException(status_code=400, detail=f"Error creating operation: {e}")
 
 

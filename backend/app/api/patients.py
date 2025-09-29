@@ -153,41 +153,30 @@ def add_node_to_zip(node_id, meta, zipf, base_path=""):
 
         zip_path = os.path.join(base_path, name)
 
-        if node_type == 0:  # fichier
+        if node_type == 0:
             if name == ".DS_Store":
                 return
 
-            print(f"➡️ [DEBUG] Téléchargement fichier: {zip_path}")
-
             try:
-                # On télécharge directement dans un fichier temporaire
                 downloaded_path = m.download((node_id, meta),
                                              dest_path=".",
                                              dest_filename=f"tmp_{name}")
 
-                # Ici le fichier est déjà fermé correctement par _download_file
                 with open(downloaded_path, "rb") as f:
                     zipf.writestr(zip_path, f.read())
-
-                # Nettoyage
                 os.remove(downloaded_path)
-
-                print(f"✅ [DEBUG] Fichier ajouté: {zip_path}")
 
             except Exception as e:
                 print(f"❌ [DEBUG] Echec download {name}: {e}")
                 return
 
-        elif node_type == 1:  # dossier
-            print(f"➡️ [DEBUG] Descente dans dossier: {zip_path}")
+        elif node_type == 1: 
             children = m.get_files_in_node(node_id)
             for child_id, child_meta in children.items():
                 add_node_to_zip(child_id, child_meta, zipf, base_path=zip_path)
 
     except Exception as e:
         print(f"❌ [DEBUG] Erreur dans add_node_to_zip pour {node_id}: {e}")
-
-
 
 
 @router.get("/export-folder/{patient_id}")
