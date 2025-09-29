@@ -32,7 +32,10 @@ def create_operation(op_data: dict = Body(...), db: Session = Depends(get_db)):
 
         op_date = op_data.get("operation_date")
         if isinstance(op_date, str):
-            op_date = datetime.fromisoformat(op_date)
+            try:
+                op_date = datetime.fromisoformat(op_date)
+            except ValueError:
+                op_date = datetime.strptime(op_date, "%Y-%m-%d")
 
         existing = (
             db.query(Operation)
