@@ -68,15 +68,16 @@ export default function CreateFollowUp() {
 
       if (Platform.OS === "web") {
         window.alert("Success\n\nFollow-up saved successfully");
-        router.push(`/patient/followup/${data.id_operation}`);
+        router.push(`/patient/followup/${data.operation.id_operation}`);
       } else {
         Alert.alert("Success", "Follow-up saved successfully", [
           {
             text: "OK",
-            onPress: () => router.push(`/patient/followup/${data.id_operation}`),
+            onPress: () => router.push(`/patient/followup/${data.operation.id_operation}`),
           },
         ]);
       }
+
     } catch (err) {
       console.error("Error:", err);
       if (Platform.OS === "web") {

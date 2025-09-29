@@ -15,7 +15,7 @@ def test_create_operation():
     }
     r = requests.post(API_URL + "/", json=payload)
     print("CREATE:", r.status_code, r.json())
-    return r.json().get("id_operation")
+    return r.json().get("operation", {}).get("id_operation")  # <-- correction
 
 
 # ---------------------
@@ -80,7 +80,7 @@ if __name__ == "__main__":
     op_id = test_create_operation()
     if op_id:
         test_get_operation(op_id)
-        #test_update_operation(op_id)
-        #test_get_operations_by_patient("MV131")
-        #test_get_all_operations()
-        #test_delete_operation(op_id)
+        test_update_operation(op_id)
+        test_get_operations_by_patient("MV131")
+        test_get_all_operations()
+        test_delete_operation(op_id)
