@@ -23,19 +23,13 @@ m = mega.login(EMAIL, PASSWORD)
 
 @router.post("/")
 def create_operation(op_data: dict = Body(...), db: Session = Depends(get_db)):
-    print("[DEBUG] create_operation called with:", op_data)  # <-- payload reçu
+    print("[DEBUG] create_operation called with:", op_data)  # payload reçu
     patient_id = op_data.get("patient_id")
 
     try:
-        print("[DEBUG] Checking Mega for patient folder:", patient_id)
-        patient_folder = m.find(f"lymphtrack-data/{patient_id}")
-        print("[DEBUG] m.find result:", patient_folder)
-
-        if not patient_folder:
-            print("[DEBUG] Creating new folder for patient:", patient_id)
-            patient_folder = [m.create_folder(f"lymphtrack-data/{patient_id}")]
-            print("[DEBUG] Folder created:", patient_folder)
-
+        # ---------------------------
+        # 1. Vérification et parsing
+        # ---------------------------
         op_date = op_data.get("operation_date")
         print("[DEBUG] Raw operation_date:", op_date)
 
@@ -64,6 +58,9 @@ def create_operation(op_data: dict = Body(...), db: Session = Depends(get_db)):
                 detail="An operation with the same name and date already exists for this patient.",
             )
 
+        # ---------------------------
+        # 2. Création en base
+        # ---------------------------
         print("[DEBUG] Creating new Operation object...")
         temp_op = Operation(**op_data)
         temp_op.operation_date = op_date
@@ -87,23 +84,7 @@ def create_operation(op_data: dict = Body(...), db: Session = Depends(get_db)):
             visit_map[op.id_operation] = (i, new_visit_str)
             print(f"[DEBUG] Visit map updated: {op.id_operation} → {new_visit_str}")
 
-            existing_folder = m.find(f"{patient_folder[0]}/{new_visit_str}")
-            print(f"[DEBUG] Check if folder exists for {new_visit_str}:", existing_folder)
-
-            if op.id_operation == temp_op.id_operation:
-                if not existing_folder:
-                    print("[DEBUG] Creating folder for new operation:", new_visit_str)
-                    m.create_folder(new_visit_str, patient_folder[0])
-            else:
-                print("[DEBUG] Renaming old folders if needed...")
-                old_folders = m.get_files_in_node(patient_folder[0])
-                for folder_id, folder_meta in old_folders.items():
-                    if folder_meta["t"] == 1 and folder_meta["a"]["n"].endswith(op.operation_date.strftime("%d%m%Y")):
-                        old_name = folder_meta["a"]["n"]
-                        if old_name != new_visit_str:
-                            print(f"[DEBUG] Renaming {old_name} → {new_visit_str}")
-                            m.rename((folder_id, folder_meta), new_visit_str)
-
+        # ✅ Commit AVANT Mega
         db.commit()
         db.refresh(temp_op)
         print("[DEBUG] Operation committed with id:", temp_op.id_operation)
@@ -111,6 +92,36 @@ def create_operation(op_data: dict = Body(...), db: Session = Depends(get_db)):
         visit_number, visit_str = visit_map[temp_op.id_operation]
         print("[DEBUG] Final visit_number/visit_str:", visit_number, visit_str)
 
+        # ---------------------------
+        # 3. Interaction avec Mega (non bloquante)
+        # ---------------------------
+        try:
+            print("[DEBUG] Checking Mega for patient folder:", patient_id)
+            patient_folder = m.find(f"lymphtrack-data/{patient_id}")
+            print("[DEBUG] m.find result:", patient_folder)
+
+            if not patient_folder:
+                print("[DEBUG] Creating new folder for patient:", patient_id)
+                patient_folder = [m.create_folder(f"lymphtrack-data/{patient_id}")]
+                print("[DEBUG] Folder created:", patient_folder)
+
+            # Vérifier/Créer dossier pour la nouvelle opération
+            try:
+                existing_folder = m.find(f"{patient_folder[0]}/{visit_str}")
+                print(f"[DEBUG] Check if folder exists for {visit_str}:", existing_folder)
+
+                if not existing_folder:
+                    print("[DEBUG] Creating folder for new operation:", visit_str)
+                    m.create_folder(visit_str, patient_folder[0])
+            except Exception as e:
+                print(f"[DEBUG] Mega error while creating folder for {visit_str}:", e)
+
+        except Exception as e:
+            print("[DEBUG] Mega global error:", e)
+
+        # ---------------------------
+        # 4. Retour au frontend
+        # ---------------------------
         return {
             "status": "success",
             "operation": {
