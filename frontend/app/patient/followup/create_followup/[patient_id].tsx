@@ -43,7 +43,7 @@ export default function CreateFollowUp() {
 
     setLoading(true);
     try {
-    const res = await fetch(`${API_URL}/operations/`, {
+    const res = await fetch(`${API_URL}/operations`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
