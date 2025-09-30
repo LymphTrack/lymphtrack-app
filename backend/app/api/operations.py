@@ -29,7 +29,6 @@ def create_operation(op_data: dict = Body(...), db: Session = Depends(get_db)):
         # Vérifie / crée dossier patient
         patient_folder = m.find(f"lymphtrack-data/{patient_id}")
         if not patient_folder:
-            print(f"[DEBUG][Mega] Creating patient folder for {patient_id}")
             patient_folder = [m.create_folder(f"lymphtrack-data/{patient_id}")]
 
         # Parse date proprement
@@ -40,7 +39,6 @@ def create_operation(op_data: dict = Body(...), db: Session = Depends(get_db)):
             except ValueError:
                 op_date = datetime.strptime(op_date, "%Y-%m-%d")
 
-        print("[DEBUG] Checking for existing operation in DB...")
         existing = (
             db.query(Operation)
             .filter(
@@ -56,54 +54,41 @@ def create_operation(op_data: dict = Body(...), db: Session = Depends(get_db)):
                 detail="An operation with the same name and date already exists for this patient.",
             )
 
-        # Création de l’opération
-        print("[DEBUG] Creating new Operation object...")
         temp_op = Operation(**op_data)
         temp_op.operation_date = op_date
         db.add(temp_op)
         db.flush()
-        print("[DEBUG] Operation added to session:", temp_op.id_operation)
 
-        # Récupère toutes les opérations pour ce patient
         all_ops = (
             db.query(Operation)
             .filter(Operation.patient_id == patient_id)
             .order_by(Operation.operation_date.asc())
             .all()
         )
-        print("[DEBUG] Found", len(all_ops), "operations")
 
         visit_map = {}
         for i, op in enumerate(all_ops, start=1):
             new_visit_str = f"{i}-{op.name.replace(' ', '_')}_{op.operation_date.strftime('%d%m%Y')}"
             visit_map[op.id_operation] = (i, new_visit_str)
-            print(f"[DEBUG] Visit map updated: {op.id_operation} → {new_visit_str}")
-
+            
             subfolders = m.get_files_in_node(patient_folder[0])
 
             if op.id_operation == temp_op.id_operation:
-                # Vérifie si le dossier existe déjà
                 already_exists = any(meta["t"] == 1 and meta["a"]["n"] == new_visit_str for _, meta in subfolders.items())
                 if not already_exists:
-                    print(f"[DEBUG][Mega] Creating folder {new_visit_str} under {patient_id}")
                     m.create_folder(new_visit_str, patient_folder[0])
             else:
-                # Renommer les anciens si besoin
                 for folder_id, folder_meta in subfolders.items():
                     if folder_meta["t"] == 1 and folder_meta["a"]["n"].endswith(op.operation_date.strftime("%d%m%Y")):
                         old_name = folder_meta["a"]["n"]
                         if old_name != new_visit_str:
-                            print(f"[DEBUG][Mega] Renaming {old_name} → {new_visit_str}")
                             m.rename((folder_id, folder_meta), new_visit_str)
 
-        # Commit DB après la synchro Mega
         db.commit()
         db.refresh(temp_op)
-        print("[DEBUG] Operation committed with id:", temp_op.id_operation)
-
+        
         visit_number, visit_str = visit_map[temp_op.id_operation]
-        print("[DEBUG] Final visit_number/visit_str:", visit_number, visit_str)
-
+        
         return {
             "status": "success",
             "operation": {
@@ -121,7 +106,6 @@ def create_operation(op_data: dict = Body(...), db: Session = Depends(get_db)):
         raise
     except Exception as e:
         db.rollback()
-        print("[DEBUG] Exception occurred:", e)
         raise HTTPException(status_code=400, detail=f"Error creating operation: {e}")
 
 
