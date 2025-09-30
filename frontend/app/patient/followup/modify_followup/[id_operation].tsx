@@ -15,6 +15,7 @@ export default function ModifyFollowUpScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const {width} = useWindowDimensions();
   const [isFocused, setIsFocused] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const router = useRouter();
 
@@ -57,7 +58,7 @@ export default function ModifyFollowUpScreen() {
     }
 
     try {
-      setLoading(true);
+      setSaving(true);
 
       const res = await fetch(`${API_URL}/operations/${id_operation}`, {
         method: "PUT",
@@ -94,7 +95,7 @@ export default function ModifyFollowUpScreen() {
         Alert.alert("Error", "Unable to update follow-up");
       }
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
@@ -102,6 +103,17 @@ export default function ModifyFollowUpScreen() {
     return (
       <View style={{ flex: 1, backgroundColor: "#FFFFFF", justifyContent: "center", alignItems: "center" }}>
         <ActivityIndicator size="large" color="#6a90db" />
+      </View>
+    );
+  }
+
+  if (saving) {
+    return (
+      <View style={{ flex: 1, backgroundColor: "#FFFFFF", justifyContent: "center", alignItems: "center" }}>
+        <ActivityIndicator size="large" color="#6a90db" />
+        <Text style={{ marginTop: 20, fontSize: 16, color: "#1F2937" }}>
+          Creating FollowUp...
+        </Text>
       </View>
     );
   }
