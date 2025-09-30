@@ -11,6 +11,7 @@ export default function PatientResultsScreen() {
   const [operation, setOperation] = useState<any | null>(null);
   const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(false);
   const router = useRouter();
   const {width} = useWindowDimensions();
 
@@ -48,6 +49,7 @@ export default function PatientResultsScreen() {
         "Confirm deletion\n\nAre you sure you want to delete this operation?"
       );
       if (confirm) {
+        setDeleting(true);
         try {
           const res = await fetch(`${API_URL}/operations/${id_operation}`, {
             method: "DELETE",
@@ -60,6 +62,7 @@ export default function PatientResultsScreen() {
           }
 
           const data = await res.json();
+          setDeleting(false);
           window.alert(`Success\n\n${data.message || "Operation deleted successfully"}`);
 
           router.push(`../${data.patient_id}`);
@@ -78,6 +81,7 @@ export default function PatientResultsScreen() {
             text: "Delete",
             style: "destructive",
             onPress: async () => {
+              setDeleting(true);
               try {
                 const res = await fetch(`${API_URL}/operations/${id_operation}`, {
                   method: "DELETE",
@@ -91,7 +95,7 @@ export default function PatientResultsScreen() {
 
                 const data = await res.json();
                 Alert.alert("Success", data.message || "Operation deleted successfully");
-
+                setDeleting(false);
                 router.push(`../${data.patient_id}`);
               } catch (err) {
                 console.error("Unexpected error:", err);
@@ -164,6 +168,17 @@ export default function PatientResultsScreen() {
     return (
       <View style={styles.loaderContainer}>
         <ActivityIndicator size="large" color="#6a90db" />
+      </View>
+    );
+  }
+
+  if (deleting) {
+    return (
+      <View style={{ flex: 1, backgroundColor: "#FFFFFF", justifyContent: "center", alignItems: "center" }}>
+        <ActivityIndicator size="large" color="#6a90db" />
+        <Text style={{ marginTop: 20, fontSize: 16, color: "#1F2937" }}>
+          Deleting FollowUp...
+        </Text>
       </View>
     );
   }
