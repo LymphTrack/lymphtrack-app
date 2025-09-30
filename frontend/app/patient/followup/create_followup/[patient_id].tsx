@@ -22,10 +22,7 @@ export default function CreateFollowUp() {
   const {width}= useWindowDimensions();
 
   const handleSave = async () => {
-    console.log("[DEBUG] handleSave called");
-
     if (!name.trim()) {
-      console.log("[DEBUG] Missing name");
       if (Platform.OS === "web") {
         window.alert("Error\n\nFollow-up name is required");
       } else {
@@ -35,7 +32,7 @@ export default function CreateFollowUp() {
     }
 
     const { valid, message } = validateFollowUpDate(date);
-    console.log("[DEBUG] validateFollowUpDate:", valid, message);
+    
     if (!valid) {
       if (Platform.OS === "web") {
         window.alert(`Error\n\n${message}`);
@@ -53,10 +50,8 @@ export default function CreateFollowUp() {
         operation_date: date.toISOString().split("T")[0],
         notes: formData.notes,
       };
-      console.log("[DEBUG] Payload sent to API:", payload);
 
       const url = `${API_URL}/operations/`;
-      console.log("[DEBUG] Fetching:", url);
 
       const res = await fetch(url, {
         method: "POST",
@@ -64,26 +59,9 @@ export default function CreateFollowUp() {
         body: JSON.stringify(payload),
       });
 
-      console.log("[DEBUG] Response status:", res.status);
-
-      let raw;
-      try {
-        raw = await res.text(); // lire brut avant de parser
-        console.log("[DEBUG] Raw response text:", raw);
-      } catch (err) {
-        console.log("[DEBUG] Error reading response text:", err);
-      }
-
-      let data = null;
-      try {
-        data = raw ? JSON.parse(raw) : null;
-        console.log("[DEBUG] Parsed JSON:", data);
-      } catch (err) {
-        console.log("[DEBUG] JSON parse failed:", err);
-      }
+      const data = await res.json();
 
       if (!res.ok) {
-        console.log("[DEBUG] Request failed with status", res.status);
         if (Platform.OS === "web") {
           window.alert(`Error\n\n${data?.detail || "Unable to save follow-up"}`);
         } else {
@@ -92,24 +70,9 @@ export default function CreateFollowUp() {
         return;
       }
 
-      console.log("[DEBUG] Success, navigating with id:", data?.operation?.id_operation);
-
-      if (Platform.OS === "web") {
-        setLoading(false);
-        window.alert("Success\n\nFollow-up saved successfully");
-        
-        router.push(`/patient/${patient_id}/followup/${data.operation.id_operation}`);
-      } else {
-        setLoading(false);
-        Alert.alert("Success", "Follow-up saved successfully", [
-          {
-            text: "OK",
-            onPress: () => router.push(`/patient/${patient_id}/followup/${data.operation.id_operation}`),
-          },
-        ]);
-      }
+      router.push(`/patient/followup/${data.operation.id_operation}`);
+      
     } catch (err) {
-      console.error("[DEBUG] Caught error:", err);
       if (Platform.OS === "web") {
         window.alert("Error\n\nAn error occurred while saving");
       } else {

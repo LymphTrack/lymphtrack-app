@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Body, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.orm import Session
 from app.db.models import Operation
 from app.db.database import get_db
@@ -21,42 +21,18 @@ m = mega.login(EMAIL, PASSWORD)
 # CREATE OPERATION
 # ---------------------
 
-def sync_operation_with_mega(patient_id: str, visit_str: str):
-    try:
-        print(f"[DEBUG][Mega] Start sync for {patient_id} / {visit_str}")
-
-        patient_folder = m.find(f"lymphtrack-data/{patient_id}")
-        if not patient_folder:
-            print(f"[DEBUG][Mega] Creating patient folder: {patient_id}")
-            patient_folder = [m.create_folder(f"lymphtrack-data/{patient_id}")]
-
-        existing_folder = m.find(f"{patient_folder[0]}/{visit_str}")
-        if not existing_folder:
-            print(f"[DEBUG][Mega] Creating folder for operation: {visit_str}")
-            m.create_folder(visit_str, patient_folder[0])
-        else:
-            print(f"[DEBUG][Mega] Folder already exists: {visit_str}")
-
-        print(f"[DEBUG][Mega] Sync done for {visit_str}")
-
-    except Exception as e:
-        print(f"[DEBUG][Mega] Error during sync for {visit_str}: {e}")
-
-
-# --- Route principale ---
 @router.post("/")
-def create_operation(
-    op_data: dict = Body(...),
-    db: Session = Depends(get_db),
-    background_tasks: BackgroundTasks = None
-):
-    print("[DEBUG] create_operation called with:", op_data)
+def create_operation(op_data: dict = Body(...), db: Session = Depends(get_db)):
     patient_id = op_data.get("patient_id")
 
     try:
-        # ---------------------------
-        # 1. Vérification et parsing
-        # ---------------------------
+        # Vérifie / crée dossier patient
+        patient_folder = m.find(f"lymphtrack-data/{patient_id}")
+        if not patient_folder:
+            print(f"[DEBUG][Mega] Creating patient folder for {patient_id}")
+            patient_folder = [m.create_folder(f"lymphtrack-data/{patient_id}")]
+
+        # Parse date proprement
         op_date = op_data.get("operation_date")
         if isinstance(op_date, str):
             try:
@@ -64,7 +40,7 @@ def create_operation(
             except ValueError:
                 op_date = datetime.strptime(op_date, "%Y-%m-%d")
 
-        # Vérifier doublon
+        print("[DEBUG] Checking for existing operation in DB...")
         existing = (
             db.query(Operation)
             .filter(
@@ -80,46 +56,54 @@ def create_operation(
                 detail="An operation with the same name and date already exists for this patient.",
             )
 
-        # ---------------------------
-        # 2. Création en base
-        # ---------------------------
+        # Création de l’opération
+        print("[DEBUG] Creating new Operation object...")
         temp_op = Operation(**op_data)
         temp_op.operation_date = op_date
-
         db.add(temp_op)
         db.flush()
+        print("[DEBUG] Operation added to session:", temp_op.id_operation)
 
+        # Récupère toutes les opérations pour ce patient
         all_ops = (
             db.query(Operation)
             .filter(Operation.patient_id == patient_id)
             .order_by(Operation.operation_date.asc())
             .all()
         )
+        print("[DEBUG] Found", len(all_ops), "operations")
 
-        visit_map = {
-            op.id_operation: (
-                i,
-                f"{i}-{op.name.replace(' ', '_')}_{op.operation_date.strftime('%d%m%Y')}"
-            )
-            for i, op in enumerate(all_ops, start=1)
-        }
+        visit_map = {}
+        for i, op in enumerate(all_ops, start=1):
+            new_visit_str = f"{i}-{op.name.replace(' ', '_')}_{op.operation_date.strftime('%d%m%Y')}"
+            visit_map[op.id_operation] = (i, new_visit_str)
+            print(f"[DEBUG] Visit map updated: {op.id_operation} → {new_visit_str}")
 
-        # ✅ Commit AVANT Mega
+            subfolders = m.get_files_in_node(patient_folder[0])
+
+            if op.id_operation == temp_op.id_operation:
+                # Vérifie si le dossier existe déjà
+                already_exists = any(meta["t"] == 1 and meta["a"]["n"] == new_visit_str for _, meta in subfolders.items())
+                if not already_exists:
+                    print(f"[DEBUG][Mega] Creating folder {new_visit_str} under {patient_id}")
+                    m.create_folder(new_visit_str, patient_folder[0])
+            else:
+                # Renommer les anciens si besoin
+                for folder_id, folder_meta in subfolders.items():
+                    if folder_meta["t"] == 1 and folder_meta["a"]["n"].endswith(op.operation_date.strftime("%d%m%Y")):
+                        old_name = folder_meta["a"]["n"]
+                        if old_name != new_visit_str:
+                            print(f"[DEBUG][Mega] Renaming {old_name} → {new_visit_str}")
+                            m.rename((folder_id, folder_meta), new_visit_str)
+
+        # Commit DB après la synchro Mega
         db.commit()
         db.refresh(temp_op)
+        print("[DEBUG] Operation committed with id:", temp_op.id_operation)
 
         visit_number, visit_str = visit_map[temp_op.id_operation]
-        print(f"[DEBUG] Operation {temp_op.id_operation} committed with visit_str {visit_str}")
+        print("[DEBUG] Final visit_number/visit_str:", visit_number, visit_str)
 
-        # ---------------------------
-        # 3. Mega en tâche de fond
-        # ---------------------------
-        if background_tasks:
-            background_tasks.add_task(sync_operation_with_mega, patient_id, visit_str)
-
-        # ---------------------------
-        # 4. Réponse immédiate
-        # ---------------------------
         return {
             "status": "success",
             "operation": {
@@ -139,6 +123,7 @@ def create_operation(
         db.rollback()
         print("[DEBUG] Exception occurred:", e)
         raise HTTPException(status_code=400, detail=f"Error creating operation: {e}")
+
 
 # -----------------------
 # READ OPERATION BY ID
