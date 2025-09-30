@@ -69,7 +69,7 @@ export default function CreateFollowUp() {
         }
         return;
       }
-
+      setLoading(false);
       router.push(`/patient/followup/${data.operation.id_operation}`);
       
     } catch (err) {
