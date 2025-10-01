@@ -104,11 +104,16 @@ export default function CreatePositionFollowUp() {
 
       for (const m of measurements) {
         if (m.localFile) {
-          formData.append("files", {
-            uri: m.localFile.uri,
-            name: m.localFile.name,
-            type: m.localFile.mimeType || "application/octet-stream",
-          } as any);
+          if (Platform.OS === "web") {
+            const fileBlob = await fetch(m.localFile.uri).then((r) => r.blob());
+            formData.append("files", fileBlob, m.localFile.name);
+          } else {
+            formData.append("files", {
+              uri: m.localFile.uri,
+              name: m.localFile.name,
+              type: m.localFile.mimeType || "application/octet-stream",
+            } as any);
+          }
         }
       }
 
@@ -117,6 +122,9 @@ export default function CreatePositionFollowUp() {
         {
           method: "POST",
           body: formData,
+          headers: {
+            Accept: "application/json", 
+          },
         }
       );
 
@@ -150,6 +158,7 @@ export default function CreatePositionFollowUp() {
       setSaving(false);
     }
   };
+
 
   const handleDelete = async (index: number, filePath?: string) => {
     try {

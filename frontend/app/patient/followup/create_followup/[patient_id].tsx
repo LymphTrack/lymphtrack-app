@@ -5,6 +5,7 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { API_URL } from "@/constants/api";
 import { validateFollowUpDate } from "@/utils/dateUtils";
+import { Info } from "lucide-react-native";
 
 export default function CreateFollowUp() {
   const { patient_id } = useLocalSearchParams<{ patient_id: string }>();
@@ -121,7 +122,6 @@ export default function CreateFollowUp() {
     );
   }
 
-
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -224,10 +224,8 @@ export default function CreateFollowUp() {
           </>
         )}
 
-
         <View style={styles.card}>
           <Text style={styles.label}>Notes (Optionnal)</Text>
-
           <View>
             <View style={styles.inputContainer}>
               <Notebook size={18} color="#6a90db" style ={{justifyContent: "flex-start", alignItems: "center"}}/>
@@ -261,6 +259,36 @@ export default function CreateFollowUp() {
             </View>
           </View>
         </View>
+
+        <View style={styles.card}>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+            <Text style={styles.label}>Photos (Optional)</Text>
+          </View>
+
+          <View style={styles.photosRow}>
+            {[1, 2, 3].map((i) => (
+              <TouchableOpacity
+                key={i}
+                style={styles.photoPlaceholder}
+                onPress={() => {
+                  if (Platform.OS !== "web") {
+                    Alert.alert("Coming soon", "Importing photos is not yet available.");
+                  } else {
+                    window.alert("Importing photos is not yet available.");
+                  }
+                }}
+              >
+                <FileUp size={20} color="#9CA3AF" />
+                <Text style={{ color: "#9CA3AF", fontSize: 14, marginTop: 5 }}>
+                  Photo {i}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+
+
         <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
           <Text style={styles.saveButtonText}>Next</Text>
         </TouchableOpacity>
@@ -369,6 +397,22 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     fontSize: 15,
     color: "#1F2937",
+  },
+  photosRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 12,
+  },
+  photoPlaceholder: {
+    flex: 1,
+    height: 100,
+    marginHorizontal: 4,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F9FAFB",
   },
 
 });

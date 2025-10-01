@@ -66,12 +66,15 @@ async def create_results(
 
         processed_results = []
 
+        # ---------------------
+        # TRAITEMENT FICHIERS
+        # ---------------------
         for idx, file in enumerate(files, start=1):
             df = None
             suffix = file.filename.split(".")[-1].lower()
 
             try:
-                if suffix == ".csv":
+                if suffix == "csv":
                     tmp = pd.read_csv(file.file, header=0, sep=None, engine="python")
                     cols = (
                         tmp.columns.astype(str)
@@ -107,6 +110,7 @@ async def create_results(
                 logging.warning(f"Skipping {file.filename}: could not infer or find header")
                 continue
 
+            # Nettoyage des colonnes
             df.columns = (
                 df.columns.astype(str)
                 .str.strip()
@@ -129,68 +133,78 @@ async def create_results(
                 logging.warning(f"Skipping {file.filename}: no numeric data after coercion")
                 continue
 
-        min_idx = df_sub[rl_col].idxmin()
-        min_freq = df_sub.at[min_idx, freq_col]
-        min_rl = df_sub.at[min_idx, rl_col]
-        mask = df_sub[rl_col] <= -3
-        bw = np.nan
-        if mask.any():
-            freqs = df_sub.loc[mask, freq_col]
-            bw = freqs.max() - freqs.min()
+            # ✅ Calcul déplacé ici
+            min_idx = df_sub[rl_col].idxmin()
+            min_freq = df_sub.at[min_idx, freq_col]
+            min_rl = df_sub.at[min_idx, rl_col]
 
-        file.file.seek(0)
-        archive_path = f"{patient_id}/{visit_str}/{position}/{file.filename}"
+            mask = df_sub[rl_col] <= -3
+            bw = np.nan
+            if mask.any():
+                freqs = df_sub.loc[mask, freq_col]
+                bw = freqs.max() - freqs.min()
 
-        tmp_path = f"tmp_{file.filename}"
-        with open(tmp_path, "wb") as tmp_f:
-            tmp_f.write(file.file.read())
+            # ---------------------
+            # UPLOAD DANS MEGA
+            # ---------------------
+            file.file.seek(0)
+            archive_path = f"{patient_id}/{visit_str}/{position}/{file.filename}"
 
-        patient_folder = m.find(f"lymphtrack-data/{patient_id}")
-        if not patient_folder:
-            raise HTTPException(status_code=404, detail="Patient folder not found in Mega")
+            tmp_path = f"tmp_{file.filename}"
+            with open(tmp_path, "wb") as tmp_f:
+                tmp_f.write(file.file.read())
 
-        visit_folder = None
-        subfolders = m.get_files_in_node(patient_folder[0])
-        for fid, meta in subfolders.items():
-            if meta["t"] == 1 and meta["a"]["n"] == visit_str:
-                visit_folder = (fid, meta)
-                break
+            patient_folder = m.find(f"lymphtrack-data/{patient_id}")
+            if not patient_folder:
+                raise HTTPException(status_code=404, detail="Patient folder not found in Mega")
 
-        if not visit_folder:
-            raise HTTPException(status_code=404, detail=f"Visit folder {visit_str} not found in Mega")
+            visit_folder = None
+            subfolders = m.get_files_in_node(patient_folder[0])
+            for fid, meta in subfolders.items():
+                if meta["t"] == 1 and meta["a"]["n"] == visit_str:
+                    visit_folder = (fid, meta)
+                    break
 
-        dest_folder = None
-        subfolders = m.get_files_in_node(visit_folder[0])
-        for fid, meta in subfolders.items():
-            if meta["t"] == 1 and meta["a"]["n"] == str(position):
-                dest_folder = (fid, meta)
-                break
+            if not visit_folder:
+                raise HTTPException(status_code=404, detail=f"Visit folder {visit_str} not found in Mega")
 
-        if not dest_folder:
-            node = m.create_folder(str(position), visit_folder[0])
-            folder_id = node["f"][0]["h"]
-            folder_meta = node["f"][0]
-            dest_folder = (folder_id, folder_meta)
+            dest_folder = None
+            subfolders = m.get_files_in_node(visit_folder[0])
+            for fid, meta in subfolders.items():
+                if meta["t"] == 1 and meta["a"]["n"] == str(position):
+                    dest_folder = (fid, meta)
+                    break
 
-        m.upload(tmp_path, dest_folder[0], dest_filename=file.filename)
+            if not dest_folder:
+                node = m.create_folder(str(position), visit_folder[0])
+                folder_id = node["f"][0]["h"]
+                folder_meta = node["f"][0]
+                dest_folder = (folder_id, folder_meta)
 
-        os.remove(tmp_path)
+            m.upload(tmp_path, dest_folder[0], dest_filename=file.filename)
+            os.remove(tmp_path)
 
-        result = Result(
-            id_operation=int(id_operation),
-            position=int(position),
-            measurement_number=int(idx),
-            min_return_loss_db=float(min_rl),
-            min_frequency_hz=int(min_freq),
-            bandwidth_hz=float(bw) if bw is not None and not pd.isna(bw) else None,
-            file_path=archive_path, 
-            uploaded_at=datetime.now(timezone.utc),
-        )
-        db.add(result)
-        processed_results.append(result)
+            # ---------------------
+            # SAUVEGARDE EN DB
+            # ---------------------
+            result = Result(
+                id_operation=int(id_operation),
+                position=int(position),
+                measurement_number=int(idx),
+                min_return_loss_db=float(min_rl),
+                min_frequency_hz=int(min_freq),
+                bandwidth_hz=float(bw) if bw is not None and not pd.isna(bw) else None,
+                file_path=archive_path,
+                uploaded_at=datetime.now(timezone.utc),
+            )
+            db.add(result)
+            processed_results.append(result)
 
-
+        # Commit après tous les fichiers
         db.commit()
+
+        if not processed_results:
+            return {"status": "error", "message": "No valid files were processed"}
 
         return {"status": "success", "results": processed_results}
 
@@ -198,6 +212,7 @@ async def create_results(
         db.rollback()
         traceback.print_exc()
         return {"status": "error", "message": str(e)}
+
 
 
 # ---------------------

@@ -112,7 +112,7 @@ export default function ModifyFollowUpScreen() {
       <View style={{ flex: 1, backgroundColor: "#FFFFFF", justifyContent: "center", alignItems: "center" }}>
         <ActivityIndicator size="large" color="#6a90db" />
         <Text style={{ marginTop: 20, fontSize: 16, color: "#1F2937" }}>
-          Creating FollowUp...
+          Modifying FollowUp...
         </Text>
       </View>
     );
@@ -184,7 +184,7 @@ export default function ModifyFollowUpScreen() {
             style={[
               styles.input,
               { 
-                borderColor: isFocused ? "red" : "#D1D5DB",
+                borderColor: isFocused ? "#D1D5DB" : "#D1D5DB",
                 ...(Platform.OS === "web" ? { outlineWidth: 0 } : {}),
               },
             ]}
@@ -239,7 +239,7 @@ export default function ModifyFollowUpScreen() {
               { 
                 textAlignVertical: "top",
                 padding: 10,
-                borderColor: isFocused ? "red" : "#D1D5DB",
+                borderColor: isFocused ? "#D1D5DB" : "#D1D5DB",
                 ...(Platform.OS === "web" ? { outlineWidth: 0 } : {}),
               },
             ]}

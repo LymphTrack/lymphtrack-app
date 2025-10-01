@@ -49,11 +49,13 @@ export default function PatientDetailScreen() {
       const res = await fetch(`${API_URL}/operations/by_patient/${patient_id}`);
       if (!res.ok) throw new Error("Failed to fetch operations");
       
-      const data: Operation[] = await res.json(); 
+      const data: Operation[] = await res.json();
 
-      setOperations(
-        Array.from(new Map(data.map((op) => [op.name, op])).values())
-      );
+      const uniqueOps = Array.from(new Map(data.map((op) => [op.name, op])).values());
+
+      uniqueOps.sort((a, b) => new Date(a.operation_date).getTime() - new Date(b.operation_date).getTime());
+
+      setOperations(uniqueOps);
     } catch (error) {
       console.error("Erreur op:", error);
     }

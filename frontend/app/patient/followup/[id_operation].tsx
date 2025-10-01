@@ -1,6 +1,6 @@
 import { Platform, View, Text, ScrollView, StyleSheet, ActivityIndicator, Alert, TouchableOpacity, useWindowDimensions } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { ArrowLeft, Save, Trash } from "lucide-react-native";
+import { ArrowLeft, ArrowRight, Calendar, Notebook, Save, Trash } from "lucide-react-native";
 import { API_URL } from "@/constants/api";
 import { useState, useCallback } from "react";
 import { useFocusEffect } from "@react-navigation/native";
@@ -113,21 +113,38 @@ export default function PatientResultsScreen() {
 
     if (measurements.length === 0) {
       return (
-        <View key={`position-${position}`} style={styles.positionBlock}>
-          <Text style={styles.positionTitle}>Position {position}</Text>
-          <TouchableOpacity
-            style={styles.addButton}
-            onPress={() =>
-              router.push(
-                `/patient/followup/create_followup/position/${position}?operation_id=${operation.id_operation}`
-              )
-            }
-          >
-            <Text style={styles.addButtonText}>Add Position {position}</Text>
-          </TouchableOpacity>
+        <TouchableOpacity
+          key={`position-${position}`}
+          style={[width>=700 && {width:700, alignSelf : "center", paddingHorizontal: 40}]}
+          onPress={() =>
+            router.push(
+              `/patient/followup/create_followup/position/${position}?operation_id=${operation.id_operation}`
+            )
+          }
+        >
+        <View style={styles.settingItem}>
+          <View style={styles.settingLeft}>
+            <View style={styles.positionIcon}>
+              <Text style={styles.positionNumber}>{position}</Text>
+            </View>
+
+            <View style={{ flex: 1 }}>
+              <Text style={styles.settingTitle}>No measurements</Text>
+              <Text style={styles.settingSubtitle}>
+                Tap here to add data for this position.
+              </Text>
+            </View>
+          </View>
+
+          <ArrowRight size={18} color="#6B7280" />
         </View>
+
+          
+            
+        </TouchableOpacity>
       );
     }
+
 
     return (
       <View key={`position-${position}`} style={styles.positionBlock}>
@@ -225,15 +242,35 @@ export default function PatientResultsScreen() {
         </View>
       </View>
 
-      <View style={[styles.operationBlock, width>=700 && {width : 700, alignSelf: "center"}]}>
-        <Text style={styles.operationTitle}>{operation.name}</Text>
-        <Text style={styles.operationDate}>({new Date(operation.operation_date).toLocaleDateString()})</Text>
-        <Text style={styles.operationNotes}>{operation.notes || "No notes available for this visit"}</Text>
-        {[1, 2, 3, 4, 5, 6].map((position) => renderMeasurements(position))}
+      <View style={width >= 700 && { width: 700, alignSelf: "center" }}>
+        <View style={styles.operationCard}>
+          <View style={styles.operationHeader}>
+            <Text style={styles.operationName}>Visit name : {operation.name}</Text>
+            <Text style={styles.operationDate}><Calendar size={16} color="#6B7280" />
+              {new Date(operation.operation_date).toLocaleDateString()}
+            </Text>
+          </View>
+
+          <View style={styles.operationRow}>
+            <Notebook size={16} color="#6B7280" />
+            <Text style={styles.operationNotes}>
+              Notes: {operation.notes || "No notes available for this visit"}
+            </Text>
+          </View>
+          <Text >Photos</Text>
+        </View>
+        <Text style={styles.positionpTitle}>Position</Text>
+
+        <View>
+          <View style={styles.operationCard}>
+              {[1, 2, 3, 4, 5, 6].map((position) => renderMeasurements(position))}
+          </View>
+        </View>
       </View>
 
+
       
-      <View style={[styles.buttonContainer,  width>=700 && {width : 700, alignSelf: "center"}]}>
+      <View style={styles.buttonContainer}>
         <TouchableOpacity
           style={styles.modifyButton}
           onPress={() =>
@@ -280,30 +317,37 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  operationBlock: {
-    margin: 16,
-    padding: 16,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  operationTitle: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: "#6a90db",
-    alignSelf : 'center',
-    marginBottom : 5
-  },
-  operationDate: {
-    fontSize: 15,
-    color: "#6B7280",
-    marginBottom: 25,
-    alignSelf : 'center',
-  },
+operationCard: {
+  backgroundColor: "#FFFFFF",
+  borderRadius: 16,
+  padding: 20,
+  margin: 20,
+  shadowColor: "#000",
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.1,
+  shadowRadius: 8,
+  elevation: 4,
+},
+operationHeader: {
+  flexDirection: "row",
+  justifyContent: "space-between",
+  alignItems: "center",
+  marginBottom: 12,
+},
+operationName: { fontSize: 18, fontWeight: "600", color: "#6a90db" },
+operationDate: { fontSize: 14, color: "#6B7280" },
+operationRow: {
+  flexDirection: "row",
+  alignItems: "center",
+  marginBottom: 8,
+  gap: 8,
+},
+operationNotes: {
+  fontSize: 16,
+  color: "#6B7280",
+  flexShrink: 1,
+},
+
   positionBlock: {
     marginBottom: 12,
     padding: 12,
@@ -370,15 +414,11 @@ modifyButton: {
 
   buttonContainer : {
     marginHorizontal : 15,
+    width : 400,
+    alignSelf : "center",
   },
 
-  operationNotes : {
-    marginTop: 10,
-    fontSize: 15,
-    paddingHorizontal: 10,
-    color: "#6B7280",
-    marginBottom : 18,
-  },
+
 
   addButton: {
   backgroundColor: "#c9def9ff",
@@ -392,5 +432,68 @@ addButtonText: {
   fontSize: 16,
   fontWeight: "600",
 },
+
+  positionpTitle: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: "#6a90db",
+    marginTop: 10,
+    alignSelf: "center",
+  },
+
+sectionTitle: {
+  fontSize: 18,
+  fontWeight: "600",
+  color: "#1F2937",
+  marginBottom: 16,
+},
+settingItem: {
+  flexDirection: "row",
+  justifyContent: "space-between",
+  alignItems: "center",
+  paddingVertical: 12,
+  borderBottomWidth: 1,
+  borderBottomColor: "#F3F4F6",
+},
+settingLeft: {
+  flexDirection: "row",
+  alignItems: "center",
+  flex: 1,
+},
+iconContainer: {
+  width: 40,
+  height: 40,
+  borderRadius: 20,
+  backgroundColor: "#EFF6FF",
+  justifyContent: "center",
+  alignItems: "center",
+  marginRight: 12,
+},
+settingTitle: {
+  fontSize: 16,
+  fontWeight: "500",
+  color: "#1F2937",
+  marginBottom: 2,
+},
+settingSubtitle: {
+  fontSize: 14,
+  color: "#6B7280",
+},
+
+positionIcon: {
+  width: 32,
+  height: 32,
+  borderRadius: 16,
+  backgroundColor: "#EFF6FF",
+  justifyContent: "center",
+  alignItems: "center",
+  marginRight: 12,
+},
+positionNumber: {
+  fontSize: 14,
+  fontWeight: "600",
+  color: "#2563EB",
+},
+
 
 });
