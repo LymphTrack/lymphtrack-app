@@ -177,9 +177,17 @@ async def create_results(
 
             if not dest_folder:
                 node = m.create_folder(str(position), visit_folder[0])
-                folder_id = node["f"][0]["h"]
-                folder_meta = node["f"][0]
-                dest_folder = (folder_id, folder_meta)
+                if isinstance(node, dict) and "f" in node:
+                    folder_id = node["f"][0]["h"]
+                    folder_meta = node["f"][0]
+                    dest_folder = (folder_id, folder_meta)
+                elif isinstance(node, dict) and "h" in node:
+                    folder_id = node["h"]
+                    dest_folder = (folder_id, node)
+                elif isinstance(node, str):
+                    dest_folder = (node, {"a": {"n": str(position)}, "t": 1})
+                else:
+                    raise HTTPException(status_code=500, detail=f"Unexpected Mega response when creating folder: {node}")
 
             m.upload(tmp_path, dest_folder[0], dest_filename=file.filename)
             os.remove(tmp_path)
