@@ -2,9 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 from app.db.models import Photo, Operation
 from app.db.database import get_db
-import os
+import os, tempfile
 from dotenv import load_dotenv
 from mega import Mega
+from datetime import datetime, timezone
 
 load_dotenv()
 
@@ -27,7 +28,15 @@ def upload_photo(id_operation: int, file: UploadFile = File(...), db: Session = 
         raise HTTPException(status_code=404, detail="Operation not found")
 
     patient_id = op.patient_id
-    visit_str = f"{id_operation}-{op.name.replace(' ', '_')}_{op.operation_date.strftime('%d%m%Y')}"
+
+    all_ops = (
+        db.query(Operation)
+        .filter(Operation.patient_id == patient_id)
+        .order_by(Operation.operation_date.asc())
+        .all()
+    )
+    visit_number = {o.id_operation: idx + 1 for idx, o in enumerate(all_ops)}[op.id_operation]
+    visit_str = f"{visit_number}-{op.name.replace(' ', '_')}_{op.operation_date.strftime('%d%m%Y')}"
 
     patient_folder = m.find(f"lymphtrack-data/{patient_id}")
     if not patient_folder:
@@ -41,7 +50,7 @@ def upload_photo(id_operation: int, file: UploadFile = File(...), db: Session = 
             visit_folder = fid
             break
     if not visit_folder:
-        raise HTTPException(status_code=404, detail="Visit folder not found in Mega")
+        raise HTTPException(status_code=404, detail=f"Visit folder {visit_str} not found in Mega")
 
     visit_subfolders = m.get_files_in_node(visit_folder)
     photos_folder = None
@@ -49,20 +58,44 @@ def upload_photo(id_operation: int, file: UploadFile = File(...), db: Session = 
         if meta["t"] == 1 and meta["a"]["n"] == "photos":
             photos_folder = fid
             break
+
     if not photos_folder:
-        photos_folder = m.create_folder("photos", visit_folder)[0]
+        node = m.create_folder("photos", visit_folder)
+        if isinstance(node, dict) and "f" in node:
+            photos_folder = node["f"][0]["h"]
+        elif isinstance(node, dict) and "h" in node:
+            photos_folder = node["h"]
+        elif isinstance(node, dict) and "photos" in node: 
+            photos_folder = node["photos"]
+        elif isinstance(node, str):
+            photos_folder = node
+        else:
+            raise HTTPException(status_code=500, detail=f"Unexpected Mega response when creating photos folder: {node}")
 
     try:
-        local_path = f"/tmp/{file.filename}"
+        tmpdir = tempfile.gettempdir()
+        local_path = os.path.join(tmpdir, file.filename)
+
         with open(local_path, "wb") as buffer:
             buffer.write(file.file.read())
 
         uploaded = m.upload(local_path, photos_folder)
-        link = m.get_link(uploaded)
 
+        try:
+            link = m.get_link(uploaded)
+        except Exception:
+            # fallback : on enregistre juste le chemin Mega
+            link = f"{patient_id}/{visit_str}/photos/{file.filename}"
+
+
+
+        os.remove(local_path)
+
+        # Sauvegarde en DB
         new_photo = Photo(
             id_operation=id_operation,
-            url=link
+            url=link,
+            created_at=datetime.now(timezone.utc)
         )
         db.add(new_photo)
         db.commit()
