@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 from app.db.models import Photo, Operation
 from app.db.database import get_db
-import os, tempfile
+import os, tempfile, re
 from dotenv import load_dotenv
 from mega import Mega
 from datetime import datetime, timezone
@@ -73,8 +73,10 @@ def upload_photo(id_operation: int, file: UploadFile = File(...), db: Session = 
             raise HTTPException(status_code=500, detail=f"Unexpected Mega response when creating photos folder: {node}")
 
     try:
+        safe_filename = re.sub(r'[^a-zA-Z0-9_.-]', '_', file.filename or "upload.jpg")
+
         tmpdir = tempfile.gettempdir()
-        local_path = os.path.join(tmpdir, file.filename)
+        local_path = os.path.join(tmpdir, safe_filename)
 
         with open(local_path, "wb") as buffer:
             buffer.write(file.file.read())

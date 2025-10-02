@@ -72,25 +72,40 @@ export default function CreateFollowUp() {
 
         const extension = uri.split(".").pop()?.toLowerCase() || "jpg";
         const mimeType =
-          extension === "png" ? "image/png" : "image/jpeg";
+          extension === "png" ? "image/png" :
+          extension === "heic" || extension === "heif" ? "image/heic" :
+          "image/jpeg";
 
         const formData = new FormData();
-        formData.append("file", {
-          uri,
-          name: `photo_${i + 1}.${extension}`,
-          type: mimeType,
-        } as any);
+
+        if (Platform.OS === "web") {
+          // ⚡ Web → convertir en Blob
+          const response = await fetch(uri);
+          const blob = await response.blob();
+          formData.append("file", blob, `photo_${i + 1}.${extension}`);
+        } else {
+          // ⚡ iOS/Android → utiliser { uri, name, type }
+          formData.append("file", {
+            uri,
+            name: `photo_${i + 1}.${extension}`,
+            type: mimeType,
+          } as any);
+        }
 
         const photoRes = await fetch(`${API_URL}/photos/${opId}`, {
           method: "POST",
           body: formData,
         });
 
-        const photoData = await photoRes.json();
+        const text = await photoRes.text();
+        console.log(`UPLOAD RESPONSE photo ${i + 1}:`, photoRes.status, text);
+
         if (!photoRes.ok) {
-          console.warn(`Erreur upload photo ${i + 1}:`, photoData?.detail);
+          console.warn(`Erreur upload photo ${i + 1}:`, text);
         }
       }
+
+
 
       setLoading(false);
       router.push(`/patient/followup/${opId}`);
