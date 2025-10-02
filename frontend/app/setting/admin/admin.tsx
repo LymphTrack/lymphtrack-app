@@ -117,56 +117,61 @@ export default function AdminScreen() {
   } 
 
   const renderUserItem = ({ item }: { item: User }) => (
-    <View style={styles.userCard}>
-      <View style={styles.userHeader}>
-        <View style={styles.userInfo}>
-          <Text style={styles.userName}>{item.name || "Unnamed User"}</Text>
-        </View>
+    <TouchableOpacity
+      onPress={() => router.push(`../admin/user/${item.id}`)}
+      activeOpacity={0.7}
+    >
+      <View style={styles.userCard}>
+        <View style={styles.userHeader}>
+          <View style={styles.userInfo}>
+            <Text style={styles.userName}>{item.name || "Unnamed User"}</Text>
+          </View>
 
-        <View
-          style={[
-            styles.badge,
-            item.user_type === "admin" ? styles.adminBadge : styles.userBadge,
-          ]}
-        >
-          <Text
+          <View
             style={[
               styles.badge,
-              item.user_type === "admin" ? styles.adminBadgeText : styles.userBadgeText,
+              item.user_type === "admin" ? styles.adminBadge : styles.userBadge,
             ]}
           >
-            {item.user_type}
-          </Text>
+            <Text
+              style={[
+                styles.badge,
+                item.user_type === "admin" ? styles.adminBadgeText : styles.userBadgeText,
+              ]}
+            >
+              {item.user_type}
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            disabled={deletingId === item.id}
+            onPress={() => confirmDeleteUser(item.id)}
+          >
+            {deletingId === item.id ? (
+              <ActivityIndicator size="small" color="#6a90db" />
+            ) : (
+              <Trash size={20} color="#6a90db" />
+            )}
+          </TouchableOpacity>
         </View>
 
-        <TouchableOpacity
-          disabled={deletingId === item.id}
-          onPress={() => confirmDeleteUser(item.id)}
-        >
-          {deletingId === item.id ? (
-            <ActivityIndicator size="small" color="#6a90db" />
-          ) : (
-            <Trash size={20} color="#6a90db" />
-          )}
-        </TouchableOpacity>
-      </View>
+        <View style={styles.detailRow}>
+          <Mail size={16} color="#6B7280" />
+          <Text style={styles.userDetail}> {item.email}</Text>
+        </View>
 
-      <View style={styles.detailRow}>
-        <Mail size={16} color="#6B7280" />
-        <Text style={styles.userDetail}> {item.email}</Text>
-      </View>
+        <View style={styles.detailRow}>
+          <Briefcase size={16} color="#6B7280" />
+          <Text style={styles.userDetail}> {item.role || "N/A"}</Text>
+        </View>
 
-      <View style={styles.detailRow}>
-        <Briefcase size={16} color="#6B7280" />
-        <Text style={styles.userDetail}> {item.role || "N/A"}</Text>
+        <View style={styles.detailRow}>
+          <Building size={16} color="#6B7280" />
+          <Text style={styles.userDetail}> {item.institution || "N/A"}</Text>
+        </View>
+        
       </View>
-
-      <View style={styles.detailRow}>
-        <Building size={16} color="#6B7280" />
-        <Text style={styles.userDetail}> {item.institution || "N/A"}</Text>
-      </View>
-      
-    </View>
+    </TouchableOpacity>
   );
 
 

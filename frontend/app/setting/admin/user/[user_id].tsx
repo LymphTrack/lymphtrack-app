@@ -5,7 +5,7 @@ import { ArrowLeft, User, Briefcase, Building, Lock, Eye, EyeOff } from "lucide-
 import { KeyboardAvoidingView, Platform } from "react-native";
 import { API_URL } from "@/constants/api";
 
-export default function CreateUserScreen() {
+export default function ModifyUserScreen() {
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -144,7 +144,7 @@ export default function CreateUserScreen() {
             },
           ]}
         >
-          New User
+          Modify User
         </Text>
       </View>
       </View>

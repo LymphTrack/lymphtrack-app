@@ -1,6 +1,7 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, Enum
+from sqlalchemy import Column, Integer, String, Float, DateTime, Enum, ForeignKey
 from app.db.database import Base
 import enum
+from datetime import datetime, timezone
 
 
 # ---------------------
@@ -80,12 +81,24 @@ class Operation(Base):
 class Result(Base):
     __tablename__ = "results"
 
-    id = Column(Integer, primary_key=True, index = True, autoincrement=True)
-    id_operation = Column(Integer)
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    id_operation = Column(Integer, ForeignKey("operations.id_operation"))
     position = Column(Integer)
     measurement_number = Column(Integer)
     min_return_loss_db = Column(Float)
     min_frequency_hz = Column(Float)
     bandwidth_hz = Column(Float)
     file_path = Column(String)
-    uploaded_at = Column(DateTime)
+    uploaded_at = Column(DateTime, default=datetime.utcnow)
+
+
+# ---------------------
+# PHOTOS
+# ---------------------
+class Photo(Base):
+    __tablename__ = "photos"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    id_operation = Column(Integer, ForeignKey("operations.id_operation"), nullable=False)
+    url = Column(String, nullable=False)             
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))

@@ -5,7 +5,10 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { API_URL } from "@/constants/api";
 import { validateFollowUpDate } from "@/utils/dateUtils";
-import { Info } from "lucide-react-native";
+
+import * as ImagePicker from "expo-image-picker";
+import { Image } from "react-native";
+
 
 export default function CreateFollowUp() {
   const { patient_id } = useLocalSearchParams<{ patient_id: string }>();
@@ -19,7 +22,7 @@ export default function CreateFollowUp() {
     notes: "",
     noteHeight: 100, 
   });
-
+  const [photos, setPhotos] = useState<(string | null)[]>([null, null, null]);
   const {width}= useWindowDimensions();
 
   const handleSave = async () => {
@@ -33,7 +36,6 @@ export default function CreateFollowUp() {
     }
 
     const { valid, message } = validateFollowUpDate(date);
-    
     if (!valid) {
       if (Platform.OS === "web") {
         window.alert(`Error\n\n${message}`);
@@ -52,32 +54,48 @@ export default function CreateFollowUp() {
         notes: formData.notes,
       };
 
-      const url = `${API_URL}/operations/`;
-
-      const res = await fetch(url, {
+      const res = await fetch(`${API_URL}/operations/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
       const data = await res.json();
-
       if (!res.ok) {
-        if (Platform.OS === "web") {
-          window.alert(`Error\n\n${data?.detail || "Unable to save follow-up"}`);
-        } else {
-          Alert.alert("Error", data?.detail || "Unable to save follow-up");
-        }
-        return;
+        throw new Error(data?.detail || "Unable to save follow-up");
       }
+
+      const opId = data.operation.id_operation;
+
+      for (const [i, uri] of photos.entries()) {
+        if (!uri) continue;
+
+        const formData = new FormData();
+        formData.append("file", {
+          uri,
+          name: `photo_${i + 1}.jpg`,
+          type: "image/jpeg",
+        } as any);
+
+        const photoRes = await fetch(`${API_URL}/photos/${opId}`, {
+          method: "POST",
+          body: formData,
+        });
+
+        const photoData = await photoRes.json();
+        if (!photoRes.ok) {
+          console.warn(`Erreur upload photo ${i + 1}:`, photoData?.detail);
+        }
+      }
+
       setLoading(false);
-      router.push(`/patient/followup/${data.operation.id_operation}`);
-      
-    } catch (err) {
+      router.push(`/patient/followup/${opId}`);
+
+    } catch (err: any) {
       if (Platform.OS === "web") {
-        window.alert("Error\n\nAn error occurred while saving");
+        window.alert("Error\n\n" + err.message);
       } else {
-        Alert.alert("Error", "An error occurred while saving");
+        Alert.alert("Error", err.message);
       }
     } finally {
       setLoading(false);
@@ -110,6 +128,23 @@ export default function CreateFollowUp() {
       );
     }
   };
+
+  const handlePickPhoto = async (index: number) => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.7,
+    });
+
+    if (!result.canceled) {
+      const fileUri = result.assets[0].uri;
+      setPhotos((prev) => {
+        const copy = [...prev];
+        copy[index] = fileUri; // on garde l’URI locale avant upload
+        return copy;
+      });
+    }
+  };
+
 
   if (loading) {
     return (
@@ -266,22 +301,25 @@ export default function CreateFollowUp() {
           </View>
 
           <View style={styles.photosRow}>
-            {[1, 2, 3].map((i) => (
+            {photos.map((uri, i) => (
               <TouchableOpacity
                 key={i}
                 style={styles.photoPlaceholder}
-                onPress={() => {
-                  if (Platform.OS !== "web") {
-                    Alert.alert("Coming soon", "Importing photos is not yet available.");
-                  } else {
-                    window.alert("Importing photos is not yet available.");
-                  }
-                }}
+                onPress={() => handlePickPhoto(i)}
               >
-                <FileUp size={20} color="#9CA3AF" />
-                <Text style={{ color: "#9CA3AF", fontSize: 14, marginTop: 5 }}>
-                  Photo {i}
-                </Text>
+                {uri ? (
+                  <Image
+                    source={{ uri }}
+                    style={{ width: "100%", height: "100%", borderRadius: 12 }}
+                  />
+                ) : (
+                  <>
+                    <FileUp size={20} color="#9CA3AF" />
+                    <Text style={{ color: "#9CA3AF", fontSize: 14, marginTop: 5 }}>
+                      Photo {i + 1}
+                    </Text>
+                  </>
+                )}
               </TouchableOpacity>
             ))}
           </View>
