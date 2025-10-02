@@ -70,11 +70,15 @@ export default function CreateFollowUp() {
       for (const [i, uri] of photos.entries()) {
         if (!uri) continue;
 
+        const extension = uri.split(".").pop()?.toLowerCase() || "jpg";
+        const mimeType =
+          extension === "png" ? "image/png" : "image/jpeg";
+
         const formData = new FormData();
         formData.append("file", {
           uri,
-          name: `photo_${i + 1}.jpg`,
-          type: "image/jpeg",
+          name: `photo_${i + 1}.${extension}`,
+          type: mimeType,
         } as any);
 
         const photoRes = await fetch(`${API_URL}/photos/${opId}`, {
@@ -131,20 +135,25 @@ export default function CreateFollowUp() {
 
   const handlePickPhoto = async (index: number) => {
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ImagePicker.MediaTypeOptions.Images, // garde Images = tous les formats
       quality: 0.7,
     });
 
     if (!result.canceled) {
-      const fileUri = result.assets[0].uri;
+      const asset = result.assets[0];
+      const fileUri = asset.uri;
+
+      let extension = fileUri.split(".").pop()?.toLowerCase();
+
+      if (!extension) extension = "jpg";
+
       setPhotos((prev) => {
         const copy = [...prev];
-        copy[index] = fileUri; // on garde l’URI locale avant upload
+        copy[index] = fileUri;
         return copy;
       });
     }
   };
-
 
   if (loading) {
     return (

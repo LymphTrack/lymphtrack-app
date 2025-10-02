@@ -84,14 +84,10 @@ def upload_photo(id_operation: int, file: UploadFile = File(...), db: Session = 
         try:
             link = m.get_link(uploaded)
         except Exception:
-            # fallback : on enregistre juste le chemin Mega
             link = f"{patient_id}/{visit_str}/photos/{file.filename}"
-
-
 
         os.remove(local_path)
 
-        # Sauvegarde en DB
         new_photo = Photo(
             id_operation=id_operation,
             url=link,
