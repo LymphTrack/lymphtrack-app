@@ -221,31 +221,59 @@ export default function PatientsScreen() {
   };
 
   const handleExport = async () => {
+    console.log("🟢 [FRONT] handleExport() triggered");
     setExporting(true);
-    if (selectedPatients.length === 0) return;
+
+    if (selectedPatients.length === 0) {
+      console.warn("⚠️ [FRONT] No patients selected for export");
+      setExporting(false);
+      return;
+    }
+
+    console.log("📦 [FRONT] Selected patients:", selectedPatients);
 
     try {
+      console.log("➡️ [FRONT] Sending POST request to backend...");
       const res = await fetch(`${API_URL}/patients/export-multiple/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(selectedPatients),
       });
 
-      if (!res.ok) throw new Error("Export failed");
+      console.log("⬅️ [FRONT] Response received. Status:", res.status);
 
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error("❌ [FRONT] Backend responded with error:", errorText);
+        throw new Error(`Export failed: ${res.status}`);
+        setExporting(false);
+      }
+
+      console.log("📥 [FRONT] Fetch successful, converting response to blob...");
       const blob = await res.blob();
+      console.log("✅ [FRONT] Blob created. Size:", blob.size, "bytes");
+
+      console.log("💾 [FRONT] Creating download link...");
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "patients_export.zip";
+      a.download = `patients_export_${selectedPatients.length}.zip`;
+      document.body.appendChild(a);
       a.click();
+      document.body.removeChild(a);
+
+      console.log("📁 [FRONT] File download triggered successfully");
       window.URL.revokeObjectURL(url);
+      console.log("🧹 [FRONT] Temporary object URL revoked");
 
     } catch (err) {
-      console.error("Error exporting:", err);
+      console.error("❌ [FRONT] Error during export:", err);
       Alert.alert("Export error", "Unable to export selected patients");
+      setExporting(false);
+    } finally {
+      console.log("🔚 [FRONT] handleExport() finished");
+      setExporting(false);
     }
-    setExporting(false);
   };
 
   const selectAll = () => {
