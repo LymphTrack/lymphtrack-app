@@ -22,6 +22,7 @@ export default function PatientsScreen() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const router = useRouter();            
   const { width } = useWindowDimensions();
   const [isFocused, setIsFocused] = useState(false);
@@ -219,14 +220,32 @@ export default function PatientsScreen() {
     );
   };
 
-  const handleExport = () => {
-    if (selectedPatients.length === 0) {
-      Alert.alert("No patients selected", "Please select at least one patient to export.");
-      return;
-    }
+  const handleExport = async () => {
+    setExporting(true);
+    if (selectedPatients.length === 0) return;
 
-    console.log("Exporting patients:", selectedPatients);
-    Alert.alert("Export", `Exporting ${selectedPatients.length} patient(s)...`);
+    try {
+      const res = await fetch(`${API_URL}/patients/export-multiple/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(selectedPatients),
+      });
+
+      if (!res.ok) throw new Error("Export failed");
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "patients_export.zip";
+      a.click();
+      window.URL.revokeObjectURL(url);
+
+    } catch (err) {
+      console.error("Error exporting:", err);
+      Alert.alert("Export error", "Unable to export selected patients");
+    }
+    setExporting(false);
   };
 
   const selectAll = () => {
@@ -237,6 +256,16 @@ export default function PatientsScreen() {
     }
   };
 
+  if (exporting) {
+    return (
+      <View style={{ flex: 1, backgroundColor: "#FFFFFF", justifyContent: "center", alignItems: "center" }}>
+        <ActivityIndicator size="large" color="#6a90db" />
+        <Text style={{ marginTop: 20, fontSize: 16, color: "#1F2937", textAlign: "center", paddingHorizontal: 30 }}>
+          Exporting Folder(s) ...
+        </Text>
+      </View>
+    );
+  } 
 
   if (loading) {
     return (
@@ -244,7 +273,9 @@ export default function PatientsScreen() {
         <ActivityIndicator size="large" color="#6a90db" />
       </View>
     );
-  }  
+  }
+
+  
 
   return (
     <View style={styles.container}>
