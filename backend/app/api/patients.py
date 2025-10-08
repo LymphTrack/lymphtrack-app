@@ -218,7 +218,6 @@ class PatientsExportRequest(BaseModel):
 @router.post("/export-multiple/")
 def export_multiple_patients(request: PatientsExportRequest):
     patient_ids = request.patient_ids
-    print(f"🟢 [DEBUG] Received patient IDs: {patient_ids}")
     try:
         if not patient_ids:
             return {"status": "error", "message": "No patient IDs provided"}
@@ -227,27 +226,22 @@ def export_multiple_patients(request: PatientsExportRequest):
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zipf:
             for patient_id in patient_ids:
                 try:
-                    print(f"📂 [DEBUG] Processing patient {patient_id}")
                     folder = m.find(f"lymphtrack-data/{patient_id}")
                     if not folder:
-                        print(f"⚠️ [DEBUG] Folder not found for {patient_id}")
                         continue
 
                     files = m.get_files_in_node(folder[0])
                     if not files:
-                        print(f"⚠️ [DEBUG] No files found for {patient_id}")
                         continue
 
                     for file_id, meta in files.items():
                         add_node_to_zip(file_id, meta, zipf, base_path=patient_id)
 
                 except Exception as e:
-                    print(f"❌ [DEBUG] Error processing {patient_id}: {e}")
                     continue
 
         zip_buffer.seek(0)
         filename = f"patients_export_{len(patient_ids)}.zip"
-        print(f"✅ [DEBUG] Multi-patient export completed: {filename}")
 
         return Response(
             content=zip_buffer.read(),
@@ -256,5 +250,4 @@ def export_multiple_patients(request: PatientsExportRequest):
         )
 
     except Exception as e:
-        print(f"❌ [DEBUG] Exception in export_multiple_patients: {e}")
         return {"status": "error", "message": str(e)}

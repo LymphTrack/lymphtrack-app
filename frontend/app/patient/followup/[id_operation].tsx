@@ -1,6 +1,6 @@
 import { Platform, View, Text, ScrollView, StyleSheet, ActivityIndicator, Alert, TouchableOpacity, useWindowDimensions } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { ArrowLeft, ArrowRight, Calendar, Notebook, Save, Trash } from "lucide-react-native";
+import { ArrowLeft, ArrowRight, Calendar,Download, Notebook, Save, Trash } from "lucide-react-native";
 import { API_URL } from "@/constants/api";
 import { useState, useCallback } from "react";
 import { useFocusEffect } from "@react-navigation/native";
@@ -12,6 +12,7 @@ export default function PatientResultsScreen() {
   const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const router = useRouter();
   const {width} = useWindowDimensions();
 
@@ -200,6 +201,17 @@ export default function PatientResultsScreen() {
     );
   }
 
+  if (exporting) {
+    return (
+      <View style={{ flex: 1, backgroundColor: "#FFFFFF", justifyContent: "center", alignItems: "center" }}>
+        <ActivityIndicator size="large" color="#6a90db" />
+        <Text style={{ marginTop: 20, fontSize: 16, color: "#1F2937" }}>
+          Exporting FollowUp...
+        </Text>
+      </View>
+    );
+  }
+
   if (!operation) {
     return (
       <View style={styles.loaderContainer}>
@@ -221,24 +233,56 @@ export default function PatientResultsScreen() {
             position: "relative",
           }}
         >
-          <TouchableOpacity onPress={() => router.push(
-              `/patient/${operation.patient_id}`
-            )}>
-            <ArrowLeft size={24} color="#1F2937" />
-          </TouchableOpacity>
-          <Text
-            pointerEvents="none"
-            style={[
-              styles.headerTitle,
-              { 
-                position: "absolute",
-                left: 0,
-                right: 0,
-                textAlign: "center",
-              },
-            ]}
+          <View
+            style={{
+              width: width >= 700 ? 700 : "100%",
+              alignSelf: "center",
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
+              paddingHorizontal: width >= 700 ? 30 : 10,
+              position: "relative",
+            }}
           >
-          Visit patient : {operation.patient_id}</Text>
+            <TouchableOpacity onPress={() => router.push(`/patient/${operation.patient_id}`)}>
+              <ArrowLeft size={24} color="#1F2937" />
+            </TouchableOpacity>
+
+            <Text style={[styles.headerTitle, { textAlign: "center" }]}>
+              Visit patient : {operation.patient_id}
+            </Text>
+
+            <TouchableOpacity
+              style={styles.downloadButton}
+              onPress={async () => {
+                setExporting(true);
+                try {
+                  console.log("[FRONT] Downloading operation folder:", id_operation);
+                  const res = await fetch(`${API_URL}/operations/export-folder/${id_operation}`);
+                  
+                  if (!res.ok) 
+                    throw new Error(`Download failed: ${res.status}`);
+                  
+                  const blob = await res.blob();
+                  const url = window.URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `operation_${id_operation}.zip`;
+                  a.click();
+                  window.URL.revokeObjectURL(url);
+                  console.log("[FRONT] Download successful");
+                
+                } catch (err) {
+                  console.error("[FRONT] Error downloading:", err);
+                  Alert.alert("Download error", "Unable to download operation folder");
+                  setExporting(false);
+                }
+                setExporting(false);
+              }}
+            >
+              <Download size={20} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
 
@@ -495,5 +539,18 @@ positionNumber: {
   color: "#2563EB",
 },
 
+downloadButton: {
+  backgroundColor: "#6a90db",
+  width: 42,
+  height: 42,
+  borderRadius: 21,
+  justifyContent: "center",
+  alignItems: "center",
+  shadowColor: "#000",
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.2,
+  shadowRadius: 4,
+  elevation: 3,
+},
 
 });

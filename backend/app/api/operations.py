@@ -1,8 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, Body
+from fastapi import APIRouter, Depends, HTTPException, Body, Response
 from sqlalchemy.orm import Session
 from app.db.models import Operation
 from app.db.database import get_db
-import os
+import os, io , zipfile
 from dotenv import load_dotenv
 from mega import Mega
 from datetime import datetime
@@ -288,5 +288,61 @@ def delete_operation(id_operation: int, db: Session = Depends(get_db)):
         "patient_id": patient_id,
         "deleted_folder": visit_str
     }
+
+
+# ---------------------
+# EXPORT OPERATION FOLDER
+# ---------------------
+
+def add_node_to_zip(node_id, meta, zipf, base_path=""):
+    try:
+        name = meta["a"].get("n", str(node_id))
+        node_type = meta.get("t")
+        zip_path = os.path.join(base_path, name)
+
+        if node_type == 0: 
+            if name == ".DS_Store":
+                return
+            downloaded_path = m.download((node_id, meta), dest_path=".", dest_filename=f"tmp_{name}")
+            with open(downloaded_path, "rb") as f:
+                zipf.writestr(zip_path, f.read())
+            os.remove(downloaded_path)
+        elif node_type == 1:
+            children = m.get_files_in_node(node_id)
+            for child_id, child_meta in children.items():
+                add_node_to_zip(child_id, child_meta, zipf, base_path=zip_path)
+    except Exception as e:
+        print(f"[DEBUG] add_node_to_zip failed for {node_id}: {e}")
+
+@router.get("/export-folder/{id_operation}")
+def export_operation_folder(id_operation: str):
+    try:
+        print(f"[DEBUG] Exporting folder for operation {id_operation}")
+        folder = m.find(f"lymphtrack-data/operations/{id_operation}")
+        if not folder:
+            print(f"[DEBUG] No folder found for operation {id_operation}")
+            return {"status": "error", "message": f"No folder found for operation {id_operation}"}
+
+        files = m.get_files_in_node(folder[0])
+        if not files:
+            print(f"[DEBUG] No files inside operation {id_operation}")
+            return {"status": "error", "message": f"No files found for operation {id_operation}"}
+
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zipf:
+            for file_id, meta in files.items():
+                add_node_to_zip(file_id, meta, zipf, base_path=id_operation)
+
+        zip_buffer.seek(0)
+        print(f"[DEBUG] Successfully exported operation {id_operation}")
+        return Response(
+            content=zip_buffer.read(),
+            media_type="application/zip",
+            headers={"Content-Disposition": f"attachment; filename=operation_{id_operation}.zip"}
+        )
+
+    except Exception as e:
+        print(f"[DEBUG] Exception in export_operation_folder: {e}")
+        return {"status": "error", "message": str(e)}
 
 
