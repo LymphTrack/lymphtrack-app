@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from botocore.config import Config
 from mega import Mega
 import time, shutil, pathlib
+from pydantic import BaseModel
 
 router = APIRouter()
 
@@ -210,9 +211,14 @@ def export_patient_folder(patient_id: str):
 # ---------------------
 # EXPORT MULTIPLE PATIENT FOLDERS
 # ---------------------
+
+class PatientsExportRequest(BaseModel):
+    patient_ids: list[str]
+
 @router.post("/export-multiple/")
-def export_multiple_patients(patient_ids: list[str]):
-    print(f"🟢 [DEBUG] Starting export for multiple patients: {patient_ids}")
+def export_multiple_patients(request: PatientsExportRequest):
+    patient_ids = request.patient_ids
+    print(f"🟢 [DEBUG] Received patient IDs: {patient_ids}")
     try:
         if not patient_ids:
             return {"status": "error", "message": "No patient IDs provided"}
