@@ -314,35 +314,76 @@ def add_node_to_zip(node_id, meta, zipf, base_path=""):
     except Exception as e:
         print(f"[DEBUG] add_node_to_zip failed for {node_id}: {e}")
 
-@router.get("/export-folder/{id_operation}")
-def export_operation_folder(id_operation: str):
-    try:
-        print(f"[DEBUG] Exporting folder for operation {id_operation}")
-        folder = m.find(f"lymphtrack-data/operations/{id_operation}")
-        if not folder:
-            print(f"[DEBUG] No folder found for operation {id_operation}")
-            return {"status": "error", "message": f"No folder found for operation {id_operation}"}
 
-        files = m.get_files_in_node(folder[0])
+@router.get("/export-folder/{id_operation}")
+def export_visit_folder(id_operation: int, db: Session = Depends(get_db)):
+    try:
+        print(f"🟢 [DEBUG] Request export for operation {id_operation}")
+
+        operation = db.query(Operation).filter(Operation.id_operation == id_operation).first()
+        if not operation:
+            raise HTTPException(status_code=404, detail=f"Operation {id_operation} not found")
+
+        patient_id = operation.patient_id
+        print(f"📁 [DEBUG] Operation belongs to patient {patient_id}")
+
+        all_ops = (
+            db.query(Operation)
+            .filter(Operation.patient_id == patient_id)
+            .order_by(Operation.operation_date.asc())
+            .all()
+        )
+
+        visit_number = {op.id_operation: idx + 1 for idx, op in enumerate(all_ops)}[operation.id_operation]
+        visit_name = operation.name.replace(" ", "_")
+        visit_str = f"{visit_number}-{visit_name}_{operation.operation_date.strftime('%d%m%Y')}"
+        print(f"📂 [DEBUG] Looking for visit folder: {visit_str}")
+
+        patient_folder = m.find(f"lymphtrack-data/{patient_id}")
+        if not patient_folder:
+            raise HTTPException(status_code=404, detail=f"Patient folder {patient_id} not found")
+
+        subfolders = m.get_files_in_node(patient_folder[0])
+        visit_folder_id = None
+        for fid, meta in subfolders.items():
+            if meta["t"] == 1 and meta["a"]["n"] == visit_str:
+                visit_folder_id = fid
+                break
+
+        if not visit_folder_id:
+            raise HTTPException(status_code=404, detail=f"Visit folder {visit_str} not found in MEGA")
+
+        print(f"✅ [DEBUG] Found MEGA folder id: {visit_folder_id}")
+
+        files = m.get_files_in_node(visit_folder_id)
         if not files:
-            print(f"[DEBUG] No files inside operation {id_operation}")
-            return {"status": "error", "message": f"No files found for operation {id_operation}"}
+            raise HTTPException(status_code=404, detail=f"No files found inside {visit_str}")
 
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zipf:
             for file_id, meta in files.items():
-                add_node_to_zip(file_id, meta, zipf, base_path=id_operation)
+                try:
+                    name = meta["a"]["n"]
+                    print(f"⬇️ [DEBUG] Downloading {name}")
+                    downloaded_path = m.download((file_id, meta), dest_path=".", dest_filename=f"tmp_{name}")
+                    with open(downloaded_path, "rb") as f:
+                        zipf.writestr(os.path.join(visit_str, name), f.read())
+                    os.remove(downloaded_path)
+                except Exception as e:
+                    print(f"❌ [DEBUG] Failed to add {meta['a']['n']}: {e}")
 
         zip_buffer.seek(0)
-        print(f"[DEBUG] Successfully exported operation {id_operation}")
+        print(f"📦 [DEBUG] ZIP ready for {visit_str}")
+
         return Response(
             content=zip_buffer.read(),
             media_type="application/zip",
-            headers={"Content-Disposition": f"attachment; filename=operation_{id_operation}.zip"}
+            headers={"Content-Disposition": f"attachment; filename={visit_str}.zip"},
         )
 
+    except HTTPException as e:
+        print(f"⚠️ [DEBUG] HTTPException: {e.detail}")
+        raise e
     except Exception as e:
-        print(f"[DEBUG] Exception in export_operation_folder: {e}")
+        print(f"❌ [DEBUG] Unexpected error in export_visit_folder: {e}")
         return {"status": "error", "message": str(e)}
-
-
