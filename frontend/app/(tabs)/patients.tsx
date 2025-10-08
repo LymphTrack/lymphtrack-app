@@ -234,7 +234,7 @@ export default function PatientsScreen() {
 
     try {
       console.log("➡️ [FRONT] Sending POST request to backend...");
-      const res = await fetch(`${API_URL}/patients/export-multiple`, {
+      const res = await fetch(`${API_URL}/patients/export-multiple/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(selectedPatients),
