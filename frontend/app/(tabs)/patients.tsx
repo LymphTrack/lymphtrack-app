@@ -237,7 +237,7 @@ export default function PatientsScreen() {
       const res = await fetch(`${API_URL}/patients/export-multiple/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(selectedPatients),
+        body: JSON.stringify({ patient_ids: selectedPatients }),
       });
 
       console.log("⬅️ [FRONT] Response received. Status:", res.status);
