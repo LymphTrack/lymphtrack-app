@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { Users, Settings, BarChart3, Shield } from 'lucide-react-native';
+import { Users, Settings, BarChart3, Folder } from 'lucide-react-native';
 import { Platform,useWindowDimensions, View} from 'react-native';
 
 
@@ -30,6 +30,17 @@ export default function TabLayout() {
           ),
         }}
       />
+
+      <Tabs.Screen
+        name="export"
+        options={{
+          title: 'Export',
+          tabBarIcon: ({ size, color }) => (
+            <Folder size={size} color={color} />
+          ),
+        }}
+      />
+
       <Tabs.Screen
         name="outcomes"
         options={{

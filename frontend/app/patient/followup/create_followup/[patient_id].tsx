@@ -70,21 +70,27 @@ export default function CreateFollowUp() {
       for (const [i, uri] of photos.entries()) {
         if (!uri) continue;
 
-        const extension = uri.split(".").pop()?.toLowerCase() || "jpg";
+        const extension =
+          uri.toLowerCase().endsWith(".png") ? "png" :
+          uri.toLowerCase().endsWith(".jpg") || uri.toLowerCase().endsWith(".jpeg") ? "jpg" :
+          uri.toLowerCase().endsWith(".heic") ? "jpg" :
+          "jpg";
+
         const mimeType =
-          extension === "png" ? "image/png" :
-          extension === "heic" || extension === "heif" ? "image/heic" :
-          "image/jpeg";
+          extension === "png" ? "image/png" : "image/jpeg";
 
         const formData = new FormData();
+        formData.append("file", {
+          uri,
+          name: `photo_${i + 1}.${extension}`, 
+          type: mimeType,
+        } as any);
 
         if (Platform.OS === "web") {
-          // ⚡ Web → convertir en Blob
           const response = await fetch(uri);
           const blob = await response.blob();
           formData.append("file", blob, `photo_${i + 1}.${extension}`);
         } else {
-          // ⚡ iOS/Android → utiliser { uri, name, type }
           formData.append("file", {
             uri,
             name: `photo_${i + 1}.${extension}`,

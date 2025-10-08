@@ -129,136 +129,137 @@ export default function SettingsScreen() {
         <Text style={[styles.headerTitle, width >= 700 && {width : 700, marginLeft : 60}]}>Settings</Text>
       </View>
 
-      <ScrollView style={[styles.content, width >= 700 && {width : 700 , alignSelf :"center"}]} showsVerticalScrollIndicator={false}>
 
-        <View style={styles.profileCard}>
-          <View style={styles.avatarContainer}>
-            <User size={32} color="#FFFFFF" />
-          </View>
-          <View style={styles.profileInfo}>
-            <Text style={styles.profileName}>{userProfile?.name || 'Loading...'}</Text>
-            <Text style={styles.profileEmail}>{userProfile?.email}</Text>
-            <Text style={styles.profileRole}>{userProfile?.role} at {userProfile?.institution}</Text>
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Account</Text>
-
-          <View style={styles.settingItem}>
-            <View style={styles.settingLeft}>
-              <View style={styles.iconContainer}>
-                <User size={20} color="#2563EB" />
-              </View>
-              <View>
-                <Text style={styles.settingTitle}>Name</Text>
-                <Text style={styles.settingSubtitle}>{userProfile?.name}</Text>
-              </View>
+      <ScrollView style={[styles.content]} showsVerticalScrollIndicator={false}>
+        <View style={[width >=700 && { width : 700, alignSelf: "center"}]}>
+          <View style={styles.profileCard}>
+            <View style={styles.avatarContainer}>
+              <User size={32} color="#FFFFFF" />
+            </View>
+            <View style={styles.profileInfo}>
+              <Text style={styles.profileName}>{userProfile?.name || 'Loading...'}</Text>
+              <Text style={styles.profileEmail}>{userProfile?.email}</Text>
+              <Text style={styles.profileRole}>{userProfile?.role} at {userProfile?.institution}</Text>
             </View>
           </View>
 
-          <View style={styles.settingItem}>
-            <View style={styles.settingLeft}>
-              <View style={styles.iconContainer}>
-                <Mail size={20} color="#2563EB" />
-              </View>
-              <View>
-                <Text style={styles.settingTitle}>Email</Text>
-                <Text style={styles.settingSubtitle}>{userProfile?.email}</Text>
-              </View>
-            </View>
-          </View>
-
-          <View style={styles.settingItem}>
-            <View style={styles.settingLeft}>
-              <View style={styles.iconContainer}>
-                <Briefcase size={20} color="#2563EB" />
-              </View>
-              <View>
-                <Text style={styles.settingTitle}>Role</Text>
-                <Text style={styles.settingSubtitle}>{userProfile?.role}</Text>
-              </View>
-            </View>
-          </View>
-
-          <View style={styles.settingItem}>
-            <View style={styles.settingLeft}>
-              <View style={styles.iconContainer}>
-                <Building size={20} color="#2563EB" />
-              </View>
-              <View>
-                <Text style={styles.settingTitle}>Institution</Text>
-                <Text style={styles.settingSubtitle}>{userProfile?.institution}</Text>
-              </View>
-            </View>
-          </View>
-
-          <TouchableOpacity
-            style={styles.modifyButton}
-            onPress={() => router.push("../setting/account/modify_account")}
-          >
-            <Text style={styles.modifyButtonText}>Modify Account</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Security & Privacy</Text>
-
-          <SettingItem
-            icon={Lock}
-            title="Change Password"
-            subtitle="Update your login credentials"
-            onPress={() => router.push("../setting/security/modify_password")}
-          />
-
-          <SettingItem
-            icon={ShieldCheck}
-            title="Privacy Policy"
-            subtitle="How we protect your data"
-            onPress={() => router.push("../setting/security/privacy_policy")}
-          />
-
-          <SettingItem
-            icon={ScrollText}
-            title="Terms of Use"
-            subtitle="Read our usage guidelines"
-            onPress={() => router.push("../setting/security/terms_of_use")}
-          />
-        </View>
-
-      
-        {userProfile?.user_type === "admin" && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Administrator</Text>
+            <Text style={styles.sectionTitle}>Account</Text>
+
+            <View style={styles.settingItem}>
+              <View style={styles.settingLeft}>
+                <View style={styles.iconContainer}>
+                  <User size={20} color="#2563EB" />
+                </View>
+                <View>
+                  <Text style={styles.settingTitle}>Name</Text>
+                  <Text style={styles.settingSubtitle}>{userProfile?.name}</Text>
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.settingItem}>
+              <View style={styles.settingLeft}>
+                <View style={styles.iconContainer}>
+                  <Mail size={20} color="#2563EB" />
+                </View>
+                <View>
+                  <Text style={styles.settingTitle}>Email</Text>
+                  <Text style={styles.settingSubtitle}>{userProfile?.email}</Text>
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.settingItem}>
+              <View style={styles.settingLeft}>
+                <View style={styles.iconContainer}>
+                  <Briefcase size={20} color="#2563EB" />
+                </View>
+                <View>
+                  <Text style={styles.settingTitle}>Role</Text>
+                  <Text style={styles.settingSubtitle}>{userProfile?.role}</Text>
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.settingItem}>
+              <View style={styles.settingLeft}>
+                <View style={styles.iconContainer}>
+                  <Building size={20} color="#2563EB" />
+                </View>
+                <View>
+                  <Text style={styles.settingTitle}>Institution</Text>
+                  <Text style={styles.settingSubtitle}>{userProfile?.institution}</Text>
+                </View>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={styles.modifyButton}
+              onPress={() => router.push("../setting/account/modify_account")}
+            >
+              <Text style={styles.modifyButtonText}>Modify Account</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Security & Privacy</Text>
 
             <SettingItem
-              icon={Shield}
-              title="User Management"
-              subtitle="Update or create User"
-              onPress={() => router.push("../setting/admin/admin")}
+              icon={Lock}
+              title="Change Password"
+              subtitle="Update your login credentials"
+              onPress={() => router.push("../setting/security/modify_password")}
+            />
+
+            <SettingItem
+              icon={ShieldCheck}
+              title="Privacy Policy"
+              subtitle="How we protect your data"
+              onPress={() => router.push("../setting/security/privacy_policy")}
+            />
+
+            <SettingItem
+              icon={ScrollText}
+              title="Terms of Use"
+              subtitle="Read our usage guidelines"
+              onPress={() => router.push("../setting/security/terms_of_use")}
             />
           </View>
-        )}
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>About</Text>
-          
-          <View style={styles.infoItem}>
-            <Text style={styles.infoLabel}>Version</Text>
-            <Text style={styles.infoValue}>1.0.0</Text>
+        
+          {userProfile?.user_type === "admin" && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Administrator</Text>
+
+              <SettingItem
+                icon={Shield}
+                title="User Management"
+                subtitle="Update or create User"
+                onPress={() => router.push("../setting/admin/admin")}
+              />
+            </View>
+          )}
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>About</Text>
+            
+            <View style={styles.infoItem}>
+              <Text style={styles.infoLabel}>Version</Text>
+              <Text style={styles.infoValue}>1.0.0</Text>
+            </View>
+            
+            <View style={styles.infoItem}>
+              <Text style={styles.infoLabel}>Build</Text>
+              <Text style={styles.infoValue}>2025.08.28</Text>
+            </View>
           </View>
-          
-          <View style={styles.infoItem}>
-            <Text style={styles.infoLabel}>Build</Text>
-            <Text style={styles.infoValue}>2025.08.28</Text>
-          </View>
+
+          <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
+            <LogOut size={20} color="#4c54bc" />
+            <Text style={styles.signOutText}>Sign Out</Text>
+          </TouchableOpacity>
         </View>
-
-        <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
-          <LogOut size={20} color="#4c54bc" />
-          <Text style={styles.signOutText}>Sign Out</Text>
-        </TouchableOpacity>
-
       </ScrollView>
     </View>
   );
