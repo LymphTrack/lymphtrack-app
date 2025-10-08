@@ -32,16 +32,6 @@ export default function TabLayout() {
       />
 
       <Tabs.Screen
-        name="export"
-        options={{
-          title: 'Export',
-          tabBarIcon: ({ size, color }) => (
-            <Folder size={size} color={color} />
-          ),
-        }}
-      />
-
-      <Tabs.Screen
         name="outcomes"
         options={{
           title: 'Outcomes',

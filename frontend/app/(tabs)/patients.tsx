@@ -2,7 +2,7 @@ import { useState} from 'react';
 import { useFocusEffect } from "@react-navigation/native";
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, TextInput , ActivityIndicator, Platform, useWindowDimensions,} from 'react-native';
 import { useRouter } from 'expo-router';
-import { Search, Plus,MapPin, Trash  } from 'lucide-react-native';
+import { Search, Plus,MapPin, Trash, Download , X, CheckCircle2, Circle} from 'lucide-react-native';
 import { Alert } from "react-native";
 import { useCallback } from "react";
 import DropDownPicker from "react-native-dropdown-picker";
@@ -25,6 +25,9 @@ export default function PatientsScreen() {
   const router = useRouter();            
   const { width } = useWindowDimensions();
   const [isFocused, setIsFocused] = useState(false);
+  const [exportMode, setExportMode] = useState(false);
+  const [selectedPatients, setSelectedPatients] = useState<string[]>([]);
+  
 
   useFocusEffect(
     useCallback(() => {
@@ -144,54 +147,96 @@ export default function PatientsScreen() {
     { label: "Male", value: "2" },
   ]);
 
-  const renderPatientItem = ({ item }: { item: Patient }) => (
-    <TouchableOpacity
-      style={styles.patientCard}
-      onPress={() => router.push(`/patient/${item.patient_id}`)}
-    >
-      <View style={styles.patientHeader}>
-        <Text style={styles.patientId}>ID: {item.patient_id}</Text>
-        <View style={styles.patientInfo}>
-          <Text style={styles.patientDetail}>
-            {item.age != null ? `${item.age}y` : '?'} • {item.gender === 1 ? 'Female' : item.gender === 2 ? 'Male' : '?'}
-          </Text>
+  const renderPatientItem = ({ item }: { item: Patient }) => {
+    const isSelected = selectedPatients.includes(item.patient_id);
 
-          <Text style={styles.patientDetail}>
-            BMI: {item.bmi != null ? item.bmi.toFixed(1) : '?'}
-          </Text>
+    return (
+      <TouchableOpacity
+        style={[
+          styles.patientCard,
+          exportMode && isSelected && { backgroundColor: "#E5EDFF", borderColor: "#6a90db" },
+        ]}
+        onPress={() => {
+          if (exportMode) {
+            setSelectedPatients((prev) =>
+              prev.includes(item.patient_id)
+                ? prev.filter((id) => id !== item.patient_id)
+                : [...prev, item.patient_id]
+            );
+          } else {
+            router.push(`/patient/${item.patient_id}`);
+          }
+        }}
+      >
+        <View style={styles.patientHeader}>
+          <Text style={styles.patientId}>ID: {item.patient_id}</Text>
+          <View style={styles.patientInfo}>
+            <Text style={styles.patientDetail}>
+              {item.age != null ? `${item.age}y` : "?"} •{" "}
+              {item.gender === 1 ? "Female" : item.gender === 2 ? "Male" : "?"}
+            </Text>
+            <Text style={styles.patientDetail}>
+              BMI: {item.bmi != null ? item.bmi.toFixed(1) : "?"}
+            </Text>
+          </View>
         </View>
-      </View>
 
-      <View style={styles.locationRow}>
-        <View style={{ flexDirection: "row", alignItems: "center" }}>
-          <MapPin size={16} color="#6B7280" />
-          <Text style={styles.locationText}>
-            Lymphedema side : {
-              item.lymphedema_side === 1
-                ? 'Right'
+        <View style={styles.locationRow}>
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
+            <MapPin size={16} color="#6B7280" />
+            <Text style={styles.locationText}>
+              Lymphedema side:{" "}
+              {item.lymphedema_side === 1
+                ? "Right"
                 : item.lymphedema_side === 2
-                  ? 'Left'
-                  : item.lymphedema_side === 3
-                    ? 'Bilateral'
-                    : '?'
-            }
-          </Text>
-        </View>
+                ? "Left"
+                : item.lymphedema_side === 3
+                ? "Bilateral"
+                : "?"}
+            </Text>
+          </View>
 
-        <TouchableOpacity 
-          disabled={deletingId === item.patient_id}
-          onPress={() => confirmDeletePatient(item.patient_id)}
-        >
-          {deletingId === item.patient_id ? (
-            <ActivityIndicator size="small" color="#6a90db" />
+          {exportMode ? (
+            isSelected ? (
+              <CheckCircle2 size={26} color="#6a90db" />
+            ) : (
+              <Circle size={26} color="#D1D5DB" />
+            )
           ) : (
-            <Trash size={18} color="#4c54bc" />
+            <TouchableOpacity
+              disabled={deletingId === item.patient_id}
+              onPress={() => confirmDeletePatient(item.patient_id)}
+            >
+              {deletingId === item.patient_id ? (
+                <ActivityIndicator size="small" color="#6a90db" />
+              ) : (
+                <Trash size={18} color="#4c54bc" />
+              )}
+            </TouchableOpacity>
           )}
-        </TouchableOpacity>
-      </View>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
-    </TouchableOpacity>
-  );
+  const handleExport = () => {
+    if (selectedPatients.length === 0) {
+      Alert.alert("No patients selected", "Please select at least one patient to export.");
+      return;
+    }
+
+    console.log("Exporting patients:", selectedPatients);
+    Alert.alert("Export", `Exporting ${selectedPatients.length} patient(s)...`);
+  };
+
+  const selectAll = () => {
+    if (selectedPatients.length === filteredPatients.length) {
+      setSelectedPatients([]);
+    } else {
+      setSelectedPatients(filteredPatients.map((p) => p.patient_id));
+    }
+  };
+
 
   if (loading) {
     return (
@@ -210,15 +255,29 @@ export default function PatientsScreen() {
           justifyContent: 'space-between',
           alignItems: 'center',
           paddingHorizontal: width >= 700 ? 30 : 10,}}>
-          <Text style={styles.headerTitle}>Patients</Text>
-          <TouchableOpacity
-            style={styles.addButton}
-            onPress={() => router.push('/patient/create')}
-          >
-            <Plus size={24} color="#FFFFFF" />
-          </TouchableOpacity>
+            <Text style={styles.headerTitle}>Patients</Text>
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              {!exportMode && (
+                <TouchableOpacity
+                  style={styles.addButton}
+                  onPress={() => router.push('/patient/create')}
+                >
+                  <Plus size={22} color="#FFFFFF" />
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                style={[styles.exportModeButton, exportMode && { backgroundColor: "#ef4444" }]}
+                onPress={() => {
+                  setExportMode(!exportMode);
+                  setSelectedPatients([]);
+                }}
+              >
+                {exportMode ? <X size={20} color="#FFF" /> : <Download size={20} color="#FFF" />}
+                <Text style={styles.exportModeText}>{exportMode ? "Cancel" : "Export"}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
-      </View>
 
         <FlatList
           data={filteredPatients}
@@ -334,7 +393,31 @@ export default function PatientsScreen() {
               </Text>
             </View>
           }
+
         />
+        {exportMode && (
+          <View style={styles.bottomBar}>
+            <TouchableOpacity onPress={selectAll} style={styles.bottomButton}>
+              <Text style={styles.bottomButtonText}>
+                {selectedPatients.length === filteredPatients.length ? "Deselect all" : "Select all"}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={handleExport}
+              style={[
+                styles.bottomButton,
+                { backgroundColor: selectedPatients.length ? "#6a90db" : "#9CA3AF" },
+              ]}
+              disabled={selectedPatients.length === 0}
+            >
+              <Download size={18} color="#FFF" />
+              <Text style={[styles.bottomButtonText, { marginLeft: 6, color: "white" }]}>
+                Export {selectedPatients.length > 0 ? `(${selectedPatients.length})` : ""}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
     </View>
   );
 }
@@ -445,6 +528,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 60,
   },
+  exportModeButton: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: '#6a90db',
+    paddingHorizontal: 12, paddingVertical: 8,
+    borderRadius: 10,
+  },
+  exportModeText: { color: '#FFF', fontWeight: '500', marginLeft: 6 },
+  
   emptyText: {
     fontSize: 18,
     fontWeight: '600',
@@ -482,4 +573,37 @@ const styles = StyleSheet.create({
     borderColor: "#E5E7EB",
     minHeight: Platform.OS === 'web' ? 35 : 45,  
   },
+
+  bottomBar: {
+  position: "absolute",
+  bottom: 0,
+  left: 0,
+  right: 0,
+  backgroundColor: "#FFFFFF",
+  flexDirection: "row",
+  justifyContent: "space-around",
+  alignItems: "center",
+  borderTopWidth: 1,
+  borderTopColor: "#E5E7EB",
+  paddingVertical: 12,
+  shadowColor: "#000",
+  shadowOffset: { width: 0, height: -2 },
+  shadowOpacity: 0.05,
+  shadowRadius: 6,
+  elevation: 4,
+},
+bottomButton: {
+  flexDirection: "row",
+  alignItems: "center",
+  backgroundColor: "#E0E7FF",
+  paddingHorizontal: 20,
+  paddingVertical: 10,
+  borderRadius: 8,
+},
+bottomButtonText: {
+  color: "#4c54bc",
+  fontWeight: "600",
+  fontSize: 15,
+},
+
 });
