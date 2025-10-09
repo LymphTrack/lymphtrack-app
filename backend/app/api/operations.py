@@ -301,37 +301,33 @@ def add_node_to_zip_recursive(node_id, meta, zipf, base_path=""):
         node_type = meta.get("t")
         zip_path = os.path.join(base_path, name)
 
-        if node_type == 0:  # fichier
+        if node_type == 0:
             if name == ".DS_Store":
                 return
-
-            print(f"⬇️ [DEBUG] Downloading file: {zip_path}")
+            
             downloaded_path = m.download((node_id, meta), dest_path=".", dest_filename=f"tmp_{name}")
             with open(downloaded_path, "rb") as f:
                 zipf.writestr(zip_path, f.read())
             os.remove(downloaded_path)
 
-        elif node_type == 1:  # dossier
-            print(f"📁 [DEBUG] Entering folder: {zip_path}")
+        elif node_type == 1: 
             children = m.get_files_in_node(node_id)
             for child_id, child_meta in children.items():
                 add_node_to_zip_recursive(child_id, child_meta, zipf, base_path=zip_path)
 
     except Exception as e:
-        print(f"❌ [DEBUG] Failed to add {meta['a'].get('n', node_id)}: {e}")
+        print(f"[DEBUG] Failed to add {meta['a'].get('n', node_id)}: {e}")
 
 
 @router.get("/export-folder/{id_operation}")
 def export_visit_folder(id_operation: int, db: Session = Depends(get_db)):
     try:
-        print(f"🟢 [DEBUG] Request export for operation {id_operation}")
 
         operation = db.query(Operation).filter(Operation.id_operation == id_operation).first()
         if not operation:
             raise HTTPException(status_code=404, detail=f"Operation {id_operation} not found")
 
         patient_id = operation.patient_id
-        print(f"📁 [DEBUG] Operation belongs to patient {patient_id}")
 
         all_ops = (
             db.query(Operation)
@@ -343,7 +339,6 @@ def export_visit_folder(id_operation: int, db: Session = Depends(get_db)):
         visit_number = {op.id_operation: idx + 1 for idx, op in enumerate(all_ops)}[operation.id_operation]
         visit_name = operation.name.replace(" ", "_")
         visit_str = f"{visit_number}-{visit_name}_{operation.operation_date.strftime('%d%m%Y')}"
-        print(f"📂 [DEBUG] Looking for visit folder: {visit_str}")
 
         patient_folder = m.find(f"lymphtrack-data/{patient_id}")
         if not patient_folder:
@@ -359,8 +354,6 @@ def export_visit_folder(id_operation: int, db: Session = Depends(get_db)):
         if not visit_folder_id:
             raise HTTPException(status_code=404, detail=f"Visit folder {visit_str} not found in MEGA")
 
-        print(f"✅ [DEBUG] Found MEGA folder id: {visit_folder_id}")
-
         files = m.get_files_in_node(visit_folder_id)
         if not files:
             raise HTTPException(status_code=404, detail=f"No files found inside {visit_str}")
@@ -371,7 +364,6 @@ def export_visit_folder(id_operation: int, db: Session = Depends(get_db)):
                 add_node_to_zip_recursive(file_id, meta, zipf, base_path=visit_str)
 
         zip_buffer.seek(0)
-        print(f"📦 [DEBUG] ZIP ready for {visit_str}")
 
         return Response(
             content=zip_buffer.read(),
@@ -380,8 +372,6 @@ def export_visit_folder(id_operation: int, db: Session = Depends(get_db)):
         )
 
     except HTTPException as e:
-        print(f"⚠️ [DEBUG] HTTPException: {e.detail}")
         raise e
     except Exception as e:
-        print(f"❌ [DEBUG] Unexpected error in export_visit_folder: {e}")
         return {"status": "error", "message": str(e)}
