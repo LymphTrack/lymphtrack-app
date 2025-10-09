@@ -294,25 +294,31 @@ def delete_operation(id_operation: int, db: Session = Depends(get_db)):
 # EXPORT OPERATION FOLDER
 # ---------------------
 
-def add_node_to_zip(node_id, meta, zipf, base_path=""):
+def add_node_to_zip_recursive(node_id, meta, zipf, base_path=""):
+    """Ajoute un fichier ou un dossier (récursivement) dans le ZIP."""
     try:
         name = meta["a"].get("n", str(node_id))
         node_type = meta.get("t")
         zip_path = os.path.join(base_path, name)
 
-        if node_type == 0: 
+        if node_type == 0:  # fichier
             if name == ".DS_Store":
                 return
+
+            print(f"⬇️ [DEBUG] Downloading file: {zip_path}")
             downloaded_path = m.download((node_id, meta), dest_path=".", dest_filename=f"tmp_{name}")
             with open(downloaded_path, "rb") as f:
                 zipf.writestr(zip_path, f.read())
             os.remove(downloaded_path)
-        elif node_type == 1:
+
+        elif node_type == 1:  # dossier
+            print(f"📁 [DEBUG] Entering folder: {zip_path}")
             children = m.get_files_in_node(node_id)
             for child_id, child_meta in children.items():
-                add_node_to_zip(child_id, child_meta, zipf, base_path=zip_path)
+                add_node_to_zip_recursive(child_id, child_meta, zipf, base_path=zip_path)
+
     except Exception as e:
-        print(f"[DEBUG] add_node_to_zip failed for {node_id}: {e}")
+        print(f"❌ [DEBUG] Failed to add {meta['a'].get('n', node_id)}: {e}")
 
 
 @router.get("/export-folder/{id_operation}")
@@ -362,15 +368,7 @@ def export_visit_folder(id_operation: int, db: Session = Depends(get_db)):
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zipf:
             for file_id, meta in files.items():
-                try:
-                    name = meta["a"]["n"]
-                    print(f"⬇️ [DEBUG] Downloading {name}")
-                    downloaded_path = m.download((file_id, meta), dest_path=".", dest_filename=f"tmp_{name}")
-                    with open(downloaded_path, "rb") as f:
-                        zipf.writestr(os.path.join(visit_str, name), f.read())
-                    os.remove(downloaded_path)
-                except Exception as e:
-                    print(f"❌ [DEBUG] Failed to add {meta['a']['n']}: {e}")
+                add_node_to_zip_recursive(file_id, meta, zipf, base_path=visit_str)
 
         zip_buffer.seek(0)
         print(f"📦 [DEBUG] ZIP ready for {visit_str}")
