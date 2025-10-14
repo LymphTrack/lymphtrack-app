@@ -81,6 +81,7 @@ def train_step1_model(db_session):
         GROUP BY o.patient_id, o.name, r.position
     """)
     sick_raw = pd.read_sql(q_sick, db_session.bind)
+    sick_raw["patient"] = sick_raw["patient"].astype(str)
 
     if sick_raw.empty:
         msg = "[STEP1] ⚠️ Aucune donnée dans results/operations."
@@ -93,6 +94,7 @@ def train_step1_model(db_session):
         FROM sick_patients
     """)
     sick_side_df = pd.read_sql(q_meta_sick, db_session.bind)
+    sick_side_df["patient"] = sick_side_df["patient"].astype(str)
 
     sick_df = sick_raw.merge(sick_side_df, on="patient", how="left")
 
@@ -117,6 +119,7 @@ def train_step1_model(db_session):
         FROM healthy_patients hp
     """)
     healthy_df = pd.read_sql(q_healthy, db_session.bind)
+    healthy_df["patient"] = healthy_df["patient"].astype(str)
 
     if healthy_df.empty:
         msg = "[STEP1] ⚠️ Aucune donnée dans healthy_patients."
@@ -129,6 +132,8 @@ def train_step1_model(db_session):
         FROM healthy_metadata
     """)
     hmeta_df = pd.read_sql(q_hmeta, db_session.bind)
+    hmeta_df["patient"] = hmeta_df["patient"].astype(str)
+
     if not hmeta_df.empty:
         hmeta_df["healthy_side"] = hmeta_df["healthy_side"].map(_clean_healthy_side)
     healthy_df = healthy_df.merge(hmeta_df, on="patient", how="left")
@@ -218,6 +223,10 @@ def train_step1_model(db_session):
 
     # Utiliser l'absolu des différences (comme dans ton pipeline recherche)
     patient_df[["freq_diff", "loss_diff", "bw_diff"]] = patient_df[["freq_diff", "loss_diff", "bw_diff"]].abs()
+
+    # Nettoyage final — suppression des lignes avec NaN dans les features
+    patient_df = patient_df.dropna(subset=["freq_diff", "loss_diff", "bw_diff"]).copy()
+
 
     # 5) === Split & entraînement des modèles ===
     X = patient_df[["freq_diff", "loss_diff", "bw_diff"]].copy()
