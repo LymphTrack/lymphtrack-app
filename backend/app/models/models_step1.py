@@ -20,6 +20,7 @@ MODEL_PATH = os.path.join(DATA_DIR, "step1_model.pkl")
 RESULTS_PATH = os.path.join(DATA_DIR, "step1_results.json")
 
 
+
 def _ensure_data_dir():
     os.makedirs(DATA_DIR, exist_ok=True)
 
@@ -309,3 +310,13 @@ def train_step1_model(db_session):
 
     print(f"[STEP1] ✅ Modèle: {main_model_name} | rows={len(patient_df)} | patients={patient_df['patient'].nunique()}")
     return {"status": "success", "message": f"Step 1 OK — modèle {main_model_name} sauvegardé."}
+
+
+
+def run_step1():
+    """Lit le fichier step1_results.json et le renvoie"""
+    try:
+        with open(RESULTS_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {"status": "error", "message": "step1_results.json not found"}
