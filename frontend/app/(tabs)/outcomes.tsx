@@ -15,8 +15,9 @@ import {
   VictoryLine,
   VictoryAxis,
   VictoryTheme,
-} from "victory-native";
-import { VictoryLegend} from "victory";
+  VictoryLegend
+} from "victory";
+
 
 
 export default function OutcomesScreen() {
@@ -198,7 +199,7 @@ export default function OutcomesScreen() {
                   marginBottom: 16,
                 }}
               >
-                🏆 Best model: {step1.main_model}
+                Best model: {step1.main_model}
               </Text>
             )}
 
@@ -208,8 +209,7 @@ export default function OutcomesScreen() {
                 <Text style={[styles.graphPlaceholder, { marginBottom: 10 }]}>
                   ROC Curve — Model Comparison
                 </Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  <View style={{ width: Math.max(width, 600), height: 300 }}>
+                  <View style={{ width: width - 40, height: 300 }}>
                     {/* Utilise react-native-svg + victory-native */}
                     <VictoryChart
                       width={Math.max(width, 600)}
@@ -261,30 +261,38 @@ export default function OutcomesScreen() {
                       />
                     </VictoryChart>
                   </View>
-                </ScrollView>
               </View>
             )}
 
-            {/* === Confusion Matrix === */}
             {step1?.confusion_matrix && (
               <View style={styles.graphBox}>
                 <Text
                   style={[
                     styles.graphPlaceholder,
-                    { marginBottom: 10, fontWeight: "600", color: "#374151" },
+                    { marginBottom: 10, fontWeight: "700", color: "#374151" },
                   ]}
                 >
                   Confusion Matrix ({step1.main_model})
                 </Text>
-                <View style={{ flexDirection: "column", alignItems: "center" }}>
+
+                <View style={{ alignItems: "center", marginBottom: 12 }}>
+                  <View style={{ flexDirection: "row" }}>
+                    <View style={styles.axisLabelBox} />
+                    <Text style={styles.axisLabel}>Predicted Negative</Text>
+                    <Text style={styles.axisLabel}>Predicted Positive</Text>
+                  </View>
+
                   {step1.confusion_matrix.map((row: number[], i: number) => (
                     <View key={i} style={{ flexDirection: "row" }}>
+                      <Text style={styles.axisLabel}>
+                        {i === 0 ? "Actual Negative" : "Actual Positive"}
+                      </Text>
                       {row.map((v: number, j: number) => (
                         <View
                           key={j}
                           style={{
-                            width: 60,
-                            height: 60,
+                            width: 70,
+                            height: 70,
                             borderWidth: 1,
                             borderColor: "#D1D5DB",
                             justifyContent: "center",
@@ -299,19 +307,22 @@ export default function OutcomesScreen() {
                     </View>
                   ))}
                 </View>
+
                 <Text
                   style={{
-                    marginTop: 10,
-                    fontSize: 12,
+                    marginTop: 6,
+                    fontSize: 13,
                     color: "#6B7280",
                     textAlign: "center",
                   }}
                 >
-                  TN | FP / FN | TP
+                  <Text style={{ fontWeight: "600" }}>TN</Text> = True Negative,{" "}
+                  <Text style={{ fontWeight: "600" }}>FP</Text> = False Positive,{" "}
+                  <Text style={{ fontWeight: "600" }}>FN</Text> = False Negative,{" "}
+                  <Text style={{ fontWeight: "600" }}>TP</Text> = True Positive
                 </Text>
               </View>
             )}
-          </View>
 
 
           {/* === STEP 2 – LATERAL === */}
@@ -346,6 +357,7 @@ export default function OutcomesScreen() {
               </Text>
             </View>
           </View>
+        </View>
         </View>
       </ScrollView>
     </View>
@@ -440,4 +452,12 @@ const styles = StyleSheet.create({
     fontStyle: "italic",
     textAlign: "center",
   },
+  axisLabel: {
+    width: 120,
+    textAlign: "center",
+    fontSize: 12,
+    color: "#6B7280",
+  },
+  axisLabelBox: { width: 100 },
+
 });
