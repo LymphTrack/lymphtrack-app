@@ -9,7 +9,15 @@ import {
   ScrollView,
 } from "react-native";
 import { supabase } from "@/lib/supabase";
-import { API_URL } from "@/constants/api"; // ✅ Assure-toi que ce chemin est correct
+import { API_URL } from "@/constants/api";
+import {
+  VictoryChart,
+  VictoryLine,
+  VictoryAxis,
+  VictoryTheme,
+} from "victory-native";
+import { VictoryLegend} from "victory";
+
 
 export default function OutcomesScreen() {
   const { width } = useWindowDimensions();
@@ -20,7 +28,6 @@ export default function OutcomesScreen() {
 
   const ADMIN_EMAIL = "simon.pimprenelle@gmail.com";
 
-  // --- Vérifie que l'utilisateur est bien toi ---
   useEffect(() => {
     const checkUser = async () => {
       try {
@@ -40,7 +47,6 @@ export default function OutcomesScreen() {
     checkUser();
   }, []);
 
-  // --- Charge les résultats du Step 1 depuis le backend ---
   useEffect(() => {
     const fetchStep1 = async () => {
       try {
@@ -85,7 +91,18 @@ export default function OutcomesScreen() {
     );
   }
 
-  // --- Page principale ---
+  const results = step1?.model_comparison || [];
+  const roc = step1?.roc_data || [];
+
+  // === Convert ROC data for Victory ===
+  const rocDatasets = roc.map((m: any) => ({
+    name: m.model,
+    data: m.fpr.map((f: number, i: number) => ({ x: f, y: m.tpr[i] })),
+  }));
+
+  // === Confusion Matrix ===
+  const cm = step1?.confusion_matrix || [[0, 0], [0, 0]];
+
   return (
     <View style={styles.container}>
       <View
@@ -119,23 +136,30 @@ export default function OutcomesScreen() {
               Step 1 — Detection (Healthy vs Lymphedema)
             </Text>
             <Text style={styles.stepSubtitle}>
-              Model comparison for binary classification (presence of
-              lymphedema).
+              Model comparison for binary classification (presence of lymphedema).
             </Text>
 
+            {/* Tableau comparatif complet */}
             <View style={styles.table}>
               <View style={styles.tableHeader}>
-                <Text style={styles.colHeader}>Model</Text>
-                <Text style={styles.colHeader}>F1</Text>
-                <Text style={styles.colHeader}>AUC</Text>
-                <Text style={styles.colHeader}>Accuracy</Text>
+                {[
+                  "Model",
+                  "F1",
+                  "AUC",
+                  "Acc",
+                  "TPR",
+                  "TNR",
+                  "FPR",
+                  "FNR",
+                ].map((h) => (
+                  <Text key={h} style={styles.colHeader}>
+                    {h}
+                  </Text>
+                ))}
               </View>
 
               {loadingData ? (
-                <ActivityIndicator
-                  style={{ marginVertical: 20 }}
-                  color="#4c54bc"
-                />
+                <ActivityIndicator style={{ marginVertical: 20 }} color="#4c54bc" />
               ) : step1?.model_comparison ? (
                 step1.model_comparison.map((m: any, i: number) => (
                   <View key={i} style={styles.tableRow}>
@@ -153,6 +177,10 @@ export default function OutcomesScreen() {
                     <Text style={styles.cell}>{m.f1}</Text>
                     <Text style={styles.cell}>{m.auc}</Text>
                     <Text style={styles.cell}>{m.accuracy}</Text>
+                    <Text style={styles.cell}>{m.tpr}</Text>
+                    <Text style={styles.cell}>{m.tnr}</Text>
+                    <Text style={styles.cell}>{m.fpr}</Text>
+                    <Text style={styles.cell}>{m.fnr}</Text>
                   </View>
                 ))
               ) : (
@@ -167,23 +195,124 @@ export default function OutcomesScreen() {
                   textAlign: "center",
                   color: "#6a90db",
                   fontWeight: "600",
-                  marginBottom: 12,
+                  marginBottom: 16,
                 }}
               >
                 🏆 Best model: {step1.main_model}
               </Text>
             )}
 
-            {/* Confusion Matrix */}
+            {/* === ROC Curve === */}
+            {step1?.roc_data && (
+              <View style={styles.graphBox}>
+                <Text style={[styles.graphPlaceholder, { marginBottom: 10 }]}>
+                  ROC Curve — Model Comparison
+                </Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <View style={{ width: Math.max(width, 600), height: 300 }}>
+                    {/* Utilise react-native-svg + victory-native */}
+                    <VictoryChart
+                      width={Math.max(width, 600)}
+                      height={300}
+                      domain={{ x: [0, 1], y: [0, 1] }}
+                    >
+                      <VictoryAxis
+                        label="False Positive Rate"
+                        style={{
+                          axisLabel: { padding: 35, fontSize: 12 },
+                          tickLabels: { fontSize: 10 },
+                        }}
+                      />
+                      <VictoryAxis
+                        dependentAxis
+                        label="True Positive Rate"
+                        style={{
+                          axisLabel: { padding: 40, fontSize: 12 },
+                          tickLabels: { fontSize: 10 },
+                        }}
+                      />
+                      {step1.roc_data.map((m: any, i: number) => (
+                        <VictoryLine
+                          key={i}
+                          data={m.fpr.map((f: number, j: number) => ({
+                            x: f,
+                            y: m.tpr[j],
+                          }))}
+                          interpolation="monotoneX"
+                          style={{
+                            data: {
+                              stroke: ["#6a90db", "#f59e0b", "#10b981"][i % 3],
+                              strokeWidth: 2,
+                            },
+                          }}
+                        />
+                      ))}
+                      <VictoryLegend
+                        x={80}
+                        y={260}
+                        orientation="horizontal"
+                        gutter={20}
+                        data={step1.roc_data.map((m: any, i: number) => ({
+                          name: m.model,
+                          symbol: {
+                            fill: ["#6a90db", "#f59e0b", "#10b981"][i % 3],
+                          },
+                        }))}
+                      />
+                    </VictoryChart>
+                  </View>
+                </ScrollView>
+              </View>
+            )}
+
+            {/* === Confusion Matrix === */}
             {step1?.confusion_matrix && (
               <View style={styles.graphBox}>
-                <Text style={styles.graphPlaceholder}>
-                  Confusion Matrix: [{step1.confusion_matrix[0].join(", ")}] / [
-                  {step1.confusion_matrix[1].join(", ")}]
+                <Text
+                  style={[
+                    styles.graphPlaceholder,
+                    { marginBottom: 10, fontWeight: "600", color: "#374151" },
+                  ]}
+                >
+                  Confusion Matrix ({step1.main_model})
+                </Text>
+                <View style={{ flexDirection: "column", alignItems: "center" }}>
+                  {step1.confusion_matrix.map((row: number[], i: number) => (
+                    <View key={i} style={{ flexDirection: "row" }}>
+                      {row.map((v: number, j: number) => (
+                        <View
+                          key={j}
+                          style={{
+                            width: 60,
+                            height: 60,
+                            borderWidth: 1,
+                            borderColor: "#D1D5DB",
+                            justifyContent: "center",
+                            alignItems: "center",
+                            backgroundColor:
+                              i === j ? "#E0E7FF" : "rgba(229,231,235,0.5)",
+                          }}
+                        >
+                          <Text style={{ fontWeight: "600", color: "#374151" }}>{v}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  ))}
+                </View>
+                <Text
+                  style={{
+                    marginTop: 10,
+                    fontSize: 12,
+                    color: "#6B7280",
+                    textAlign: "center",
+                  }}
+                >
+                  TN | FP / FN | TP
                 </Text>
               </View>
             )}
           </View>
+
 
           {/* === STEP 2 – LATERAL === */}
           <View style={styles.stepSection}>
