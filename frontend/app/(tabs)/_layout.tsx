@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { Users, Settings, BarChart3, Folder } from 'lucide-react-native';
+import { Users, Settings, BarChart3, FlaskConical } from 'lucide-react-native';
 import { Platform,useWindowDimensions, View} from 'react-native';
 
 
@@ -37,6 +37,15 @@ export default function TabLayout() {
           title: 'Outcomes',
           tabBarIcon: ({ size, color }) => (
             <BarChart3 size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="test"
+        options={{
+          title: 'Test',
+          tabBarIcon: ({ size, color }) => (
+            <FlaskConical size={size} color={color} />
           ),
         }}
       />

@@ -5,6 +5,7 @@ from app.api import patients
 from app.api import operations
 from app.api import results
 from app.api import photos
+from app.api import outcomes
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(title=settings.APP_NAME)
@@ -27,5 +28,6 @@ app.include_router(patients.router, prefix="/patients", tags=["Patients"])
 app.include_router(operations.router, prefix="/operations", tags=["Operations"])
 app.include_router(results.router, prefix="/results", tags=["Results"])
 app.include_router(photos.router, prefix="/photos", tags=["Photos"])
+app.include_router(outcomes.router)
 
 
