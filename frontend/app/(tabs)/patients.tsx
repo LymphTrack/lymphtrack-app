@@ -312,14 +312,14 @@ export default function PatientsScreen() {
                 </TouchableOpacity>
               )}
               <TouchableOpacity
-                style={[styles.exportModeButton, exportMode && { backgroundColor: "#ef4444" }]}
+                style={[styles.exportModeButton, exportMode && { backgroundColor: "#ef4444", paddingHorizontal: 10, paddingVertical: 10 }]}
                 onPress={() => {
                   setExportMode(!exportMode);
                   setSelectedPatients([]);
                 }}
               >
                 {exportMode ? <X size={20} color="#FFF" /> : <Download size={20} color="#FFF" />}
-                <Text style={styles.exportModeText}>{exportMode ? "Cancel" : "Export"}</Text>
+                
               </TouchableOpacity>
             </View>
           </View>
@@ -577,8 +577,9 @@ const styles = StyleSheet.create({
   exportModeButton: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: '#6a90db',
-    paddingHorizontal: 12, paddingVertical: 8,
-    borderRadius: 10,
+    paddingHorizontal: 14, paddingVertical: 8,
+    borderRadius: 24,
+    marginRight: 15,
   },
   exportModeText: { color: '#FFF', fontWeight: '500', marginLeft: 6 },
   

@@ -290,6 +290,24 @@ export default function PatientDetailScreen() {
             <Text style={styles.addFollowUpButtonText}>Add Follow-Up</Text>
           </TouchableOpacity>
         </View>
+
+        <View style = {{alignSelf : "center", marginBottom : 30}}>
+          <Text style={styles.evolutionTitle}>Evolution</Text>
+
+              {/* Ici on va rajouter les graph d'évolution avec un graph pour chaque visite qui permet de 
+              voir pour chaque visite les mesures de chaque position (les 6)
+              en dessous voir 6 graphes globales qui compare chaque visite a chaque position
+              */}
+          <View style={ {width :700, flexDirection: "row", gap : 20, alignSelf : "center", flexWrap : "wrap", justifyContent : "center"}}>
+            <View style={styles.graphContainer}>
+              <Text style ={styles.titleGraphContainer}>Graph 1</Text>
+            </View>
+            <View style={styles.graphContainer}>
+              <Text style ={styles.titleGraphContainer}>Graph 2</Text>
+            </View>
+          </View>
+        </View>
+
       </ScrollView>
 
       <View style={styles.footer}>
@@ -332,6 +350,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 12,
   },
+  graphContainer : {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 20,
+  },
+  titleGraphContainer : {
+    color : "#1F2937",
+    fontSize : 18,
+    fontWeight : "600",
+    alignSelf : "center",
+
+  },
   patientId: { fontSize: 18, fontWeight: "600", color: "#6a90db" },
   patientInfo: { alignItems: "flex-end" },
   patientDetail: { fontSize: 14, color: "#6B7280", marginBottom: 2 },
@@ -353,6 +383,14 @@ const styles = StyleSheet.create({
     color: "#6a90db",
     marginTop: 10,
     alignSelf: "center",
+  },
+  evolutionTitle: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: "#6a90db",
+    alignSelf: "center",
+    marginTop : -10,
+    marginBottom : 30,
   },
   noFollowUp: {
     fontSize: 14,

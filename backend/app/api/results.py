@@ -4,7 +4,7 @@ from app.db.models import Result, Operation
 from app.db.database import get_db
 from mega import Mega
 
-import os
+import os, re
 import traceback
 import pandas as pd
 import numpy as np
@@ -26,6 +26,137 @@ def infer_header_and_data(raw_df, key_cols, max_header_row=10):
             return df
     return None
 
+def extract_time_from_filename(filename: str) -> int | None:
+    match = re.search(r"_(\d{6})", filename)
+    if not match:
+        return None
+
+    hhmmss = match.group(1)
+    try:
+        hour = int(hhmmss[:2])
+        minute = int(hhmmss[2:4])
+        second = int(hhmmss[4:6])
+    except ValueError:
+        return None
+
+    return hour * 3600 + minute * 60 + second
+
+def process_measurement_file(file: UploadFile, id_operation: int, position: int, db: Session, visit_str: str, patient_id: str, measurement_number=1):
+    try:
+        suffix = file.filename.split(".")[-1].lower()
+        df = None
+
+        try:
+            if suffix == "csv":
+                tmp = pd.read_csv(file.file, header=0, sep=None, engine="python")
+                cols = tmp.columns.astype(str).str.strip().str.lower().str.replace(r"\s+", "", regex=True)
+                if any("freq" in c for c in cols) and any("s11" in c or "returnloss" in c for c in cols):
+                    df = tmp.copy()
+                    df.columns = cols
+                else:
+                    raw = pd.read_csv(file.file, header=None, sep=None, engine="python")
+                    df = infer_header_and_data(raw, key_cols=["freq", "returnloss"])
+            else:
+                tmp = pd.read_excel(file.file, header=0)
+                cols = tmp.columns.astype(str).str.strip().str.lower().str.replace(r"\s+", "", regex=True)
+                if any("freq" in c for c in cols) and any("s11" in c or "returnloss" in c for c in cols):
+                    df = tmp.copy()
+                    df.columns = cols
+                else:
+                    raw = pd.read_excel(file.file, header=None)
+                    df = infer_header_and_data(raw, key_cols=["freq", "returnloss"])
+        except Exception as e:
+            logging.warning(f"Skipping {file.filename}: read error {e}")
+            return None
+
+        if df is None:
+            logging.warning(f"Skipping {file.filename}: could not infer header")
+            return None
+
+        df.columns = df.columns.astype(str).str.strip().str.lower().str.replace(r"\s+", "", regex=True)
+        freq_cols = [c for c in df.columns if "freq" in c]
+        rl_cols = [c for c in df.columns if "s11" in c or "returnloss" in c]
+        if not freq_cols or not rl_cols:
+            logging.warning(f"Skipping {file.filename}: missing freq or return loss cols")
+            return None
+
+        freq_col, rl_col = freq_cols[0], rl_cols[0]
+        df_vals = df[[freq_col, rl_col]].astype(str).map(lambda x: x.replace(",", "."))
+        df_sub = df_vals.apply(pd.to_numeric, errors="coerce").dropna()
+        if df_sub.empty:
+            logging.warning(f"Skipping {file.filename}: no numeric data after coercion")
+            return None
+
+        min_idx = df_sub[rl_col].idxmin()
+        min_freq = df_sub.at[min_idx, freq_col]
+        min_rl = df_sub.at[min_idx, rl_col]
+
+        mask = df_sub[rl_col] <= -3
+        bw = np.nan
+        if mask.any():
+            freqs = df_sub.loc[mask, freq_col]
+            bw = freqs.max() - freqs.min()
+
+        file.file.seek(0)
+        archive_path = f"{patient_id}/{visit_str}/{position}/{file.filename}"
+        tmp_path = f"tmp_{file.filename}"
+        with open(tmp_path, "wb") as tmp_f:
+            tmp_f.write(file.file.read())
+
+        patient_folder = m.find(f"lymphtrack-data/{patient_id}")
+        if not patient_folder:
+            raise HTTPException(status_code=404, detail="Patient folder not found in Mega")
+
+        visit_folder = None
+        subfolders = m.get_files_in_node(patient_folder[0])
+        for fid, meta in subfolders.items():
+            if meta["t"] == 1 and meta["a"]["n"] == visit_str:
+                visit_folder = (fid, meta)
+                break
+        if not visit_folder:
+            raise HTTPException(status_code=404, detail=f"Visit folder {visit_str} not found in Mega")
+
+        dest_folder = None
+        subfolders = m.get_files_in_node(visit_folder[0])
+        for fid, meta in subfolders.items():
+            if meta["t"] == 1 and meta["a"]["n"] == str(position):
+                dest_folder = (fid, meta)
+                break
+        if not dest_folder:
+            node = m.create_folder(str(position), visit_folder[0])
+            if isinstance(node, dict) and "f" in node:
+                folder_id = node["f"][0]["h"]
+                folder_meta = node["f"][0]
+                dest_folder = (folder_id, folder_meta)
+            elif isinstance(node, dict) and "h" in node:
+                dest_folder = (node["h"], node)
+            elif isinstance(node, str):
+                dest_folder = (node, {"a": {"n": str(position)}, "t": 1})
+            else:
+                raise HTTPException(status_code=500, detail=f"Unexpected Mega response: {node}")
+
+        m.upload(tmp_path, dest_folder[0], dest_filename=file.filename)
+        os.remove(tmp_path)
+
+        result = Result(
+            id_operation=int(id_operation),
+            position=int(position),
+            measurement_number=measurement_number,
+            min_return_loss_db=float(min_rl),
+            min_frequency_hz=int(min_freq),
+            bandwidth_hz=float(bw) if not pd.isna(bw) else None,
+            file_path=archive_path,
+            uploaded_at=datetime.now(timezone.utc),
+        )
+        db.add(result)
+        return result
+
+    except Exception as e:
+        logging.error(f"[PROCESS FILE] {file.filename}: {e}")
+        traceback.print_exc()
+        return None
+
+
 load_dotenv()
 
 EMAIL = os.getenv("MEGA_EMAIL")
@@ -40,9 +171,41 @@ m = mega.login(EMAIL, PASSWORD)
 # ---------------------
 
 @router.post("/process-results/{id_operation}/{position}")
-async def create_results(
+async def create_results(id_operation: int, position: int, files: list[UploadFile] = File(...), db: Session = Depends(get_db)):
+    try:
+        operation = db.query(Operation).filter(Operation.id_operation == id_operation).first()
+        if not operation:
+            return {"status": "error", "message": "Operation not found"}
+
+        patient_id = operation.patient_id
+        all_ops = db.query(Operation).filter(Operation.patient_id == patient_id).order_by(Operation.operation_date.asc()).all()
+        visit_number = {op.id_operation: idx + 1 for idx, op in enumerate(all_ops)}[operation.id_operation]
+        visit_name = operation.name.replace(" ", "_")
+        visit_str = f"{visit_number}-{visit_name}_{operation.operation_date.strftime('%d%m%Y')}"
+
+        processed = []
+        for idx, f in enumerate(files, start=1):
+            result = process_measurement_file(f, id_operation, position, db, visit_str, patient_id, measurement_number=idx)
+            if result:
+                processed.append(result)
+
+        db.commit()
+        if not processed:
+            return {"status": "error", "message": "No valid files processed"}
+
+        return {"status": "success", "results": processed}
+    except Exception as e:
+        db.rollback()
+        return {"status": "error", "message": str(e)}
+
+
+# ---------------------
+# CREATE ALL RESULTS (18 files → 6 positions)
+# ---------------------
+
+@router.post("/process-all/{id_operation}")
+async def create_all_results(
     id_operation: int,
-    position: int,
     files: list[UploadFile] = File(...),
     db: Session = Depends(get_db),
 ):
@@ -52,175 +215,57 @@ async def create_results(
             return {"status": "error", "message": "Operation not found"}
 
         patient_id = operation.patient_id
-
         all_ops = (
             db.query(Operation)
             .filter(Operation.patient_id == patient_id)
             .order_by(Operation.operation_date.asc())
             .all()
         )
-
         visit_number = {op.id_operation: idx + 1 for idx, op in enumerate(all_ops)}[operation.id_operation]
         visit_name = operation.name.replace(" ", "_")
         visit_str = f"{visit_number}-{visit_name}_{operation.operation_date.strftime('%d%m%Y')}"
 
-        processed_results = []
+        timed_files = []
+        for f in files:
+            t = extract_time_from_filename(f.filename)
+            if t is not None:
+                timed_files.append((t, f))
+            else:
+                logging.warning(f"[PROCESS-ALL] Could not extract time from {f.filename}")
 
-        # ---------------------
-        # TRAITEMENT FICHIERS
-        # ---------------------
-        for idx, file in enumerate(files, start=1):
-            df = None
-            suffix = file.filename.split(".")[-1].lower()
+        if len(timed_files) < 18:
+            return {"status": "error", "message": f"Expected 18 files, got {len(timed_files)}"}
 
-            try:
-                if suffix == "csv":
-                    tmp = pd.read_csv(file.file, header=0, sep=None, engine="python")
-                    cols = (
-                        tmp.columns.astype(str)
-                        .str.strip()
-                        .str.lower()
-                        .str.replace(r"\s+", "", regex=True)
-                    )
-                    if any("freq" in c for c in cols) and any("s11" in c or "returnloss" in c for c in cols):
-                        df = tmp.copy()
-                        df.columns = cols
-                    else:
-                        raw = pd.read_csv(file.file, header=None, sep=None, engine="python")
-                        df = infer_header_and_data(raw, key_cols=["freq", "returnloss"])
-                else:
-                    tmp = pd.read_excel(file.file, header=0)
-                    cols = (
-                        tmp.columns.astype(str)
-                        .str.strip()
-                        .str.lower()
-                        .str.replace(r"\s+", "", regex=True)
-                    )
-                    if any("freq" in c for c in cols) and any("s11" in c or "returnloss" in c for c in cols):
-                        df = tmp.copy()
-                        df.columns = cols
-                    else:
-                        raw = pd.read_excel(file.file, header=None)
-                        df = infer_header_and_data(raw, key_cols=["freq", "returnloss"])
-            except Exception as e:
-                logging.warning(f"Skipping {file.filename}: read error: {e}")
-                continue
+        timed_files.sort(key=lambda x: x[0])
+        sorted_files = [f for _, f in timed_files]
 
-            if df is None:
-                logging.warning(f"Skipping {file.filename}: could not infer or find header")
-                continue
+        grouped = {
+            pos: sorted_files[(pos - 1) * 3 : pos * 3]
+            for pos in range(1, 7)
+        }
 
-            # Nettoyage des colonnes
-            df.columns = (
-                df.columns.astype(str)
-                .str.strip()
-                .str.lower()
-                .str.replace(r"\s+", "", regex=True)
-            )
+        all_results = []
+        for pos, pos_files in grouped.items():
+            for idx, f in enumerate(pos_files, start=1):
+                result = process_measurement_file(f, id_operation, pos, db, visit_str, patient_id, measurement_number=idx)
+                if result:
+                    all_results.append(result)
 
-            freq_cols = [c for c in df.columns if "freq" in c]
-            rl_cols = [c for c in df.columns if "s11" in c or "returnloss" in c]
-            if not freq_cols or not rl_cols:
-                logging.warning(f"Skipping {file.filename}: missing freq or return loss columns")
-                continue
-
-            freq_col = freq_cols[0]
-            rl_col = rl_cols[0]
-
-            df_vals = df[[freq_col, rl_col]].astype(str).map(lambda x: x.replace(",", "."))
-            df_sub = df_vals.apply(pd.to_numeric, errors="coerce").dropna()
-            if df_sub.empty:
-                logging.warning(f"Skipping {file.filename}: no numeric data after coercion")
-                continue
-
-            # ✅ Calcul déplacé ici
-            min_idx = df_sub[rl_col].idxmin()
-            min_freq = df_sub.at[min_idx, freq_col]
-            min_rl = df_sub.at[min_idx, rl_col]
-
-            mask = df_sub[rl_col] <= -3
-            bw = np.nan
-            if mask.any():
-                freqs = df_sub.loc[mask, freq_col]
-                bw = freqs.max() - freqs.min()
-
-            # ---------------------
-            # UPLOAD DANS MEGA
-            # ---------------------
-            file.file.seek(0)
-            archive_path = f"{patient_id}/{visit_str}/{position}/{file.filename}"
-
-            tmp_path = f"tmp_{file.filename}"
-            with open(tmp_path, "wb") as tmp_f:
-                tmp_f.write(file.file.read())
-
-            patient_folder = m.find(f"lymphtrack-data/{patient_id}")
-            if not patient_folder:
-                raise HTTPException(status_code=404, detail="Patient folder not found in Mega")
-
-            visit_folder = None
-            subfolders = m.get_files_in_node(patient_folder[0])
-            for fid, meta in subfolders.items():
-                if meta["t"] == 1 and meta["a"]["n"] == visit_str:
-                    visit_folder = (fid, meta)
-                    break
-
-            if not visit_folder:
-                raise HTTPException(status_code=404, detail=f"Visit folder {visit_str} not found in Mega")
-
-            dest_folder = None
-            subfolders = m.get_files_in_node(visit_folder[0])
-            for fid, meta in subfolders.items():
-                if meta["t"] == 1 and meta["a"]["n"] == str(position):
-                    dest_folder = (fid, meta)
-                    break
-
-            if not dest_folder:
-                node = m.create_folder(str(position), visit_folder[0])
-                if isinstance(node, dict) and "f" in node:
-                    folder_id = node["f"][0]["h"]
-                    folder_meta = node["f"][0]
-                    dest_folder = (folder_id, folder_meta)
-                elif isinstance(node, dict) and "h" in node:
-                    folder_id = node["h"]
-                    dest_folder = (folder_id, node)
-                elif isinstance(node, str):
-                    dest_folder = (node, {"a": {"n": str(position)}, "t": 1})
-                else:
-                    raise HTTPException(status_code=500, detail=f"Unexpected Mega response when creating folder: {node}")
-
-            m.upload(tmp_path, dest_folder[0], dest_filename=file.filename)
-            os.remove(tmp_path)
-
-            # ---------------------
-            # SAUVEGARDE EN DB
-            # ---------------------
-            result = Result(
-                id_operation=int(id_operation),
-                position=int(position),
-                measurement_number=int(idx),
-                min_return_loss_db=float(min_rl),
-                min_frequency_hz=int(min_freq),
-                bandwidth_hz=float(bw) if bw is not None and not pd.isna(bw) else None,
-                file_path=archive_path,
-                uploaded_at=datetime.now(timezone.utc),
-            )
-            db.add(result)
-            processed_results.append(result)
-
-        # Commit après tous les fichiers
         db.commit()
 
-        if not processed_results:
+        if not all_results:
             return {"status": "error", "message": "No valid files were processed"}
 
-        return {"status": "success", "results": processed_results}
+        return {
+            "status": "success",
+            "message": f"Processed {len(all_results)} files across 6 positions",
+            "results": all_results,
+        }
 
     except Exception as e:
         db.rollback()
         traceback.print_exc()
         return {"status": "error", "message": str(e)}
-
 
 
 # ---------------------

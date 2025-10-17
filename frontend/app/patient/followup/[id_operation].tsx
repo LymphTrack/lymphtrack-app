@@ -1,21 +1,28 @@
-import { Platform, View, Text, ScrollView, StyleSheet, ActivityIndicator, Alert, TouchableOpacity, useWindowDimensions } from "react-native";
+import { Platform, View, Text, Image, ScrollView, StyleSheet, ActivityIndicator, Alert, TouchableOpacity, useWindowDimensions } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { ArrowLeft, ArrowRight, Calendar,Download, Notebook, Save, Trash } from "lucide-react-native";
+import { ArrowLeft,Calendar,Download, Notebook, Plus, Save, Trash } from "lucide-react-native";
 import { API_URL } from "@/constants/api";
 import { useState, useCallback } from "react";
 import { useFocusEffect } from "@react-navigation/native";
+import * as DocumentPicker from "expo-document-picker";
 
 export default function PatientResultsScreen() {
   const { id_operation } = useLocalSearchParams<{ id_operation: string }>();
 
   const [operation, setOperation] = useState<any | null>(null);
   const [results, setResults] = useState<any[]>([]);
+  const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
   const [exporting, setExporting] = useState(false);
   const router = useRouter();
   const {width} = useWindowDimensions();
-
+  const [measurements, setMeasurements] = useState(
+    Array.from({ length: 6 }, (_, i) => ({
+      position: i + 1,
+      files: [],
+    }))
+  );
 
   useFocusEffect(
       useCallback(() => {
@@ -24,6 +31,28 @@ export default function PatientResultsScreen() {
         }
       }, [id_operation])
   );
+
+  const getPositionCoordinates = (pos: number, width: number) => {
+    const offsetX = width >= 700 ? 180 : 120;
+    const offsetY = width >= 700 ? 60 : 40;
+
+    switch (pos) {
+      case 1:
+        return { bottom: offsetY + 15, right: offsetX + 30 };
+      case 2:
+        return { bottom: offsetY + 130, right: offsetX + 50 };
+      case 3 : 
+        return { top: offsetY + 80, right: offsetX + 60 };
+      case 4:
+        return { bottom: offsetY + 20, left: offsetX +0 };
+      case 5:
+        return { bottom: offsetY + 135, left: offsetX +30 };
+      case 6:
+        return { top: offsetY + 75, left: offsetX +40 }; 
+      default:
+        return {};
+    }
+  };
 
   const loadAllData = async () => {
     try {
@@ -43,6 +72,11 @@ export default function PatientResultsScreen() {
       setLoading(false);
     }
   };
+
+  const hasResultForPosition = (pos: number) => {
+    return results.some(r => r.position === pos);
+  };
+
 
   const handleDelete = async () => {
     if (Platform.OS === "web") {
@@ -109,76 +143,120 @@ export default function PatientResultsScreen() {
     }
   };
 
-  const renderMeasurements = (position: number) => {
-    const measurements = results.filter((f) => f.position === position);
+  const handleImport = async () => {
+    try {
+      const res = await DocumentPicker.getDocumentAsync({
+        multiple: true,
+        type: [
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "application/vnd.ms-excel",
+          "text/csv",
+        ],
+      });
 
-    if (measurements.length === 0) {
-      return (
-        <TouchableOpacity
-          key={`position-${position}`}
-          style={[width>=700 && {width:700, alignSelf : "center", paddingHorizontal: 40}]}
-          onPress={() =>
-            router.push(
-              `/patient/followup/create_followup/position/${position}?operation_id=${operation.id_operation}`
-            )
-          }
-        >
-        <View style={styles.settingItem}>
-          <View style={styles.settingLeft}>
-            <View style={styles.positionIcon}>
-              <Text style={styles.positionNumber}>{position}</Text>
-            </View>
+      if (res.canceled || !res.assets?.length) return;
 
-            <View style={{ flex: 1 }}>
-              <Text style={styles.settingTitle}>No measurements</Text>
-              <Text style={styles.settingSubtitle}>
-                Tap here to add data for this position.
-              </Text>
-            </View>
-          </View>
+      const files = res.assets;
 
-          <ArrowRight size={18} color="#6B7280" />
-        </View>
+      if (files.length !== 18) {
+        const msg = `You selected ${files.length} files. You should import 18 (3 per position × 6 positions).`;
+        Platform.OS === "web"
+          ? window.alert(msg)
+          : Alert.alert("Invalid number of files", msg);
+        return;
+      }
 
-          
-            
-        </TouchableOpacity>
+      const validExtensions = [".xlsx", ".xls", ".csv"];
+      const invalidFiles = files.filter(
+        (f) => !validExtensions.some((ext) => f.name.toLowerCase().endsWith(ext))
       );
+      if (invalidFiles.length > 0) {
+        const msg = `Some files are not valid Excel or CSV files:\n\n${invalidFiles
+          .map((f) => f.name)
+          .join("\n")}`;
+        Platform.OS === "web"
+          ? window.alert(msg)
+          : Alert.alert("Invalid file type", msg);
+        return;
+      }
+
+      const grouped = [];
+      for (let i = 0; i < 6; i++) {
+        grouped.push({
+          position: i + 1,
+          files: files.slice(i * 3, i * 3 + 3),
+        });
+      }
+
+      setMeasurements(grouped);
+
+      Platform.OS === "web"
+        ? window.alert("Files imported successfully! Now processing...")
+        : Alert.alert("Success", "Files imported successfully! Processing...");
+
+      await handleSave();
+    } catch (err) {
+      console.error("Import error:", err);
+      Platform.OS === "web"
+        ? window.alert("Error\n\nUnable to import files")
+        : Alert.alert("Error", "Unable to import files");
     }
+  };
 
 
-    return (
-      <View key={`position-${position}`} style={styles.positionBlock}>
-        <Text style={styles.positionTitle}>Position {position}</Text>
-        {measurements.map((m) => (
-          <View key={m.id} style={styles.measurementRow}>
-            <View style={styles.measureBlock}>
-              <Text style={styles.measureTitle}>Test {m.measurement_number}</Text>
-              <Text style={styles.measureText}>- RL: {m.min_return_loss_db ?? "?"} dB</Text>
-              <Text style={styles.measureText}>- Freq: {m.min_frequency_hz ?? "?"} Hz</Text>
-              <Text style={styles.measureText}>- BW: {m.bandwidth_hz ?? "?"} Hz</Text>
-            </View>
-          </View>
-        ))}
+  const handleSave = async () => {
+    try {
+      setSaving(true);
+      const formData = new FormData();
 
-        <View>
-              <TouchableOpacity
-                style={styles.modifyButton}
-                onPress={() =>
-                  router.push(
-                    `/patient/followup/create_followup/position/${position}?operation_id=${operation.id_operation}`
-                  )
-                }
-              >
-                <View style={{ flexDirection: "row", alignItems: "center" }}>
-                  <Save size={16} color="#2563EB" style={{ marginRight: 8 }} />
-                    <Text style={styles.modifyButtonText}>Modify</Text>
-                </View>
-              </TouchableOpacity>
+      for (const group of measurements) {
+        for (const file of group.files) {
+          if (Platform.OS === "web") {
+            const fileBlob = await fetch(file.uri).then((r) => r.blob());
+            formData.append(
+              `files_position_${group.position}`, 
+              fileBlob,
+              file.name
+            );
+          } else {
+            formData.append(`files_position_${group.position}`, {
+              uri: file.uri,
+              name: file.name,
+              type: file.mimeType || "application/octet-stream",
+            } as any);
+          }
+        }
+      }
 
-            </View>
-      </View>
-    );
+      const res = await fetch(`${API_URL}/results/process-all/${id_operation}`, {
+        method: "POST",
+        body: formData,
+        headers: { Accept: "application/json" },
+      });
+
+      if (!res.ok) throw new Error("Processing failed");
+
+      const data = await res.json();
+      if (data.status === "error") {
+        const msg = data.message || "Processing failed";
+        Platform.OS === "web"
+          ? window.alert(`Error\n\n${msg}`)
+          : Alert.alert("Error", msg);
+        return;
+      }
+
+      Platform.OS === "web"
+        ? window.alert("All measurements processed and saved!")
+        : Alert.alert("Success", "All measurements processed and saved!");
+      router.push(`/patient/followup/${id_operation}`);
+    } catch (err) {
+      console.error("Save error:", err);
+      Platform.OS === "web"
+        ? window.alert("Error\n\nUnable to save measurements")
+        : Alert.alert("Error", "Unable to save measurements");
+    } finally {
+      setSaving(false);
+    }
   };
 
 
@@ -221,123 +299,160 @@ export default function PatientResultsScreen() {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <View style={styles.header}>
-
-        <View
-          style={{
-            width: width >= 700 ? 700 : "100%",
-             alignSelf: "center",
-            flexDirection: "row",
-            paddingHorizontal: width >= 700 ? 30 : 10,
-            position: "relative",
-          }}
-        >
+    <View style={{ flex: 1}}>
+      <ScrollView contentContainerStyle={styles.container}>
+        <View style={styles.header}>
           <View
             style={{
               width: width >= 700 ? 700 : "100%",
               alignSelf: "center",
               flexDirection: "row",
-              justifyContent: "space-between",
-              alignItems: "center",
               paddingHorizontal: width >= 700 ? 30 : 10,
               position: "relative",
             }}
           >
-            <TouchableOpacity onPress={() => router.push(`/patient/${operation.patient_id}`)}>
-              <ArrowLeft size={24} color="#1F2937" />
-            </TouchableOpacity>
-
-            <Text style={[styles.headerTitle, { textAlign: "center" }]}>
-              Visit patient : {operation.patient_id}
-            </Text>
-
-            <TouchableOpacity
-              style={styles.downloadButton}
-              onPress={async () => {
-                setExporting(true);
-                try {
-                  console.log("[FRONT] Downloading operation folder:", id_operation);
-                  const res = await fetch(`${API_URL}/operations/export-folder/${id_operation}`);
-                  
-                  if (!res.ok) 
-                    throw new Error(`Download failed: ${res.status}`);
-                  
-                  const blob = await res.blob();
-                  const url = window.URL.createObjectURL(blob);
-                  const a = document.createElement("a");
-                  a.href = url;
-                  a.download = `operation_${id_operation}.zip`;
-                  a.click();
-                  window.URL.revokeObjectURL(url);
-                  console.log("[FRONT] Download successful");
-                
-                } catch (err) {
-                  console.error("[FRONT] Error downloading:", err);
-                  Alert.alert("Download error", "Unable to download operation folder");
-                  setExporting(false);
-                }
-                setExporting(false);
+            <View
+              style={{
+                width: width >= 700 ? 700 : "100%",
+                alignSelf: "center",
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+                paddingHorizontal: width >= 700 ? 30 : 10,
+                position: "relative",
               }}
             >
-              <Download size={20} color="#FFFFFF" />
-            </TouchableOpacity>
+              <TouchableOpacity onPress={() => router.push(`/patient/${operation.patient_id}`)}>
+                <ArrowLeft size={24} color="#1F2937" />
+              </TouchableOpacity>
+
+              <Text style={[styles.headerTitle, { textAlign: "center" }]}>
+                Visit patient : {operation.patient_id}
+              </Text>
+
+              <TouchableOpacity
+                style={[styles.downloadButton, width >= 700 && { marginRight: 40,}]}
+                onPress={async () => {
+                  setExporting(true);
+                  try {
+                    console.log("[FRONT] Downloading operation folder:", id_operation);
+                    const res = await fetch(`${API_URL}/operations/export-folder/${id_operation}`);
+                    
+                    if (!res.ok) 
+                      throw new Error(`Download failed: ${res.status}`);
+                    
+                    const blob = await res.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `operation_${id_operation}.zip`;
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    console.log("[FRONT] Download successful");
+                  
+                  } catch (err) {
+                    console.error("[FRONT] Error downloading:", err);
+                    Alert.alert("Download error", "Unable to download operation folder");
+                    setExporting(false);
+                  }
+                  setExporting(false);
+                }}
+              >
+                <Download size={20} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
-      </View>
 
-      <View style={width >= 700 && { width: 700, alignSelf: "center" }}>
-        <View style={styles.operationCard}>
-          <View style={styles.operationHeader}>
-            <Text style={styles.operationName}>Visit name : {operation.name}</Text>
-            <Text style={styles.operationDate}><Calendar size={16} color="#6B7280" />
-              {new Date(operation.operation_date).toLocaleDateString()}
-            </Text>
-          </View>
-
-          <View style={styles.operationRow}>
-            <Notebook size={16} color="#6B7280" />
-            <Text style={styles.operationNotes}>
-              Notes: {operation.notes || "No notes available for this visit"}
-            </Text>
-          </View>
-          <Text >Photos</Text>
-        </View>
-        <Text style={styles.positionpTitle}>Position</Text>
-
-        <View>
+        <View style={width >= 700 && { width: 700, alignSelf: "center" }}>
           <View style={styles.operationCard}>
-              {[1, 2, 3, 4, 5, 6].map((position) => renderMeasurements(position))}
+            <View style={styles.operationHeader}>
+              <Text style={styles.operationName}>Visit name : {operation.name}</Text>
+              <View style ={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Calendar size={16} color="#6B7280" />
+                <Text style={styles.operationDate}>
+                  {new Date(operation.operation_date).toLocaleDateString()}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.operationRow}>
+              <Notebook size={16} color="#6B7280" />
+              <Text style={styles.operationNotes}>
+                Notes: {operation.notes || "No notes available for this visit"}
+              </Text>
+            </View>
+          </View>
+          <Text style={styles.positionpTitle}>Positions</Text>
+
+          <View>
+            <View style={styles.operationCard}>
+              <View style={{ position: "relative" }}>
+                <Image
+                  source={require("../../../assets/images/body.png")}
+                  style={{ width: "100%", height: 400, resizeMode: "contain" }}
+                />
+
+                {Array.from({ length: 6 }).map((_, index) => {
+                  const pos = index + 1;
+                  const filled = hasResultForPosition(pos);
+                  return (
+                    <TouchableOpacity
+                      key={pos}
+                      style={[
+                        styles.positionButton,
+                        getPositionCoordinates(pos, width),
+                        { backgroundColor: filled ? "#6a90db" : "#9CA3AF" },
+                      ]}
+                      onPress={() =>
+                        router.push(`/patient/followup/position/${pos}?operation_id=${operation.id_operation}`)
+                      }
+                    >
+                      <Text style={styles.positionButtonText}>{pos}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+
+              </View>
+            </View>
           </View>
         </View>
+        <View>
+          <TouchableOpacity
+            style ={styles.importButton}
+            onPress={() => handleImport()}
+          >
+            <Plus size={20} color="#2563EB" />
+            <Text style={styles.importButtonText}>Import all results</Text>
+          </TouchableOpacity>
       </View>
+      </ScrollView>
 
+      <View style={styles.footer}>
+        <View style={ styles.button}>
+          <TouchableOpacity
+              style={styles.modifyButton}
+              onPress={() =>
+                router.push(
+                  `/patient/followup/modify_followup/${operation.id_operation}`
+                )
+              }
+          >
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              <Save size={16} color="#2563EB" style={{ marginRight: 8 }} />
+                <Text style={styles.modifyButtonText}>Modify visit</Text>
+            </View>
+          </TouchableOpacity>
 
-      
-      <View style={styles.buttonContainer}>
-        <TouchableOpacity
-          style={styles.modifyButton}
-          onPress={() =>
-            router.push(
-              `/patient/followup/modify_followup/${operation.id_operation}`
-            )
-          }
-        >
-          <View style={{ flexDirection: "row", alignItems: "center" }}>
-            <Save size={16} color="#2563EB" style={{ marginRight: 8 }} />
-              <Text style={styles.modifyButtonText}>Modify</Text>
-          </View>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
-          <View style={{ flexDirection: "row", alignItems: "center" }}>
-            <Trash size={16} color="#891111ff" style={{ marginRight: 8 }} />
-              <Text style={styles.deleteButtonText}>Delete</Text>
-          </View>
-        </TouchableOpacity>
+          <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              <Trash size={16} color="#891111ff" style={{ marginRight: 8 }} />
+                <Text style={styles.deleteButtonText}>Delete visit</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
       </View>
-
-    </ScrollView>
+    </View>
   );
 }
 
@@ -430,13 +545,17 @@ operationNotes: {
     borderWidth: 1,
     borderColor: "#F3F4F6",
   },
+  button : {
+    flexDirection: "row",
+    gap  : 25,
+    alignSelf : "center",
+  },
   deleteButton: {
   backgroundColor: "#f38181ff", 
   borderRadius: 12,
-  paddingVertical: 14,
+  padding: 14,
   alignItems: "center",
-  marginTop: 10,
-  marginBottom : 25,
+  width : 150,
 },
 deleteButtonText: {
   color: "#891111ff",
@@ -445,10 +564,10 @@ deleteButtonText: {
 },
 modifyButton: {
   backgroundColor: "#c9def9ff",
-  marginTop: 14,
   padding: 14,
   borderRadius: 12,
   alignItems: "center",
+  width : 150,
   },
   modifyButtonText: {
     color: "#2563EB",
@@ -459,10 +578,7 @@ modifyButton: {
   buttonContainer : {
     marginHorizontal : 15,
     width : 400,
-    alignSelf : "center",
   },
-
-
 
   addButton: {
   backgroundColor: "#c9def9ff",
@@ -551,6 +667,50 @@ downloadButton: {
   shadowOpacity: 0.2,
   shadowRadius: 4,
   elevation: 3,
+  
 },
-
+footer: {
+    padding: 25,
+    borderTopWidth: 1,
+    borderTopColor: "#E5E7EB",
+    backgroundColor: "#FFFFFF",
+  },
+positionButton: {
+  position: "absolute",
+  backgroundColor: "#6a90db",
+  width: 28,
+  height: 28,
+  borderRadius: 14,
+  justifyContent: "center",
+  alignItems: "center",
+  zIndex: 10,
+  shadowColor: "#000",
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.2,
+  shadowRadius: 3,
+  elevation: 3,
+},
+positionButtonText: {
+  color: "white",
+  fontWeight: "600",
+  fontSize: 13,
+},
+  importButtonText: {
+    color: '#2563EB',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  importButton: {
+    flexDirection: "row",
+    gap : 10,
+    backgroundColor: '#c9def9ff',
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginTop: 24,
+    marginBottom: 30,
+    width: '50%',
+    alignSelf: 'center',
+    justifyContent: "center",
+  },
 });

@@ -206,11 +206,10 @@ export default function OutcomesScreen() {
             {/* === ROC Curve === */}
             {step1?.roc_data && (
               <View style={styles.graphBox}>
-                <Text style={[styles.graphPlaceholder, { marginBottom: 10 }]}>
+                <Text style={[styles.graphPlaceholder]}>
                   ROC Curve — Model Comparison
                 </Text>
-                  <View style={{ width: width - 40, height: 300 }}>
-                    {/* Utilise react-native-svg + victory-native */}
+                  <View style={{ marginLeft: 45, width: 550, height: 350, marginTop: -40 }}>
                     <VictoryChart
                       width={Math.max(width, 600)}
                       height={300}
@@ -249,7 +248,7 @@ export default function OutcomesScreen() {
                       ))}
                       <VictoryLegend
                         x={80}
-                        y={260}
+                        y={310}
                         orientation="horizontal"
                         gutter={20}
                         data={step1.roc_data.map((m: any, i: number) => ({
@@ -323,6 +322,7 @@ export default function OutcomesScreen() {
                 </Text>
               </View>
             )}
+          </View>
 
 
           {/* === STEP 2 – LATERAL === */}
@@ -357,7 +357,6 @@ export default function OutcomesScreen() {
               </Text>
             </View>
           </View>
-        </View>
         </View>
       </ScrollView>
     </View>
