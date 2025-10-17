@@ -132,8 +132,12 @@ def process_measurement_file(file: UploadFile, id_operation: int, position: int,
                 dest_folder = (node["h"], node)
             elif isinstance(node, str):
                 dest_folder = (node, {"a": {"n": str(position)}, "t": 1})
+            elif isinstance(node, dict) and "1" in node:
+                folder_id = list(node.values())[0]
+                dest_folder = (folder_id, {"a": {"n": str(position)}, "t": 1})
             else:
                 raise HTTPException(status_code=500, detail=f"Unexpected Mega response: {node}")
+
 
         m.upload(tmp_path, dest_folder[0], dest_filename=file.filename)
         os.remove(tmp_path)

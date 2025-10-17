@@ -189,12 +189,9 @@ export default function PatientResultsScreen() {
       }
 
       setMeasurements(grouped);
-
-      Platform.OS === "web"
-        ? window.alert("Files imported successfully! Now processing...")
-        : Alert.alert("Success", "Files imported successfully! Processing...");
-
+      setLoading(true);
       await handleSave();
+      setLoading(false);
     } catch (err) {
       console.error("Import error:", err);
       Platform.OS === "web"
@@ -212,14 +209,14 @@ export default function PatientResultsScreen() {
       for (const group of measurements) {
         for (const file of group.files) {
           if (Platform.OS === "web") {
-            const fileBlob = await fetch(file.uri).then((r) => r.blob());
-            formData.append(
-              `files_position_${group.position}`, 
-              fileBlob,
-              file.name
-            );
+            if (file.file) {
+              formData.append("files", file.file);
+            } else {
+              const blob = await fetch(file.uri).then((r) => r.blob());
+              formData.append("files", blob, file.name);
+            }
           } else {
-            formData.append(`files_position_${group.position}`, {
+            formData.append("files", {
               uri: file.uri,
               name: file.name,
               type: file.mimeType || "application/octet-stream",
