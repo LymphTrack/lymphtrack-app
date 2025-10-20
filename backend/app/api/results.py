@@ -16,8 +16,18 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-EMAIL = os.getenv("MEGA_EMAIL")
-PASSWORD = os.getenv("MEGA_PASSWORD")
+
+def login_mega():
+    email = os.getenv("MEGA_EMAIL")
+    password = os.getenv("MEGA_PASSWORD")
+    if not email or not password:
+        logging.warning("[MEGA] Missing MEGA_EMAIL/MEGA_PASSWORD env vars; Mega features disabled")
+        return None
+    try:
+        return Mega().login(email, password)
+    except Exception as e:
+        logging.warning(f"[MEGA] Login failed: {e}")
+        return None
 
 def infer_header_and_data(raw_df, key_cols, max_header_row=10):
     for idx in range(min(max_header_row, len(raw_df))):
@@ -44,7 +54,7 @@ def extract_time_from_filename(filename: str) -> int | None:
 
     return hour * 3600 + minute * 60 + second
 
-def process_measurement_file(file: UploadFile, id_operation: int, position: int, db: Session, visit_str: str, patient_id: str, measurement_number=1):
+def process_measurement_file(file: UploadFile, id_operation: int, position: int, db: Session, visit_str: str, patient_id: str, measurement_number=1, m=None):
     try:
         suffix = file.filename.split(".")[-1].lower()
         df = None
@@ -106,97 +116,106 @@ def process_measurement_file(file: UploadFile, id_operation: int, position: int,
         with open(tmp_path, "wb") as tmp_f:
             tmp_f.write(file.file.read())
 
-        patient_folder = m.find(f"lymphtrack-data/{patient_id}")
-        if not patient_folder:
-            raise HTTPException(status_code=404, detail="Patient folder not found in Mega")
+            if m:
+                patient_folder = m.find(f"lymphtrack-data/{patient_id}")
+                if not patient_folder:
+                    # Crée (ou log seulement, au choix)
+                    try:
+                        m.create_folder(f"lymphtrack-data/{patient_id}")
+                        patient_folder = m.find(f"lymphtrack-data/{patient_id}")
+                    except Exception as e:
+                        logging.warning(f"[MEGA] create_folder patient failed: {e}")
+                        patient_folder = None
 
-        visit_folder = None
-        subfolders = m.get_files_in_node(patient_folder[0])
-        for fid, meta in subfolders.items():
-            if meta["t"] == 1 and meta["a"]["n"] == visit_str:
-                visit_folder = (fid, meta)
-                break
-            try:
-                if not visit_folder:
-                    raise HTTPException(status_code=404, detail=f"Visit folder {visit_str} not found in Mega")
+                visit_folder = None
+                if patient_folder:
+                    sub = m.get_files_in_node(patient_folder[0])
+                    for fid, meta in sub.items():
+                        if meta.get("t") == 1 and meta.get("a", {}).get("n") == visit_str:
+                            visit_folder = (fid, meta)
+                            break
+                    if not visit_folder:
+                        try:
+                            node = m.create_folder(visit_str, patient_folder[0])
+                            # tolérer réponses non standard
+                            if isinstance(node, dict) and "f" in node:
+                                folder_id = node["f"][0]["h"]
+                                visit_folder = (folder_id, node["f"][0])
+                            elif isinstance(node, dict) and "h" in node:
+                                visit_folder = (node["h"], node)
+                            elif isinstance(node, str):
+                                visit_folder = (node, {"a": {"n": visit_str}, "t": 1})
+                            elif isinstance(node, dict) and any(k.isdigit() for k in node):
+                                folder_id = list(node.values())[0]
+                                visit_folder = (folder_id, {"a": {"n": visit_str}, "t": 1})
+                            else:
+                                logging.warning(f"[MEGA] Unexpected visit folder response: {node}")
+                                visit_folder = None
+                        except Exception as e:
+                            logging.warning(f"[MEGA] create_folder visit failed: {e}")
+                            visit_folder = None
 
                 dest_folder = None
-                subfolders = m.get_files_in_node(visit_folder[0])
-                for fid, meta in subfolders.items():
-                    if meta["t"] == 1 and meta["a"]["n"] == str(position):
-                        dest_folder = (fid, meta)
-                        break
+                if visit_folder:
+                    subfolders = m.get_files_in_node(visit_folder[0])
+                    for fid, meta in subfolders.items():
+                        if meta.get("t") == 1 and meta.get("a", {}).get("n") == str(position):
+                            dest_folder = (fid, meta)
+                            break
+                    if not dest_folder:
+                        try:
+                            node = m.create_folder(str(position), visit_folder[0])
+                            if isinstance(node, dict) and "f" in node:
+                                folder_id = node["f"][0]["h"]
+                                dest_folder = (folder_id, node["f"][0])
+                            elif isinstance(node, dict) and "h" in node:
+                                dest_folder = (node["h"], node)
+                            elif isinstance(node, str):
+                                dest_folder = (node, {"a": {"n": str(position)}, "t": 1})
+                            elif isinstance(node, dict) and any(k.isdigit() for k in node):
+                                folder_id = list(node.values())[0]
+                                dest_folder = (folder_id, {"a": {"n": str(position)}, "t": 1})
+                            else:
+                                logging.warning(f"[MEGA] Unexpected position folder response: {node}")
+                                dest_folder = None
+                        except Exception as e:
+                            logging.warning(f"[MEGA] create_folder position failed: {e}")
+                            dest_folder = None
 
-                if not dest_folder:
-                    node = m.create_folder(str(position), visit_folder[0])
-
-                    # Gestion robuste des différents formats possibles
-                    if isinstance(node, dict) and "f" in node:
-                        folder_id = node["f"][0]["h"]
-                        folder_meta = node["f"][0]
-                        dest_folder = (folder_id, folder_meta)
-                    elif isinstance(node, dict) and "h" in node:
-                        dest_folder = (node["h"], node)
-                    elif isinstance(node, str):
-                        dest_folder = (node, {"a": {"n": str(position)}, "t": 1})
-                    elif isinstance(node, dict) and any(k.isdigit() for k in node.keys()):
-                        # Cas typique : {'2': 'zJ8QFbgT'}
-                        folder_id = list(node.values())[0]
-                        dest_folder = (folder_id, {"a": {"n": str(position)}, "t": 1})
-                        logging.warning(f"[PROCESS FILE] Mega returned unusual folder response: {node}")
-                    else:
-                        # Ancien cas bloquant supprimé
-                        logging.warning(f"[PROCESS FILE] Unexpected Mega folder response format: {node}")
-                        dest_folder = None
-
-                # 🔸 Upload du fichier (avec garde-fou)
+                # Upload tolérant
                 try:
                     if dest_folder:
-                        # Rafraîchir la connexion Mega tous les 3 fichiers
-                        if measurement_number % 3 == 1 and measurement_number != 1:
-                            m = Mega().login(EMAIL, PASSWORD)
-                        upload_res = m.upload(tmp_path, dest_folder[0], dest_filename=file.filename)
-                        logging.info(f"[PROCESS FILE] Uploaded {file.filename} to Mega: {upload_res}")
+                        up = m.upload(tmp_path, dest_folder[0], dest_filename=file.filename)
+                        logging.info(f"[MEGA] Uploaded {file.filename}: {up}")
                     else:
-                        logging.warning(f"[PROCESS FILE] Skipped Mega upload for {file.filename} (no destination folder)")
-                except Exception as upload_err:
-                    logging.warning(f"[PROCESS FILE] Upload failed for {file.filename}: {upload_err}")
+                        logging.warning(f"[MEGA] Skip upload (no dest folder) for {file.filename}")
+                except Exception as e:
+                    logging.warning(f"[MEGA] Upload failed for {file.filename}: {e}")
+            else:
+                logging.debug("[MEGA] Client is None, skipping Mega operations")
+            # ======== FIN MEGA ========
 
-                # Nettoyage temporaire
-                os.remove(tmp_path)
+            # Nettoyage
+            os.remove(tmp_path)
 
-                # Enregistrement dans la base, que Mega ait marché ou pas
-                result = Result(
-                    id_operation=int(id_operation),
-                    position=int(position),
-                    measurement_number=measurement_number,
-                    min_return_loss_db=float(min_rl),
-                    min_frequency_hz=int(min_freq),
-                    bandwidth_hz=float(bw) if not pd.isna(bw) else None,
-                    file_path=archive_path,
-                    uploaded_at=datetime.now(timezone.utc),
-                )
-                db.add(result)
-                return result
-
-            except Exception as e:
-                logging.error(f"[PROCESS FILE] {file.filename}: {e}")
-                traceback.print_exc()
-                return None
+            # Enregistrement DB
+            result = Result(
+                id_operation=int(id_operation),
+                position=int(position),
+                measurement_number=measurement_number,
+                min_return_loss_db=float(min_rl),
+                min_frequency_hz=int(min_freq),
+                bandwidth_hz=float(bw) if not pd.isna(bw) else None,
+                file_path=archive_path,
+                uploaded_at=datetime.now(timezone.utc),
+            )
+            db.add(result)
+            return result
 
     except Exception as e:
         logging.error(f"[PROCESS FILE] {file.filename}: {e}")
         traceback.print_exc()
         return None
-
-
-load_dotenv()
-
-EMAIL = os.getenv("MEGA_EMAIL")
-PASSWORD = os.getenv("MEGA_PASSWORD")
-
-mega = Mega()
-m = mega.login(EMAIL, PASSWORD)
 
 
 # ---------------------
@@ -243,11 +262,14 @@ async def create_all_results(
     db: Session = Depends(get_db),
 ):
     try:
+        # --- Check operation existence ---
         operation = db.query(Operation).filter(Operation.id_operation == id_operation).first()
         if not operation:
             return {"status": "error", "message": "Operation not found"}
 
         patient_id = operation.patient_id
+
+        # --- Build visit name ---
         all_ops = (
             db.query(Operation)
             .filter(Operation.patient_id == patient_id)
@@ -258,6 +280,7 @@ async def create_all_results(
         visit_name = operation.name.replace(" ", "_")
         visit_str = f"{visit_number}-{visit_name}_{operation.operation_date.strftime('%d%m%Y')}"
 
+        # --- Sort files by timestamp ---
         timed_files = []
         for f in files:
             t = extract_time_from_filename(f.filename)
@@ -272,31 +295,48 @@ async def create_all_results(
         timed_files.sort(key=lambda x: x[0])
         sorted_files = [f for _, f in timed_files]
 
-        grouped = {
-            pos: sorted_files[(pos - 1) * 3 : pos * 3]
-            for pos in range(1, 7)
-        }
+        # --- Group by position (3 files per position) ---
+        grouped = {pos: sorted_files[(pos - 1) * 3 : pos * 3] for pos in range(1, 7)}
 
+        # --- Initialize Mega and variables ---
+        m = login_mega()
         all_results = []
+        counter_db = 0
+        counter_files = 0
+        batch_size_db = 5
 
-        batch_size = 5
-        counter = 0
-
+        # --- Main processing loop ---
         for pos, pos_files in grouped.items():
             for idx, f in enumerate(pos_files, start=1):
+                counter_files += 1
+
+                # 🔄 Refresh Mega every 3 uploads to avoid session loss
+                if counter_files % 3 == 1 and counter_files != 1:
+                    m = login_mega()
+
                 result = process_measurement_file(
-                    f, id_operation, pos, db, visit_str, patient_id, measurement_number=idx
+                    f,
+                    id_operation,
+                    pos,
+                    db,
+                    visit_str,
+                    patient_id,
+                    measurement_number=idx,
+                    m=m,  # ✅ pass Mega client safely
                 )
+
                 if result:
                     all_results.append(result)
-                    counter += 1
+                    counter_db += 1
 
-                    if counter % batch_size == 0:
+                    # 💾 Commit every few inserts to avoid DB overload
+                    if counter_db % batch_size_db == 0:
                         db.commit()
 
+        # Final commit
         db.commit()
 
-
+        # --- Final response ---
         if not all_results:
             return {"status": "error", "message": "No valid files were processed"}
 
@@ -309,8 +349,8 @@ async def create_all_results(
     except Exception as e:
         db.rollback()
         traceback.print_exc()
+        logging.error(f"[PROCESS-ALL] {e}")
         return {"status": "error", "message": str(e)}
-
 
 # ---------------------
 # READ ALL RESULTS
