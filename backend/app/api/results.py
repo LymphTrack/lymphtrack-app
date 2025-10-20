@@ -218,6 +218,15 @@ def process_measurement_file(file: UploadFile, id_operation: int, position: int,
         return None
 
 
+load_dotenv()
+
+EMAIL = os.getenv("MEGA_EMAIL")
+PASSWORD = os.getenv("MEGA_PASSWORD")
+
+mega = Mega()
+m = mega.login(EMAIL, PASSWORD)
+
+
 # ---------------------
 # CREATE RESULT
 # ---------------------
