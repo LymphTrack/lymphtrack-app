@@ -122,6 +122,17 @@ export default function PositionScreen() {
     );
   }
 
+   if (exporting) {
+    return (
+      <View style={{ flex: 1, backgroundColor: "#FFFFFF", justifyContent: "center", alignItems: "center" }}>
+        <ActivityIndicator size="large" color="#6a90db" />
+        <Text style={{ marginTop: 20, fontSize: 16, color: "#1F2937" }}>
+          Exporting FollowUp...
+        </Text>
+      </View>
+    );
+  }
+   
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <View style={styles.header}>

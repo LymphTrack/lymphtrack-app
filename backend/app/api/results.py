@@ -231,34 +231,56 @@ m = mega.login(EMAIL, PASSWORD)
 # CREATE RESULT
 # ---------------------
 
-@router.post("/process-results/{id_operation}/{position}")
-async def create_results(id_operation: int, position: int, files: list[UploadFile] = File(...), db: Session = Depends(get_db)):
+async def create_result(
+    id_operation: int,
+    position: int,
+    files: list[UploadFile] = File(...),
+    db: Session = Depends(get_db),
+):
     try:
         operation = db.query(Operation).filter(Operation.id_operation == id_operation).first()
         if not operation:
-            return {"status": "error", "message": "Operation not found"}
+            raise HTTPException(status_code=404, detail="Operation not found")
 
         patient_id = operation.patient_id
-        all_ops = db.query(Operation).filter(Operation.patient_id == patient_id).order_by(Operation.operation_date.asc()).all()
+        all_ops = (
+            db.query(Operation)
+            .filter(Operation.patient_id == patient_id)
+            .order_by(Operation.operation_date.asc())
+            .all()
+        )
         visit_number = {op.id_operation: idx + 1 for idx, op in enumerate(all_ops)}[operation.id_operation]
         visit_name = operation.name.replace(" ", "_")
         visit_str = f"{visit_number}-{visit_name}_{operation.operation_date.strftime('%d%m%Y')}"
 
-        processed = []
+        m = login_mega()
+
+        all_results = []
         for idx, f in enumerate(files, start=1):
-            result = process_measurement_file(f, id_operation, position, db, visit_str, patient_id, measurement_number=idx)
+            result = process_measurement_file(
+                f,
+                id_operation,
+                position,
+                db,
+                visit_str,
+                patient_id,
+                measurement_number=idx,
+                m=m,  # ✅ on passe le client Mega
+            )
             if result:
-                processed.append(result)
+                all_results.append(result)
 
         db.commit()
-        if not processed:
-            return {"status": "error", "message": "No valid files processed"}
 
-        return {"status": "success", "results": processed}
+        if not all_results:
+            return {"status": "error", "message": "No valid files were processed"}
+
+        return {"status": "success", "message": f"Processed {len(all_results)} file(s)", "results": all_results}
+
     except Exception as e:
         db.rollback()
+        traceback.print_exc()
         return {"status": "error", "message": str(e)}
-
 
 # ---------------------
 # CREATE ALL RESULTS (18 files → 6 positions)
