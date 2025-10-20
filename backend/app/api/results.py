@@ -249,13 +249,24 @@ async def create_all_results(
         }
 
         all_results = []
+
+        batch_size = 5
+        counter = 0
+
         for pos, pos_files in grouped.items():
             for idx, f in enumerate(pos_files, start=1):
-                result = process_measurement_file(f, id_operation, pos, db, visit_str, patient_id, measurement_number=idx)
+                result = process_measurement_file(
+                    f, id_operation, pos, db, visit_str, patient_id, measurement_number=idx
+                )
                 if result:
                     all_results.append(result)
+                    counter += 1
+
+                    if counter % batch_size == 0:
+                        db.commit()
 
         db.commit()
+
 
         if not all_results:
             return {"status": "error", "message": "No valid files were processed"}

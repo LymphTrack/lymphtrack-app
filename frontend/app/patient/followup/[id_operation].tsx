@@ -34,8 +34,7 @@ export default function PatientResultsScreen() {
 
   useEffect(() => {
     if (measurements.some(m => m.files.length > 0)) {
-      setLoading(true);
-      handleSave();  
+      console.log("✅ Ready to upload all results");
     }
   }, [measurements]);
 
@@ -150,8 +149,9 @@ export default function PatientResultsScreen() {
     }
   };
 
-  const handleImport = async () => {
+  const importAndUploadAll = async () => {
     try {
+      // 1) Sélection des fichiers
       const res = await DocumentPicker.getDocumentAsync({
         multiple: true,
         type: [
@@ -159,111 +159,78 @@ export default function PatientResultsScreen() {
           "application/vnd.ms-excel",
           "text/csv",
         ],
+        // copyToCacheDirectory aide sur mobile pour garantir un uri lisible
+        copyToCacheDirectory: true,
       });
 
-      if (res.canceled || !res.assets?.length) return;
+      if (res.canceled || !res.assets?.length) {
+        return;
+      }
 
-      const files = res.assets;
+      const assets = res.assets;
 
-      if (files.length !== 18) {
-        const msg = `You selected ${files.length} files. You should import 18 (3 per position × 6 positions).`;
-        Platform.OS === "web"
-          ? window.alert(msg)
-          : Alert.alert("Invalid number of files", msg);
+      // 2) Validation nombre / extensions
+      if (assets.length !== 18) {
+        const msg = `You selected ${assets.length} files. You should import 18 (3 per position × 6 positions).`;
+        Platform.OS === "web" ? window.alert(msg) : Alert.alert("Invalid number of files", msg);
         return;
       }
 
       const validExtensions = [".xlsx", ".xls", ".csv"];
-      const invalidFiles = files.filter(
-        (f) => !validExtensions.some((ext) => f.name.toLowerCase().endsWith(ext))
-      );
-      if (invalidFiles.length > 0) {
-        const msg = `Some files are not valid Excel or CSV files:\n\n${invalidFiles
-          .map((f) => f.name)
-          .join("\n")}`;
-        Platform.OS === "web"
-          ? window.alert(msg)
-          : Alert.alert("Invalid file type", msg);
+      const invalid = assets.filter(a => !validExtensions.some(ext => a.name?.toLowerCase().endsWith(ext)));
+      if (invalid.length) {
+        const msg = `Some files are not valid Excel or CSV files:\n\n${invalid.map(f => f.name || "(unnamed)") .join("\n")}`;
+        Platform.OS === "web" ? window.alert(msg) : Alert.alert("Invalid file type", msg);
         return;
       }
 
-      const grouped = [];
-      for (let i = 0; i < 6; i++) {
-        grouped.push({
-          position: i + 1,
-          files: files.slice(i * 3, i * 3 + 3),
-        });
-      }
+      // 3) Construire le FormData (IMPORTANT: ne pas forcer Content-Type)
+      const fd = new FormData();
 
-      setMeasurements(grouped);
-    } catch (err) {
-      console.error("Import error:", err);
-      Platform.OS === "web"
-        ? window.alert("Error\n\nUnable to import files")
-        : Alert.alert("Error", "Unable to import files");
-    }
-  };
-
-
-  const handleSave = async () => {
-    console.log("📦 measurements:", measurements);
-    try {
-      setExporting(true);
-      const formData = new FormData();
-
-      for (const group of measurements) {
-        for (const file of group.files) {
-          if (Platform.OS === "web") {
-            let blob: Blob;
-            try {
-              if (file.file instanceof File) {
-                blob = file.file;
-              } else if (file.uri.startsWith("blob:") || file.uri.startsWith("http")) {
-                blob = await fetch(file.uri).then((r) => r.blob());
-              } else {
-                console.warn("⚠️ Unhandled file URI format:", file.uri);
-                continue;
-              }
-
-              formData.append("files", blob, file.name);
-            } catch (err) {
-              console.error("❌ Error fetching blob for", file.name, err);
-            }
-          } 
-          else {
-            formData.append("files", {
-              uri: file.uri,
-              name: file.name,
-              type: file.mimeType || "application/octet-stream",
-            } as any);
+      for (const f of assets) {
+        if (Platform.OS === "web") {
+          // Sur web, si DocumentPicker fournit un File natif, prends-le.
+          // Sinon, récupère un Blob via fetch(uri).
+          let blob: Blob;
+          if ((f as any).file instanceof File) {
+            blob = (f as any).file as File;
+          } else if (f.uri?.startsWith("blob:") || f.uri?.startsWith("http")) {
+            blob = await fetch(f.uri).then(r => r.blob());
+          } else {
+            // fallback: tente quand même un fetch
+            blob = await fetch(f.uri).then(r => r.blob());
           }
+          fd.append("files", blob, f.name || "measurement.csv");
+        } else {
+          fd.append("files", {
+            uri: f.uri,
+            name: f.name || "measurement.csv",
+            type: f.mimeType || "application/octet-stream",
+          } as any);
         }
       }
 
-      for (let [key, val] of (formData as any).entries()) {
-        console.log("FormData content:", key, val);
-      }
+      // Optionnel: log pour vérifier qu’on a bien 18 entrées
+      // @ts-ignore
+      for (const [k, v] of fd.entries()) console.log("FD:", k, v);
 
-      const res = await fetch(`${API_URL}/results/process-all/${id_operation}`, {
+      setExporting(true);
+
+      // 4) POST au backend
+      const resp = await fetch(`${API_URL}/results/process-all/${id_operation}`, {
         method: "POST",
-        body: formData,
-        headers: {
-          Accept: "application/json",
-        },
+        body: fd,
+        headers: { Accept: "application/json" }, // NE PAS définir Content-Type
       });
 
-      if (!res.ok) {
-        const text = await res.text();
-        console.error("❌ Backend response:", text);
-        throw new Error("Processing failed");
-      }
+      const text = await resp.text();
+      console.log("Backend resp:", resp.status, text);
+      if (!resp.ok) throw new Error(text || `HTTP ${resp.status}`);
 
-      const data = await res.json();
+      const data = JSON.parse(text);
       if (data.status === "error") {
         const msg = data.message || "Processing failed";
-        Platform.OS === "web"
-          ? window.alert(`Error\n\n${msg}`)
-          : Alert.alert("Error", msg);
+        Platform.OS === "web" ? window.alert(`Error\n\n${msg}`) : Alert.alert("Error", msg);
         return;
       }
 
@@ -271,15 +238,16 @@ export default function PatientResultsScreen() {
         ? window.alert("✅ All measurements processed and saved!")
         : Alert.alert("Success", "All measurements processed and saved!");
       router.push(`/patient/followup/${id_operation}`);
-    } catch (err) {
-      console.error("Save error:", err);
+    } catch (e: any) {
+      console.error("Upload error:", e);
       Platform.OS === "web"
-        ? window.alert("Error\n\nUnable to save measurements")
-        : Alert.alert("Error", "Unable to save measurements");
+        ? window.alert("Error\n\n" + (e.message || e))
+        : Alert.alert("Error", e.message || String(e));
     } finally {
       setExporting(false);
     }
   };
+
 
 
   if (loading) {
@@ -440,13 +408,14 @@ export default function PatientResultsScreen() {
           </View>
         </View>
         <View>
-          <TouchableOpacity
-            style ={styles.importButton}
-            onPress={() => handleImport()}
-          >
-            <Plus size={20} color="#2563EB" />
-            <Text style={styles.importButtonText}>Import all results</Text>
-          </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.importButton}
+          onPress={importAndUploadAll}
+        >
+          <Plus size={20} color="#2563EB" />
+          <Text style={styles.importButtonText}>Import all results</Text>
+        </TouchableOpacity>
+
       </View>
       </ScrollView>
 
