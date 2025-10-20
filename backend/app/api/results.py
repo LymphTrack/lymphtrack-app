@@ -231,6 +231,7 @@ m = mega.login(EMAIL, PASSWORD)
 # CREATE RESULT
 # ---------------------
 
+@router.post("/process-results/{id_operation}/{position}")
 async def create_result(
     id_operation: int,
     position: int,
