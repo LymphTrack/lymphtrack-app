@@ -2,7 +2,7 @@ import { Platform, View, Text, Image, ScrollView, StyleSheet, ActivityIndicator,
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { ArrowLeft,Calendar,Download, Notebook, Plus, Save, Trash } from "lucide-react-native";
 import { API_URL } from "@/constants/api";
-import { useState, useCallback } from "react";
+import { useState, useCallback , useEffect} from "react";
 import { useFocusEffect } from "@react-navigation/native";
 import * as DocumentPicker from "expo-document-picker";
 
@@ -31,6 +31,13 @@ export default function PatientResultsScreen() {
         }
       }, [id_operation])
   );
+
+  useEffect(() => {
+    if (measurements.some(m => m.files.length > 0)) {
+      setLoading(true);
+      handleSave();  
+    }
+  }, [measurements]);
 
   const getPositionCoordinates = (pos: number, width: number) => {
     const offsetX = width >= 700 ? 180 : 120;
@@ -189,9 +196,6 @@ export default function PatientResultsScreen() {
       }
 
       setMeasurements(grouped);
-      setLoading(true);
-      await handleSave();
-      setLoading(false);
     } catch (err) {
       console.error("Import error:", err);
       Platform.OS === "web"
@@ -202,20 +206,31 @@ export default function PatientResultsScreen() {
 
 
   const handleSave = async () => {
+    console.log("📦 measurements:", measurements);
     try {
-      setSaving(true);
+      setExporting(true);
       const formData = new FormData();
 
       for (const group of measurements) {
         for (const file of group.files) {
           if (Platform.OS === "web") {
-            if (file.file) {
-              formData.append("files", file.file);
-            } else {
-              const blob = await fetch(file.uri).then((r) => r.blob());
+            let blob: Blob;
+            try {
+              if (file.file instanceof File) {
+                blob = file.file;
+              } else if (file.uri.startsWith("blob:") || file.uri.startsWith("http")) {
+                blob = await fetch(file.uri).then((r) => r.blob());
+              } else {
+                console.warn("⚠️ Unhandled file URI format:", file.uri);
+                continue;
+              }
+
               formData.append("files", blob, file.name);
+            } catch (err) {
+              console.error("❌ Error fetching blob for", file.name, err);
             }
-          } else {
+          } 
+          else {
             formData.append("files", {
               uri: file.uri,
               name: file.name,
@@ -225,13 +240,23 @@ export default function PatientResultsScreen() {
         }
       }
 
+      for (let [key, val] of (formData as any).entries()) {
+        console.log("FormData content:", key, val);
+      }
+
       const res = await fetch(`${API_URL}/results/process-all/${id_operation}`, {
         method: "POST",
         body: formData,
-        headers: { Accept: "application/json" },
+        headers: {
+          Accept: "application/json",
+        },
       });
 
-      if (!res.ok) throw new Error("Processing failed");
+      if (!res.ok) {
+        const text = await res.text();
+        console.error("❌ Backend response:", text);
+        throw new Error("Processing failed");
+      }
 
       const data = await res.json();
       if (data.status === "error") {
@@ -243,7 +268,7 @@ export default function PatientResultsScreen() {
       }
 
       Platform.OS === "web"
-        ? window.alert("All measurements processed and saved!")
+        ? window.alert("✅ All measurements processed and saved!")
         : Alert.alert("Success", "All measurements processed and saved!");
       router.push(`/patient/followup/${id_operation}`);
     } catch (err) {
@@ -252,7 +277,7 @@ export default function PatientResultsScreen() {
         ? window.alert("Error\n\nUnable to save measurements")
         : Alert.alert("Error", "Unable to save measurements");
     } finally {
-      setSaving(false);
+      setExporting(false);
     }
   };
 
