@@ -81,23 +81,31 @@ def upload_photo(id_operation: int, file: UploadFile = File(...), db: Session = 
         with open(local_path, "wb") as buffer:
             buffer.write(file.file.read())
 
-        uploaded = m.upload(local_path, photos_folder)
+            uploaded = m.upload(local_path, photos_folder)
 
-        if isinstance(uploaded, dict):
-            if "f" in uploaded and len(uploaded["f"]) > 0:
-                file_handle = uploaded["f"][0]["h"]
-            elif "h" in uploaded:
-                file_handle = uploaded["h"]
+            # Extraire le handle correct
+            if isinstance(uploaded, dict):
+                if "f" in uploaded and len(uploaded["f"]) > 0:
+                    file_handle = uploaded["f"][0]["h"]
+                elif "h" in uploaded:
+                    file_handle = uploaded["h"]
+                else:
+                    raise HTTPException(status_code=500, detail=f"Unexpected Mega upload response: {uploaded}")
             else:
-                raise HTTPException(status_code=500, detail=f"Unexpected Mega upload response: {uploaded}")
-        else:
-            file_handle = uploaded
+                file_handle = uploaded
 
-        try:
-            link = m.get_link(file_handle)
-        except Exception as e:
-            print(f"[WARN] Could not get Mega link: {e}")
-            link = f"https://mega.nz/file/{file_handle}"
+            # 🔧 Correction ici
+            try:
+                # On redemande les infos du fichier depuis le dossier pour forcer la synchro
+                uploaded_file = m.find(file.filename)
+                if uploaded_file:
+                    link = m.get_link(uploaded_file[0])
+                else:
+                    link = m.get_link(file_handle)
+
+            except Exception as e:
+                print(f"[WARN] Could not get Mega link properly: {e}")
+                link = f"https://mega.nz/file/{file_handle}"
 
 
 
