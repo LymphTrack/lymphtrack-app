@@ -83,14 +83,22 @@ def upload_photo(id_operation: int, file: UploadFile = File(...), db: Session = 
 
         uploaded = m.upload(local_path, photos_folder)
 
+        if isinstance(uploaded, dict):
+            if "f" in uploaded and len(uploaded["f"]) > 0:
+                file_handle = uploaded["f"][0]["h"]
+            elif "h" in uploaded:
+                file_handle = uploaded["h"]
+            else:
+                raise HTTPException(status_code=500, detail=f"Unexpected Mega upload response: {uploaded}")
+        else:
+            file_handle = uploaded
+
         try:
-            link = m.get_link(uploaded)
-            if not link or not str(link).startswith("http"):
-                raise Exception("Invalid Mega link")
+            link = m.get_link(file_handle)
         except Exception as e:
             print(f"[WARN] Could not get Mega link: {e}")
-            # fallback temporaire si Mega ne renvoie rien
-            link = f"https://mega.nz/file/{uploaded}"
+            link = f"https://mega.nz/file/{file_handle}"
+
 
 
         os.remove(local_path)
