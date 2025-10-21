@@ -85,8 +85,13 @@ def upload_photo(id_operation: int, file: UploadFile = File(...), db: Session = 
 
         try:
             link = m.get_link(uploaded)
-        except Exception:
-            link = f"{patient_id}/{visit_str}/photos/{file.filename}"
+            if not link or not str(link).startswith("http"):
+                raise Exception("Invalid Mega link")
+        except Exception as e:
+            print(f"[WARN] Could not get Mega link: {e}")
+            # fallback temporaire si Mega ne renvoie rien
+            link = f"https://mega.nz/file/{uploaded}"
+
 
         os.remove(local_path)
 

@@ -11,7 +11,8 @@ export default function PatientResultsScreen() {
 
   const [operation, setOperation] = useState<any | null>(null);
   const [results, setResults] = useState<any[]>([]);
-  const [saving, setSaving] = useState(false);
+  const [photos, setPhotos] = useState<Array<{id:number; url:string; created_at?:string}>>([]);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -32,11 +33,12 @@ export default function PatientResultsScreen() {
       }, [id_operation])
   );
 
+
   useEffect(() => {
-    if (measurements.some(m => m.files.length > 0)) {
-      console.log("✅ Ready to upload all results");
-    }
-  }, [measurements]);
+    console.log("PHOTOS STATE →", photos);
+    if (Platform.OS === "web") console.table(photos);
+  }, [photos]);
+
 
   const getPositionCoordinates = (pos: number, width: number) => {
     const offsetX = width >= 700 ? 180 : 120;
@@ -72,6 +74,7 @@ export default function PatientResultsScreen() {
 
       setOperation(opData);
       setResults(resultsData);
+      await loadPhotos();
     } catch (e) {
       console.error("Error loading patient data:", e);
     } finally {
@@ -83,6 +86,16 @@ export default function PatientResultsScreen() {
     return results.some(r => r.position === pos);
   };
 
+  const loadPhotos = async () => {
+    try {
+      const res = await fetch(`${API_URL}/photos/${id_operation}`);
+      if (!res.ok) throw new Error("Failed to fetch photos");
+      const data = await res.json();
+      setPhotos(Array.isArray(data) ? data : []);
+    } catch (e) {
+      console.error("Error loading photos:", e);
+    }
+  };
 
   const handleDelete = async () => {
     if (Platform.OS === "web") {
@@ -149,9 +162,78 @@ export default function PatientResultsScreen() {
     }
   };
 
+  const uploadPhoto = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        multiple: false,
+        type: ["image/*"],
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled || !result.assets?.length) return;
+
+      const file = result.assets[0];
+      const formData = new FormData();
+
+      if (Platform.OS === "web") {
+        let blob: Blob;
+        if ((file as any).file instanceof File) {
+          blob = (file as any).file as File;
+        } else {
+          blob = await fetch(file.uri).then((r) => r.blob());
+        }
+        formData.append("file", blob, file.name || "photo.jpg");
+      } else {
+        formData.append("file", {
+          uri: file.uri,
+          name: file.name || "photo.jpg",
+          type: file.mimeType || "image/jpeg",
+        } as any);
+      }
+
+      setUploadingPhoto(true);
+      const res = await fetch(`${API_URL}/photos/${id_operation}`, {
+        method: "POST",
+        body: formData,
+        headers: {
+          Accept: "application/json",
+        },
+      });
+
+      const text = await res.text();
+      if (!res.ok) {
+        if (Platform.OS === "web") {
+          window.alert(`Error\n\n${text || "Failed to upload photo"}`);
+        } else {
+          Alert.alert("Error", text || "Failed to upload photo");
+        }
+        return;
+      }
+
+      const data = JSON.parse(text);
+      if (data?.photo?.url) {
+        setPhotos((prev) => [...prev, data.photo]);
+      }
+
+      if (Platform.OS === "web") {
+        window.alert("Photo uploaded successfully!");
+      } else {
+        Alert.alert("Success", "Photo uploaded successfully!");
+      }
+    } catch (err: any) {
+      console.error("Upload error:", err);
+      if (Platform.OS === "web") {
+        window.alert(`Error\n\n${err.message || err}`);
+      } else {
+        Alert.alert("Error", err.message || "An unexpected error occurred");
+      }
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
   const importAndUploadAll = async () => {
     try {
-      // 1) Sélection des fichiers
       const res = await DocumentPicker.getDocumentAsync({
         multiple: true,
         type: [
@@ -159,7 +241,6 @@ export default function PatientResultsScreen() {
           "application/vnd.ms-excel",
           "text/csv",
         ],
-        // copyToCacheDirectory aide sur mobile pour garantir un uri lisible
         copyToCacheDirectory: true,
       });
 
@@ -168,8 +249,6 @@ export default function PatientResultsScreen() {
       }
 
       const assets = res.assets;
-
-      // 2) Validation nombre / extensions
       if (assets.length !== 18) {
         const msg = `You selected ${assets.length} files. You should import 18 (3 per position × 6 positions).`;
         Platform.OS === "web" ? window.alert(msg) : Alert.alert("Invalid number of files", msg);
@@ -184,20 +263,16 @@ export default function PatientResultsScreen() {
         return;
       }
 
-      // 3) Construire le FormData (IMPORTANT: ne pas forcer Content-Type)
       const fd = new FormData();
 
       for (const f of assets) {
         if (Platform.OS === "web") {
-          // Sur web, si DocumentPicker fournit un File natif, prends-le.
-          // Sinon, récupère un Blob via fetch(uri).
           let blob: Blob;
           if ((f as any).file instanceof File) {
             blob = (f as any).file as File;
           } else if (f.uri?.startsWith("blob:") || f.uri?.startsWith("http")) {
             blob = await fetch(f.uri).then(r => r.blob());
           } else {
-            // fallback: tente quand même un fetch
             blob = await fetch(f.uri).then(r => r.blob());
           }
           fd.append("files", blob, f.name || "measurement.csv");
@@ -210,17 +285,12 @@ export default function PatientResultsScreen() {
         }
       }
 
-      // Optionnel: log pour vérifier qu’on a bien 18 entrées
-      // @ts-ignore
-      for (const [k, v] of fd.entries()) console.log("FD:", k, v);
-
       setExporting(true);
 
-      // 4) POST au backend
       const resp = await fetch(`${API_URL}/results/process-all/${id_operation}`, {
         method: "POST",
         body: fd,
-        headers: { Accept: "application/json" }, // NE PAS définir Content-Type
+        headers: { Accept: "application/json" },
       });
 
       const text = await resp.text();
@@ -235,7 +305,7 @@ export default function PatientResultsScreen() {
       }
 
       Platform.OS === "web"
-        ? window.alert("✅ All measurements processed and saved!")
+        ? window.alert("All measurements processed and saved!")
         : Alert.alert("Success", "All measurements processed and saved!");
       router.push(`/patient/followup/${id_operation}`);
     } catch (e: any) {
@@ -264,6 +334,17 @@ export default function PatientResultsScreen() {
         <ActivityIndicator size="large" color="#6a90db" />
         <Text style={{ marginTop: 20, fontSize: 16, color: "#1F2937" }}>
           Deleting FollowUp...
+        </Text>
+      </View>
+    );
+  }
+
+  if (uploadingPhoto) {
+    return (
+      <View style={{ flex: 1, backgroundColor: "#FFFFFF", justifyContent: "center", alignItems: "center" }}>
+        <ActivityIndicator size="large" color="#6a90db" />
+        <Text style={{ marginTop: 20, fontSize: 16, color: "#1F2937" }}>
+          Uploading Photo...
         </Text>
       </View>
     );
@@ -417,6 +498,84 @@ export default function PatientResultsScreen() {
         </TouchableOpacity>
 
       </View>
+
+      {photos.length > 0 && (
+        <View style={width >= 700 && { width: 700, alignSelf: "center" }}>
+          <View style={[styles.operationCard, { marginTop: 0 }]}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <Text style={{ fontSize: 18, fontWeight: "600", color: "#1F2937" }}>
+                Photos ({photos.length})
+              </Text>
+              <TouchableOpacity
+                onPress={uploadPhoto}
+                disabled={uploadingPhoto}
+                style={[styles.photoAddBtn, uploadingPhoto && { opacity: 0.6 }]}
+              >
+                <Plus size={18} color="#2563EB" />
+                <Text style={styles.photoAddBtnText}>Add photo</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.photoGrid}>
+              {photos.map((p) => (
+                <View key={p.id} style={styles.photoItem}>
+                  <Image
+                    source={{ uri: p.url }}
+                    style={styles.photoImage}
+                    onError={(e) => {
+                      console.log("Image failed to load:", p.url, e.nativeEvent);
+                    }}
+                  />
+
+                  <TouchableOpacity
+                    style={styles.deletePhotoButton}
+                    onPress={async () => {
+                      if (Platform.OS === "web") {
+                        const confirmDelete = window.confirm("Are you sure you want to delete this photo?");
+                        if (!confirmDelete) return;
+
+                        try {
+                          const resp = await fetch(`${API_URL}/photos/${p.id}`, { method: "DELETE" });
+                          if (!resp.ok) throw new Error("Failed to delete photo");
+                          setPhotos((prev) => prev.filter((x) => x.id !== p.id));
+                        } catch (err) {
+                          console.error("Delete error:", err);
+                          window.alert("Error: Could not delete photo.");
+                        }
+                      } else {
+                        Alert.alert(
+                          "Delete photo",
+                          "Are you sure you want to delete this photo?",
+                          [
+                            { text: "Cancel", style: "cancel" },
+                            {
+                              text: "Delete",
+                              style: "destructive",
+                              onPress: async () => {
+                                try {
+                                  const resp = await fetch(`${API_URL}/photos/${p.id}`, { method: "DELETE" });
+                                  if (!resp.ok) throw new Error("Failed to delete photo");
+                                  setPhotos((prev) => prev.filter((x) => x.id !== p.id));
+                                } catch (err) {
+                                  console.error("Delete error:", err);
+                                  Alert.alert("Error", "Could not delete photo.");
+                                }
+                              },
+                            },
+                          ]
+                        );
+                      }
+                    }}
+                  >
+                    <Text style={styles.deletePhotoButtonText}>×</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
+          </View>
+        </View>
+      )}
+
       </ScrollView>
 
       <View style={styles.footer}>
@@ -703,5 +862,59 @@ positionButtonText: {
     width: '50%',
     alignSelf: 'center',
     justifyContent: "center",
+  },
+  photoGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,           
+  },
+  photoItem: {
+    width: 100,
+    height: 100,
+    borderRadius: 12,
+    overflow: "hidden",
+    backgroundColor: "#E5E7EB",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    margin: 5,
+    position: "relative",
+  },
+  photoImage: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover",
+    borderRadius: 12,
+  },
+  photoAddBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#c9def9ff",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  photoAddBtnText: {
+    color: "#2563EB",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  deletePhotoButton: {
+    position: "absolute",
+    top: 4,
+    right: 4,
+    backgroundColor: "#6a90db",
+    borderRadius: 12,
+    width: 22,
+    height: 22,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  deletePhotoButtonText: {
+    color: "white",
+    fontSize: 16,
+    lineHeight: 14,
+    marginTop: -4,
+    fontWeight: "bold",
   },
 });
