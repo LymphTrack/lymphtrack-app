@@ -256,8 +256,17 @@ async def create_result(
 
         m = login_mega()
 
+        existing_results = (
+            db.query(Result)
+            .filter(Result.id_operation == id_operation, Result.position == position)
+            .order_by(Result.measurement_number.asc())
+            .all()
+        )
+        existing_count = len(existing_results)
+        start_index = existing_count + 1 
+
         all_results = []
-        for idx, f in enumerate(files, start=1):
+        for offset, f in enumerate(files, start=start_index):
             result = process_measurement_file(
                 f,
                 id_operation,
@@ -265,8 +274,8 @@ async def create_result(
                 db,
                 visit_str,
                 patient_id,
-                measurement_number=idx,
-                m=m,  # ✅ on passe le client Mega
+                measurement_number=offset, 
+                m=m,
             )
             if result:
                 all_results.append(result)
@@ -276,12 +285,17 @@ async def create_result(
         if not all_results:
             return {"status": "error", "message": "No valid files were processed"}
 
-        return {"status": "success", "message": f"Processed {len(all_results)} file(s)", "results": all_results}
+        return {
+            "status": "success",
+            "message": f"Processed {len(all_results)} file(s)",
+            "results": all_results,
+        }
 
     except Exception as e:
         db.rollback()
         traceback.print_exc()
         return {"status": "error", "message": str(e)}
+
 
 # ---------------------
 # CREATE ALL RESULTS (18 files → 6 positions)
@@ -522,28 +536,15 @@ def delete_measurements(payload: dict, db: Session = Depends(get_db)):
             old_number = r.measurement_number
             r.measurement_number = old_number - 1
 
-            old_name = f"measurement_{old_number}.xlsx"
-            new_name = f"measurement_{old_number - 1}.xlsx"
-
-            for fid, meta in files.items():
-                if meta["t"] == 0 and meta["a"]["n"] == old_name:
-                    try:
-                        m.rename(fid, new_name)
-                        print(f"[INFO] Renamed {old_name} → {new_name} in Mega")
-                    except Exception as e:
-                        print(f"[WARN] Could not rename {old_name}: {e}")
-
-            parts[-1] = new_name
-            r.file_path = "/".join(parts[:-1] + [new_name])
-
         db.commit()
 
         return {
             "status": "success",
             "deleted": [file_path],
-            "renamed": [r.file_path for r in results_to_update],
+            "reindexed": [r.id_result for r in results_to_update],
         }
 
     except Exception as e:
         db.rollback()
         return {"status": "error", "message": str(e)}
+
