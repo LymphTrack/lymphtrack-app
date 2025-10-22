@@ -18,13 +18,7 @@ export default function PatientResultsScreen() {
   const [exporting, setExporting] = useState(false);
   const router = useRouter();
   const {width} = useWindowDimensions();
-  const [measurements, setMeasurements] = useState(
-    Array.from({ length: 6 }, (_, i) => ({
-      position: i + 1,
-      files: [],
-    }))
-  );
-
+  
   useFocusEffect(
       useCallback(() => {
         if (id_operation) {
@@ -32,13 +26,6 @@ export default function PatientResultsScreen() {
         }
       }, [id_operation])
   );
-
-
-  useEffect(() => {
-    console.log("PHOTOS STATE →", photos);
-    if (Platform.OS === "web") console.table(photos);
-  }, [photos]);
-
 
   const getPositionCoordinates = (pos: number, width: number) => {
     const offsetX = width >= 700 ? 180 : 120;
@@ -318,8 +305,6 @@ export default function PatientResultsScreen() {
     }
   };
 
-
-
   if (loading) {
     return (
       <View style={styles.loaderContainer}>
@@ -416,7 +401,7 @@ export default function PatientResultsScreen() {
                     const url = window.URL.createObjectURL(blob);
                     const a = document.createElement("a");
                     a.href = url;
-                    a.download = `operation_${id_operation}.zip`;
+                    a.download = `${operation.patient_id}_operation_${id_operation}.zip`;
                     a.click();
                     window.URL.revokeObjectURL(url);
                     console.log("[FRONT] Download successful");
@@ -489,14 +474,15 @@ export default function PatientResultsScreen() {
           </View>
         </View>
         <View>
-        <TouchableOpacity
-          style={styles.importButton}
-          onPress={importAndUploadAll}
-        >
-          <Plus size={20} color="#2563EB" />
-          <Text style={styles.importButtonText}>Import all results</Text>
-        </TouchableOpacity>
-
+        <View style={width >= 700 && { width: 600, alignSelf: "center" }}>
+          <TouchableOpacity
+            style={styles.importButton}
+            onPress={importAndUploadAll}
+          >
+            <Plus size={20} color="#2563EB" />
+            <Text style={styles.importButtonText}>Import all results</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {photos.length > 0 && (

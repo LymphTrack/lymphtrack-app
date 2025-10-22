@@ -96,7 +96,9 @@ def upload_photo(id_operation: int, file: UploadFile = File(...), db: Session = 
 
             # 🔧 Correction ici
             try:
-                # On redemande les infos du fichier depuis le dossier pour forcer la synchro
+                # ne pas modifier car on va avoir un nouveau cloud bientot donc j'attend le serveur de la machine virtuelle
+                # pour pouvoir faire quoi que ce soit avec mega.nz
+                # 
                 uploaded_file = m.find(file.filename)
                 if uploaded_file:
                     link = m.get_link(uploaded_file[0])

@@ -375,3 +375,78 @@ def export_visit_folder(id_operation: int, db: Session = Depends(get_db)):
         raise e
     except Exception as e:
         return {"status": "error", "message": str(e)}
+    
+
+# ---------------------
+# EXPORT Position FOLDER
+# ---------------------
+
+@router.get("/export-position/{id_operation}/{position}")
+def export_position_folder(id_operation: int, position: int, db: Session = Depends(get_db)):
+    import io, zipfile
+    from fastapi import Response
+
+    try:
+        operation = db.query(Operation).filter(Operation.id_operation == id_operation).first()
+        if not operation:
+            raise HTTPException(status_code=404, detail=f"Operation {id_operation} not found")
+
+        patient_id = operation.patient_id
+
+        all_ops = (
+            db.query(Operation)
+            .filter(Operation.patient_id == patient_id)
+            .order_by(Operation.operation_date.asc())
+            .all()
+        )
+        visit_number = {op.id_operation: idx + 1 for idx, op in enumerate(all_ops)}[operation.id_operation]
+        visit_name = operation.name.replace(" ", "_")
+        visit_str = f"{visit_number}-{visit_name}_{operation.operation_date.strftime('%d%m%Y')}"
+
+        patient_folder = m.find(f"lymphtrack-data/{patient_id}")
+        if not patient_folder:
+            raise HTTPException(status_code=404, detail=f"Patient folder {patient_id} not found")
+
+        subfolders = m.get_files_in_node(patient_folder[0])
+        visit_folder_id = None
+        for fid, meta in subfolders.items():
+            if meta["t"] == 1 and meta["a"]["n"] == visit_str:
+                visit_folder_id = fid
+                break
+
+        if not visit_folder_id:
+            raise HTTPException(status_code=404, detail=f"Visit folder {visit_str} not found in MEGA")
+
+        visit_contents = m.get_files_in_node(visit_folder_id)
+        position_folder_id = None
+        position_folder_name = f"position_{position}"
+        for fid, meta in visit_contents.items():
+            if meta["t"] == 1 and meta["a"]["n"].lower() == position_folder_name.lower():
+                position_folder_id = fid
+                break
+
+        if not position_folder_id:
+            raise HTTPException(status_code=404, detail=f"Position folder {position_folder_name} not found in {visit_str}")
+
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zipf:
+            position_files = m.get_files_in_node(position_folder_id)
+            if not position_files:
+                raise HTTPException(status_code=404, detail=f"No files found inside {position_folder_name}")
+
+            for file_id, meta in position_files.items():
+                add_node_to_zip_recursive(file_id, meta, zipf, base_path=position_folder_name)
+
+        zip_buffer.seek(0)
+
+        filename = f"{patient_id}_{visit_str}_{position_folder_name}.zip"
+        return Response(
+            content=zip_buffer.read(),
+            media_type="application/zip",
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
+
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
