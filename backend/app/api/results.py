@@ -541,7 +541,7 @@ def delete_measurements(payload: dict, db: Session = Depends(get_db)):
         return {
             "status": "success",
             "deleted": [file_path],
-            "reindexed": [r.id_result for r in results_to_update],
+            "reindexed": [r.id for r in results_to_update],
         }
 
     except Exception as e:

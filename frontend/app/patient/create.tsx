@@ -8,14 +8,17 @@ import { mapGenderToDb, mapSideToDb, validatePatientData } from "@/utils/patient
 
 export default function CreatePatientScreen() {
   const [formData, setFormData] = useState({
+    patient_id: '',
+    skipId: false,
     age: '',
+    skipAge: false,
+    bmi: '',
+    skipBmi: false,
     gender: 'Male' as 'Male' | 'Female' | 'Unknown',
     lymphedema_side: 'Right' as 'Right' | 'Left' | 'Both' | 'Unknown',
-    bmi : '',
-    notes :'',
-    skipAge : false,
-    skipBmi : false,
+    notes: '',
   });
+
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const {width} = useWindowDimensions();
@@ -24,7 +27,8 @@ export default function CreatePatientScreen() {
   const handleSubmit = async () => {
     const { valid, error, age, bmi } = validatePatientData(
       formData.skipAge ? null : formData.age,
-      formData.skipBmi ? null : formData.bmi
+      formData.skipBmi ? null : formData.bmi,
+      formData.skipId ? null : formData.patient_id,
     );
 
     if (!valid) {
@@ -36,6 +40,17 @@ export default function CreatePatientScreen() {
       return;
     }
 
+    if (!formData.skipId && formData.patient_id) {
+      if (!formData.patient_id.startsWith("MV")) {
+        if (Platform.OS === "web") {
+          window.alert("Error\n\nPatient ID must start with 'MV'");
+        } else {
+          Alert.alert("Error", "Patient ID must start with 'MV'");
+        }
+        return;
+      }
+    }
+
     try {
       setLoading(true);
 
@@ -43,6 +58,7 @@ export default function CreatePatientScreen() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          patient_id: formData.skipId ? null : formData.patient_id?.trim().toUpperCase(),
           gender: mapGenderToDb(formData.gender),
           age: formData.skipAge ? null : age,
           bmi: formData.skipBmi ? null : bmi,
@@ -53,10 +69,11 @@ export default function CreatePatientScreen() {
 
       if (!res.ok) {
         const errorData = await res.json();
+        const msg = errorData.detail || "Failed to create patient record";
         if (Platform.OS === "web") {
-          window.alert(`Error\n\n${errorData.detail || "Failed to create patient record"}`);
+          window.alert(`Error\n\n${msg}`);
         } else {
-          Alert.alert("Error", errorData.detail || "Failed to create patient record");
+          Alert.alert("Error", msg);
         }
         return;
       }
@@ -66,20 +83,22 @@ export default function CreatePatientScreen() {
       if (Platform.OS === "web") {
         router.replace(`/patient/${createdPatient.patient_id}`);
       } else {
-        router.replace(`/patient/${createdPatient.patient_id}`) 
+        router.replace(`/patient/${createdPatient.patient_id}`);
       }
-        
+
     } catch (error) {
       console.error("Error creating patient:", error);
+      const msg = "An unexpected error occurred";
       if (Platform.OS === "web") {
-        window.alert("Error\n\nAn unexpected error occurred");
+        window.alert(`Error\n\n${msg}`);
       } else {
-        Alert.alert("Error", "An unexpected error occurred");
+        Alert.alert("Error", msg);
       }
     } finally {
       setLoading(false);
     }
   };
+
 
   const SegmentedControl = ({ 
     options, 
@@ -187,6 +206,61 @@ export default function CreatePatientScreen() {
       >
 
       <ScrollView style={[styles.form, width>=700 && {width : 700, alignSelf : "center"}]} showsVerticalScrollIndicator={false}>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Patient ID</Text>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Custom Patient ID (optional)</Text>
+
+            {!formData.skipId && (
+              <View style={styles.inputContainer}>
+                <TextInput
+                  style={[
+                    styles.input,
+                    {
+                      borderColor: "#D1D5DB",
+                      ...(Platform.OS === "web" ? { outlineWidth: 0 } : {}),
+                    },
+                  ]}
+                  placeholder="Enter patient ID (e.g. MV123)"
+                  placeholderTextColor="#9CA3AF"
+                  value={formData.patient_id}
+                  onChangeText={(text) =>
+                    setFormData((prev) => ({ ...prev, patient_id: text.trim().toUpperCase() }))
+                  }
+                  autoCapitalize="characters"
+                />
+              </View>
+            )}
+
+            <View style={{ flexDirection: "row", alignItems: "center", marginTop: 8 }}>
+              <Text style={{ marginRight: 8, color: "#374151" }}>Do not provide ID</Text>
+              <Switch
+                value={formData.skipId}
+                onValueChange={(val) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    skipId: val,
+                    patient_id: val ? "" : prev.patient_id,
+                  }))
+                }
+                {...(Platform.OS === "web"
+                  ? ({
+                      activeThumbColor: "#2563EB",
+                      activeTrackColor: "#93C5FD",
+                      thumbColor: "#f4f3f4",
+                      trackColor: "#D1D5DB",
+                    } as any)
+                  : {
+                      trackColor: { false: "#D1D5DB", true: "#93C5FD" },
+                      thumbColor: formData.skipId ? "#2563EB" : "#f4f3f4",
+                      ios_backgroundColor: "#D1D5DB",
+                    })}
+              />
+            </View>
+          </View>
+        </View>
+        
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Patient Demographics</Text>
 

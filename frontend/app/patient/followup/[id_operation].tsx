@@ -387,7 +387,7 @@ export default function PatientResultsScreen() {
               </Text>
 
               <TouchableOpacity
-                style={[styles.downloadButton, width >= 700 && { marginRight: 40,}]}
+                style={[styles.downloadButton, width >= 700 && { marginRight: 60,}]}
                 onPress={async () => {
                   setExporting(true);
                   try {

@@ -28,26 +28,40 @@ export const mapDbToSide = (side: number | null): LymphedemaSide => {
 
 export const validatePatientData = (
   ageStr: string | null,
-  bmiStr: string | null
-): { valid: boolean; error?: string; age?: number | null; bmi?: number | null } => {
-  if (ageStr === null || ageStr === "") {
-    return { valid: true, age: null, bmi: bmiStr ? parseFloat(bmiStr.replace(",", ".")) : null };
+  bmiStr: string | null,
+  idStr: string | null,
+): {
+  valid: boolean;
+  error?: string;
+  age?: number | null;
+  bmi?: number | null;
+  id?: string | null;
+} => {
+  if (idStr && idStr.trim() !== "") {
+    const id = idStr.trim().toUpperCase();
+    if (!id.startsWith("MV")) {
+      return { valid: false, error: "Patient ID must start with 'MV'" };
+    }
   }
 
-  const age = parseInt(ageStr, 10);
-  if (isNaN(age) || age < 10 || age > 100) {
-    return { valid: false, error: "Incorrect age" };
+  let age: number | null = null;
+  if (ageStr && ageStr !== "") {
+    const parsedAge = parseInt(ageStr, 10);
+    if (isNaN(parsedAge) || parsedAge < 10 || parsedAge > 100) {
+      return { valid: false, error: "Incorrect age" };
+    }
+    age = parsedAge;
   }
 
-  if (bmiStr === null || bmiStr === "") {
-    return { valid: true, age, bmi: null };
+  let bmi: number | null = null;
+  if (bmiStr && bmiStr !== "") {
+    const parsedBmi = parseFloat(bmiStr.replace(",", "."));
+    if (isNaN(parsedBmi) || parsedBmi < 10 || parsedBmi > 60) {
+      return { valid: false, error: "Incorrect BMI" };
+    }
+    bmi = parsedBmi;
   }
 
-  const bmi = parseFloat(bmiStr.replace(",", "."));
-  if (isNaN(bmi) || bmi < 10 || bmi > 60) {
-    return { valid: false, error: "Incorrect BMI" };
-  }
-
-  return { valid: true, age, bmi };
+  return { valid: true, age, bmi, id: idStr ? idStr.trim().toUpperCase() : null };
 };
 
