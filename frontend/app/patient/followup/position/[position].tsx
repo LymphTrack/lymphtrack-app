@@ -126,7 +126,7 @@ export default function PositionScreen() {
     setExporting(true);
     try {
       console.log("[FRONT] Downloading operation folder:", operation_id);
-      const res = await fetch(`${API_URL}/export-position/${operation_id}/${position}`);
+      const res = await fetch(`${API_URL}/operations/export-position/${operation_id}/${position}`);
                     
       if (!res.ok) 
         throw new Error(`Download failed: ${res.status}`);
@@ -168,6 +168,7 @@ export default function PositionScreen() {
       if (!confirmed) return;
     }
 
+    setDeleting(true);
     try {
       const resp = await fetch(`${API_URL}/results/delete-measurements`, {
         method: "POST",
@@ -182,14 +183,10 @@ export default function PositionScreen() {
         throw new Error(data.message || "Failed to delete measurement");
       }
 
-      setMeasurements((prev) => prev.filter((m) => m.id_result !== id_result));
-
-      if (Platform.OS === "web") {
-        window.alert("Measurement deleted successfully!");
-      } else {
-        Alert.alert("Success", "Measurement deleted successfully!");
-      }
+      await loadMeasurements();
+      
     } catch (err: any) {
+      setDeleting(false);
       console.error("Delete error:", err);
       const msg = err.message || "An unexpected error occurred";
       if (Platform.OS === "web") {
@@ -198,6 +195,7 @@ export default function PositionScreen() {
         Alert.alert("Error", msg);
       }
     }
+    setDeleting(false);
   };
 
 
@@ -289,7 +287,7 @@ export default function PositionScreen() {
           <View style={styles.noData}>
             <Text style={styles.noDataText}>No measurements yet for this position.</Text>
             <TouchableOpacity style={styles.importButton} onPress={importAndUploadPosition}>
-              <Plus size={20} color="#FFFFFF" />
+              <Plus size={20} color="#2563EB" />
               <Text style={styles.importButtonText}>Add Measurement(s)</Text>
             </TouchableOpacity>
           </View>

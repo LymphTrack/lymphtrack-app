@@ -383,9 +383,6 @@ def export_visit_folder(id_operation: int, db: Session = Depends(get_db)):
 
 @router.get("/export-position/{id_operation}/{position}")
 def export_position_folder(id_operation: int, position: int, db: Session = Depends(get_db)):
-    import io, zipfile
-    from fastapi import Response
-
     try:
         operation = db.query(Operation).filter(Operation.id_operation == id_operation).first()
         if not operation:

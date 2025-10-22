@@ -467,6 +467,13 @@ def delete_measurements(payload: dict, db: Session = Depends(get_db)):
 
         patient_id, visit_str, position, file_name = parts[-4:]
 
+        result = db.query(Result).filter(Result.file_path == file_path).first()
+        if not result:
+            return {"status": "error", "message": f"No DB record found for {file_path}"}
+
+        id_operation = result.id_operation
+        measurement_number = result.measurement_number
+
         patient_folder = m.find(f"lymphtrack-data/{patient_id}")
         if not patient_folder:
             return {"status": "error", "message": f"Patient folder {patient_id} not found in Mega"}
@@ -475,47 +482,68 @@ def delete_measurements(payload: dict, db: Session = Depends(get_db)):
         subfolders = m.get_files_in_node(patient_folder[0])
         for fid, meta in subfolders.items():
             if meta["t"] == 1 and meta["a"]["n"] == visit_str:
-                visit_folder = (fid, meta)
+                visit_folder = fid
                 break
         if not visit_folder:
             return {"status": "error", "message": f"Visit folder {visit_str} not found in Mega"}
 
         pos_folder = None
-        subfolders = m.get_files_in_node(visit_folder[0])
+        subfolders = m.get_files_in_node(visit_folder)
         for fid, meta in subfolders.items():
             if meta["t"] == 1 and meta["a"]["n"] == position:
-                pos_folder = (fid, meta)
+                pos_folder = fid
                 break
         if not pos_folder:
             return {"status": "error", "message": f"Position folder {position} not found in Mega"}
 
-        file_node = None
-        files = m.get_files_in_node(pos_folder[0])
+        files = m.get_files_in_node(pos_folder)
+        deleted = False
         for fid, meta in files.items():
             if meta["t"] == 0 and meta["a"]["n"] == file_name:
-                file_node = (fid, meta)
+                m.delete(fid)
+                deleted = True
+                print(f"[INFO] Deleted {file_name} from Mega")
                 break
+        if not deleted:
+            print(f"[WARN] File {file_name} not found in Mega, skipping deletion")
 
-        if file_node:
-            m.delete(file_node[0])
-            print(f"[INFO] Deleted {file_name} from Mega")
-        else:
-            print(f"[INFO] File {file_name} not found in Mega, skipping deletion")
+        db.delete(result)
+        db.commit()
 
-        results = db.query(Result).filter(Result.file_path == file_path).all()
-        if results:
-            for r in results:
-                db.delete(r)
-            db.commit()
-        else:
-            return {"status": "error", "message": f"No DB record found for {file_path}"}
+        results_to_update = (
+            db.query(Result)
+            .filter(Result.id_operation == id_operation, Result.position == position)
+            .filter(Result.measurement_number > measurement_number)
+            .order_by(Result.measurement_number.asc())
+            .all()
+        )
 
-        return {"status": "success", "deleted": [file_path]}
+        for r in results_to_update:
+            old_number = r.measurement_number
+            r.measurement_number = old_number - 1
+
+            old_name = f"measurement_{old_number}.xlsx"
+            new_name = f"measurement_{old_number - 1}.xlsx"
+
+            for fid, meta in files.items():
+                if meta["t"] == 0 and meta["a"]["n"] == old_name:
+                    try:
+                        m.rename(fid, new_name)
+                        print(f"[INFO] Renamed {old_name} → {new_name} in Mega")
+                    except Exception as e:
+                        print(f"[WARN] Could not rename {old_name}: {e}")
+
+            parts[-1] = new_name
+            r.file_path = "/".join(parts[:-1] + [new_name])
+
+        db.commit()
+
+        return {
+            "status": "success",
+            "deleted": [file_path],
+            "renamed": [r.file_path for r in results_to_update],
+        }
 
     except Exception as e:
         db.rollback()
         return {"status": "error", "message": str(e)}
-
-
-
-
