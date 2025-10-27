@@ -4,27 +4,18 @@ import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { Eye, EyeOff } from 'lucide-react-native';
 import AsyncStorage from "@react-native-async-storage/async-storage";
-
+import { COLORS } from '@/constants/colors';
+import { LoadingScreen } from '@/components/loadingScreen';
+import { showAlert} from '@/utils/alertUtils';
+import { commonStyles } from '@/constants/styles';
 
 export default function LoginScreen() {
+  const router = useRouter();
+  const { width } = useWindowDimensions();
   const [email, setEmail] = useState('');
-  const [message,setMessage] = useState<{text : string; type: 'error' | 'success' | null }>({
-    text: '',
-    type: null
-  });
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
-  const { width } = useWindowDimensions();
-
-  const showAlert = (title: string, messageText: string, type: 'error' | 'success' = 'error') => {
-    if (Platform.OS === 'web') {
-      setMessage({ text: `${title}: ${messageText}`, type });
-    } else {
-      Alert.alert(title, messageText);
-    }
-  };
 
   const saveUserId = async (id: string) => {
     if (Platform.OS === 'web') {
@@ -35,24 +26,20 @@ export default function LoginScreen() {
   };
 
   const handleLogin = async () => {
-    setMessage({ text: '', type: null });
     if (!email || !password) {
       showAlert('Error', 'Please fill in all fields');
       return;
     }
-
     setLoading(true);
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
-
       if (error) {
         showAlert('Login Failed', error.message);
       } else if (data.user) {
         await saveUserId(data.user.id);
-        setMessage({ text: '', type: null });
         router.replace('/(tabs)/patients');
       }
     } catch (error) {
@@ -63,38 +50,36 @@ export default function LoginScreen() {
   };
 
   const handleForgotPassword = async () => {
-    setMessage({ text: '', type: null });
     if (!email) {
       showAlert('Email Required', 'Please enter your email address');
       return;
     }
-
     const { error } = await supabase.auth.resetPasswordForEmail(email);
     if (error) {
       showAlert('Error', error.message);
     } else {
       showAlert('Success', 'Password reset email sent');
-      setMessage({ text: '', type: null });
     }
   };
 
+  if (loading) return <LoadingScreen text="Sign In..."/>;
 
   return (
-    <View style={styles.container}>
+    <View style={[commonStyles.container,{justifyContent: "center"}]}>
       <View style={styles.header}>
         <Image
           source={require("../../assets/images/LymphTrack_Logo_no_background.png")}
-          style={{ width: 400, height: 300, marginBottom : -100 , marginTop : -100}}
+          style={styles.image}
           resizeMode="contain"
         />
         <Text style={styles.subtitle}>Secure Medical Data Management</Text>
       </View>
 
-      <View style={[styles.form, width >=500 && { width : 450, alignSelf: 'center' }]}>
+      <View style={[commonStyles.card, width >=500 && { width : 450, alignSelf: 'center' }]}>
         <TextInput
-          style={styles.input}
+          style={commonStyles.input}
           placeholder="Email Address"
-          placeholderTextColor={'gray'}
+          placeholderTextColor={COLORS.inputText}
           value={email}
           onChangeText={setEmail}
           keyboardType="email-address"
@@ -104,9 +89,9 @@ export default function LoginScreen() {
 
         <View style={styles.passwordContainer}>
           <TextInput
-            style={[styles.input, { flex: 1 }]}
+            style={commonStyles.input}
             placeholder="Password"
-            placeholderTextColor={'gray'}
+            placeholderTextColor={COLORS.inputText}
             value={password}
             onChangeText={setPassword}
             secureTextEntry={!showPassword}
@@ -116,7 +101,9 @@ export default function LoginScreen() {
             onPress={() => setShowPassword(!showPassword)}
             style={styles.eyeIcon}
           >
-            {showPassword ? <EyeOff size={20} color="#6B7280" /> : <Eye size={20} color="#6B7280" />}
+            {showPassword 
+              ? <EyeOff size={20} color={COLORS.subtitle} /> 
+              : <Eye size={20} color={COLORS.subtitle} />}
           </TouchableOpacity>
         </View>
 
@@ -126,20 +113,10 @@ export default function LoginScreen() {
           </TouchableOpacity>
         </View>
 
-        {Platform.OS === 'web' && message.text ? (
-          <Text style={{ color: message.type === 'error' ? 'red' : 'green', textAlign: 'center', marginBottom: 20, marginTop : -20 }}>
-            {message.text}
-          </Text>
-        ) : null}
-
         <TouchableOpacity
-          style={[styles.loginButton, loading && styles.loginButtonDisabled]}
-          onPress={handleLogin}
-          disabled={loading}
-        >
-          <Text style={styles.loginButtonText}>
-            {loading ? 'Signing In...' : 'Sign In'}
-          </Text>
+          style={styles.loginButton}
+          onPress={handleLogin}>
+          <Text style={styles.loginButtonText}>Sign In</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -147,46 +124,21 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-    justifyContent: 'center',
-    paddingHorizontal: 20,
-  },
   header: {
     alignItems: 'center',
     marginBottom: 40,
   },
-  logo: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#2563EB',
-    marginBottom: 8,
-  },
   subtitle: {
     fontSize: 16,
-    color: '#6B7280',
+    color: COLORS.subtitle,
     textAlign: 'center',
+    marginBottom: -20,
   },
-  form: {
-    backgroundColor: '#FFFFFF',
-    padding: 24,
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 25,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontSize: 16,
-    marginBottom: 16,
-    backgroundColor: '#FFFFFF',
+  image : { 
+    width: 400, 
+    height: 300, 
+    marginBottom : -100 , 
+    marginTop : -100
   },
   passwordContainer: {
     flexDirection: 'row',
@@ -194,12 +146,11 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   eyeIcon: {
-  position: 'absolute',
-  right: 16,
-  top: '50%',
-  transform: [{ translateY: -18 }], 
-},
-
+    position: 'absolute',
+    right: 16,
+    top: '50%',
+    transform: [{ translateY: -18 }], 
+  },
   optionsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -210,11 +161,11 @@ const styles = StyleSheet.create({
   forgotPassword: {
     marginLeft : 15,
     fontSize: 12,
-    color: '#6a90db',
+    color: COLORS.primary,
     fontWeight: '500',
   },
   loginButton: {
-    backgroundColor: '#6a90db',
+    backgroundColor: COLORS.primary,
     width: '50%',
     borderRadius: 25,
     paddingVertical: 16,
@@ -222,18 +173,9 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     alignSelf: 'center',
   },
-  loginButtonDisabled: {
-    backgroundColor: '#9CA3AF',
-  },
   loginButtonText: {
-    color: '#FFFFFF',
+    color: COLORS.textButton,
     fontSize: 16,
     fontWeight: '600',
-  },
-  disclaimer: {
-    fontSize: 12,
-    color: '#6B7280',
-    textAlign: 'center',
-    lineHeight: 18,
   },
 });

@@ -1,24 +1,10 @@
-import React, { useState, useEffect } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  useWindowDimensions,
-  Platform,
-  ActivityIndicator,
-  ScrollView,
-} from "react-native";
+import { useState, useEffect } from "react";
+import { View,Text,StyleSheet,useWindowDimensions,Platform,ActivityIndicator,ScrollView,} from "react-native";
 import { supabase } from "@/lib/supabase";
 import { API_URL } from "@/constants/api";
-import {
-  VictoryChart,
-  VictoryLine,
-  VictoryAxis,
-  VictoryTheme,
-  VictoryLegend
-} from "victory";
-
-
+import { VictoryChart,VictoryLine,VictoryAxis,VictoryLegend} from "victory";
+import { LoadingScreen } from "@/components/loadingScreen";
+import { commonStyles } from "@/constants/styles";
 
 export default function OutcomesScreen() {
   const { width } = useWindowDimensions();
@@ -63,22 +49,15 @@ export default function OutcomesScreen() {
     fetchStep1();
   }, []);
 
-  if (loadingAuth) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#4c54bc" />
-        <Text style={styles.loadingText}>Loading...</Text>
-      </View>
-    );
-  }
+  if (loadingAuth) return <LoadingScreen text="Loading ..." />;
 
   if (!isAuthorized) {
     return (
       <View style={styles.container}>
         <View
-          style={[styles.header, width >= 700 && { justifyContent: "center" }]}
+          style={[commonStyles.header, width >= 700 && { justifyContent: "center" }]}
         >
-          <Text style={[styles.headerTitle, width >= 700 && { width: 700 }]}>
+          <Text style={[commonStyles.headerTitle, width >= 700 && { width: 700 }]}>
             Outcomes
           </Text>
         </View>
@@ -107,9 +86,9 @@ export default function OutcomesScreen() {
   return (
     <View style={styles.container}>
       <View
-        style={[styles.header, width >= 700 && { justifyContent: "center" }]}
+        style={[commonStyles.header, width >= 700 && { justifyContent: "center" }]}
       >
-        <Text style={[styles.headerTitle, width >= 700 && { width: 700 }]}>
+        <Text style={[commonStyles.headerTitle, width >= 700 && { width: 700 }]}>
           Outcomes
         </Text>
       </View>
@@ -132,7 +111,7 @@ export default function OutcomesScreen() {
           </Text>
 
           {/* === STEP 1 – DETECTION === */}
-          <View style={styles.stepSection}>
+          <View style={commonStyles.card}>
             <Text style={styles.stepTitle}>
               Step 1 — Detection (Healthy vs Lymphedema)
             </Text>
@@ -326,7 +305,7 @@ export default function OutcomesScreen() {
 
 
           {/* === STEP 2 – LATERAL === */}
-          <View style={styles.stepSection}>
+          <View style={commonStyles.card}>
             <Text style={styles.stepTitle}>
               Step 2 — Lateral Classification (Right vs Left)
             </Text>
@@ -342,7 +321,7 @@ export default function OutcomesScreen() {
           </View>
 
           {/* === STEP 3 – CLUSTERING === */}
-          <View style={styles.stepSection}>
+          <View style={commonStyles.card}>
             <Text style={styles.stepTitle}>
               Step 3 — Clustering (Anderson Stages)
             </Text>
@@ -365,22 +344,6 @@ export default function OutcomesScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F8FAFC" },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingTop: Platform.OS === "web" ? 20 : 60,
-    paddingBottom: 20,
-    backgroundColor: "#FFFFFF",
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: "#1F2937",
-  },
   content: { flex: 1, justifyContent: "center", alignItems: "center" },
   constructionIcon: { fontSize: 60, marginBottom: 20 },
   constructionText: { fontSize: 18, color: "#6B7280" },
@@ -400,17 +363,6 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   subtitle: { fontSize: 16, color: "#6B7280" },
-  stepSection: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    padding: 20,
-    marginTop: 24,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 2,
-  },
   stepTitle: {
     fontSize: 20,
     fontWeight: "700",

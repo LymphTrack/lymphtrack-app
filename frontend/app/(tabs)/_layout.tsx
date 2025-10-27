@@ -1,20 +1,18 @@
 import { Tabs } from 'expo-router';
 import { Users, Settings, BarChart3 } from 'lucide-react-native';
-import { Platform,useWindowDimensions, View} from 'react-native';
-
+import { Platform} from 'react-native';
+import {COLORS} from '@/constants/colors';
 
 export default function TabLayout() {
-  const { width } = useWindowDimensions();
-
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: '#6a90db',
-        tabBarInactiveTintColor: '#6B7280',
+        tabBarActiveTintColor: COLORS.primary,
+        tabBarInactiveTintColor: COLORS.subtitle,
         tabBarStyle: {
-          backgroundColor: '#FFFFFF',
-          borderTopColor: '#E5E7EB',
+          backgroundColor: COLORS.tabsBackground,
+          borderTopColor: COLORS.grayLight,
           paddingBottom: 8,
           paddingTop: Platform.OS === 'web' ? 8 : 12,
           height: Platform.OS === 'web' ? 70 : 90,

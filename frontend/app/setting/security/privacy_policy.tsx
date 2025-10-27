@@ -1,14 +1,16 @@
 import { Platform, View, Text, ScrollView, StyleSheet, TouchableOpacity, useWindowDimensions } from "react-native";
 import { ArrowLeft } from "lucide-react-native";
 import { useRouter } from "expo-router";
+import { commonStyles } from "@/constants/styles";
+import { COLORS } from "@/constants/colors";
 
 export default function TermsOfUseScreen() {
   const router = useRouter();
   const {width} = useWindowDimensions();
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
+    <View style={commonStyles.container}>
+      <View style={commonStyles.secondaryHeader}>
         <View
           style={{
             width: width >= 700 ? 700 : "100%",
@@ -19,19 +21,11 @@ export default function TermsOfUseScreen() {
           }}
         >
           <TouchableOpacity onPress={ () => router.back()}>
-            <ArrowLeft size={24} color="#1F2937" />
+            <ArrowLeft size={24} color={COLORS.text} />
           </TouchableOpacity>
           <Text
             pointerEvents="none"
-            style={[
-              styles.headerTitle,
-              { 
-                position: "absolute",
-                left: 0,
-                right: 0,
-                textAlign: "center",
-              },
-            ]}
+            style={commonStyles.secondaryHeaderTitle}
           >
           Privacy Policy</Text>
         </View>
@@ -48,17 +42,9 @@ export default function TermsOfUseScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F8FAFC" },
-  header: {
-    paddingHorizontal: 20,
-    paddingTop : Platform.OS === 'web' ? 20 : 60,
-    paddingBottom: 20,
-    backgroundColor: "#FFFFFF",
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
+  content: { 
+    padding: 20 
   },
-  headerTitle: { fontSize: 20, fontWeight: "600", color: "#1F2937" },
-  content: { padding: 20 },
   sectionTitle: {
     fontSize: 16,
     fontWeight: "600",
@@ -71,12 +57,5 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     color: "#374151",
     marginBottom: 8,
-  },
-  footer: {
-    fontSize: 12,
-    color: "#6B7280",
-    textAlign: "center",
-    marginTop: 20,
-    marginBottom: 40,
   },
 });

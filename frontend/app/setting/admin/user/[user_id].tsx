@@ -1,30 +1,22 @@
 import { useState, useEffect } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  Alert,
-  ActivityIndicator,
-  useWindowDimensions,
-  KeyboardAvoidingView,
-  Platform,
-} from "react-native";
-import { ArrowLeft, Save, Trash } from "lucide-react-native";
+import {View,Text,TextInput,TouchableOpacity,StyleSheet,ScrollView,useWindowDimensions,KeyboardAvoidingView,Platform,} from "react-native";
+import { ArrowLeft, Save, Trash, User,Building,Briefcase, Mail  } from "lucide-react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { API_URL } from "@/constants/api";
+import { LoadingScreen } from "@/components/loadingScreen";
+import { showAlert, confirmAction } from "@/utils/alertUtils";
+import { commonStyles } from "@/constants/styles";
+import { COLORS } from "@/constants/colors";
+import { SegmentedControl } from "@/components/segmentedControl";
+import { InputField } from "@/components/inputField";
 
 export default function ModifyUserScreen() {
-  const { user_id } = useLocalSearchParams<{ user_id: string }>();
   const router = useRouter();
   const { width } = useWindowDimensions();
-
+  const { user_id } = useLocalSearchParams<{ user_id: string }>();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [isFocused, setIsFocused] = useState(false);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -55,11 +47,7 @@ export default function ModifyUserScreen() {
       });
     } catch (error) {
       console.error("Error loading user:", error);
-      if (Platform.OS === "web") {
-        window.alert("Error\n\nFailed to load user data");
-      } else {
-        Alert.alert("Error", "Failed to load user data");
-      }
+      showAlert("Error", "Failed to load user data");
     } finally {
       setLoading(false);
     }
@@ -79,31 +67,24 @@ export default function ModifyUserScreen() {
         throw new Error(err.detail || "Failed to update user");
       }
 
-      if (Platform.OS === "web") {
-        window.alert("Success\n\nUser updated successfully!");
-      } else {
-        Alert.alert("Success", "User updated successfully!");
-      }
-      router.push(`../${user_id}`);
+      showAlert("Success", "User updated successfully!");
+      router.replace("../admin");
     } catch (err) {
       console.error("Error updating user:", err);
-      if (Platform.OS === "web") {
-        window.alert("Error\n\nUnexpected error occurred");
-      } else {
-        Alert.alert("Error", "Unexpected error occurred");
-      }
+      showAlert("Error", "Unexpected error occurred");
     } finally {
       setSaving(false);
     }
   };
 
   const deleteUser = async () => {
-    if (Platform.OS === "web") {
-      const confirm = window.confirm(
-        "Confirm deletion\n\nAre you sure you want to delete this user?"
-      );
-      if (!confirm) return;
-    }
+    const confirmed = await confirmAction(
+      "Confirm deletion",
+      "Are you sure you want to delete this user?",
+      "Delete",
+      "Cancel"
+    );
+    if (!confirmed) return;
 
     setDeleting(true);
     try {
@@ -113,100 +94,48 @@ export default function ModifyUserScreen() {
         throw new Error(err.detail || "Failed to delete user");
       }
 
-      if (Platform.OS === "web") {
-        window.alert("Success\n\nUser deleted successfully!");
-      } else {
-        Alert.alert("Success", "User deleted successfully!");
-      }
+      showAlert("Success", "User deleted successfully!");
       router.replace("../admin");
     } catch (err) {
       console.error("Error deleting user:", err);
-      if (Platform.OS === "web") {
-        window.alert("Error\n\nUnexpected error occurred");
-      } else {
-        Alert.alert("Error", "Unexpected error occurred");
-      }
+      showAlert("Error", "Unexpected error occurred");
     } finally {
       setDeleting(false);
     }
   };
 
-  const handleBack = () => {
-    if (Platform.OS === "web") {
-      const confirm = window.confirm(
-        "Unsaved Changes\n\nIf you leave now, your modifications will not be saved. Continue?"
-      );
-      if (confirm) router.push(`../admin`);
-    } else {
-      Alert.alert(
-        "Unsaved Changes",
-        "If you leave now, your modifications will not be saved.",
-        [
-          { text: "Stay", style: "cancel" },
-          { text: "Leave", style: "destructive", onPress: () => router.push(`../${user_id}`) },
-        ]
-      );
-    }
+  const handleBack = async () => {
+    const confirmed = await confirmAction(
+      "Unsaved Changes",
+      "If you leave now, your modifications will not be saved. Do you want to continue?",
+      "Leave",
+      "Stay"
+    );
+    if (confirmed) router.push("../admin");
   };
 
-  if (loading || deleting) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#6a90db" />
-        <Text style={{ marginTop: 20, fontSize: 16, color: "#1F2937" }}>
-          {deleting ? "Deleting User..." : "Loading User..."}
-        </Text>
-      </View>
-    );
-  }
+  if (loading) return <LoadingScreen text="Loading user..." />;
+  if (saving) return <LoadingScreen text="Saving changes..." />;
+  if (deleting) return <LoadingScreen text="Deleting user..." />;
 
-  const SegmentedControl = ({
-    options,
-    value,
-    onValueChange,
-  }: {
-    options: string[];
-    value: string;
-    onValueChange: (v: string) => void;
-  }) => (
-    <View style={styles.segmentedControl}>
-      {options.map((option) => (
-        <TouchableOpacity
-          key={option}
-          style={[styles.segment, value === option && styles.segmentActive]}
-          onPress={() => onValueChange(option)}
-        >
-          <Text
-            style={[styles.segmentText, value === option && styles.segmentTextActive]}
-          >
-            {option.toUpperCase()}
-          </Text>
-        </TouchableOpacity>
-      ))}
-    </View>
-  );
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
+    <View style={commonStyles.container}>
+
+      <View style={commonStyles.secondaryHeader}>
         <View
           style={{
             width: width >= 700 ? 700 : "100%",
             alignSelf: "center",
-            flexDirection: "row",
             paddingHorizontal: width >= 700 ? 30 : 10,
-            position: "relative",
           }}
         >
           <TouchableOpacity onPress={handleBack}>
-            <ArrowLeft size={24} color="#1F2937" />
+            <ArrowLeft size={24} color={COLORS.text} />
           </TouchableOpacity>
           <Text
             pointerEvents="none"
-            style={[
-              styles.headerTitle,
-              { position: "absolute", left: 0, right: 0, textAlign: "center" },
-            ]}
+            style={commonStyles.secondaryHeaderTitle}
           >
             Modify User
           </Text>
@@ -218,51 +147,46 @@ export default function ModifyUserScreen() {
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <ScrollView
-          contentContainerStyle={[styles.form, width >= 700 && { width: 700, alignSelf: "center" }]}
+          showsVerticalScrollIndicator={false}
+          
         >
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Name</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Enter full name..."
+          <View style={[styles.form, width >= 600 && { width: 600, alignSelf: "center" }]}>
+            <InputField
+              label="Full Name"
+              icon={<User size={18} color={COLORS.text} style={styles.inputIcon} />}
+              placeholder="Enter full name ..."
               value={formData.name}
               onChangeText={(text) => setFormData((prev) => ({ ...prev, name: text }))}
             />
-          </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Email</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Enter email..."
+            <InputField
+              label="Email"
+              required
+              icon={<Mail size={18} color={COLORS.text} style={styles.inputIcon} />}
+              placeholder="Enter email ..."
               keyboardType="email-address"
               value={formData.email}
               onChangeText={(text) => setFormData((prev) => ({ ...prev, email: text }))}
             />
-          </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Role</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Enter role (ex: Doctor)"
+            <InputField
+              label="Role"
+              optional
+              icon={<Briefcase size={18} color={COLORS.text} style={styles.inputIcon} />}
+              placeholder="Enter role (ex: Doctor) ..."
               value={formData.role}
               onChangeText={(text) => setFormData((prev) => ({ ...prev, role: text }))}
             />
-          </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Institution</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Enter institution"
+            <InputField
+              label="Institution"
+              optional
+              icon={<Building size={18} color={COLORS.text} style={styles.inputIcon} />}
+              placeholder="Enter institution ..."
               value={formData.institution}
               onChangeText={(text) => setFormData((prev) => ({ ...prev, institution: text }))}
             />
-          </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>User Type</Text>
             <SegmentedControl
               options={["user", "admin"]}
               value={formData.user_type}
@@ -270,30 +194,28 @@ export default function ModifyUserScreen() {
                 setFormData((prev) => ({ ...prev, user_type: val as "user" | "admin" }))
               }
             />
+
+            <TouchableOpacity
+              style={commonStyles.button}
+              onPress={handleSave}
+              disabled={saving}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <Save size={18} color={COLORS.butonText} style={{ marginRight: 8 }} />
+                <Text style={commonStyles.buttonText}>Save Changes</Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[commonStyles.button, { backgroundColor: COLORS.lightRed, marginTop: 12 }]}
+              onPress={deleteUser}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <Trash size={18} color={COLORS.darkRed} style={{ marginRight: 8 }} />
+                <Text style={[commonStyles.buttonText, { color: COLORS.darkRed }]}>Delete</Text>
+              </View>
+            </TouchableOpacity>
           </View>
-
-          <TouchableOpacity
-            style={[styles.saveButton, saving && { backgroundColor: "#9CA3AF" }]}
-            onPress={handleSave}
-            disabled={saving}
-          >
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
-              <Save size={16} color="#2563EB" style={{ marginRight: 8 }} />
-              <Text style={styles.saveButtonText}>
-                {saving ? "Saving..." : "Save Changes"}
-              </Text>
-            </View>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.saveButton, { backgroundColor: "#f38181ff" }]}
-            onPress={deleteUser}
-          >
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
-              <Trash size={16} color="#891111ff" style={{ marginRight: 8 }} />
-              <Text style={[styles.saveButtonText, { color: "#891111ff" }]}>Delete</Text>
-            </View>
-          </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
     </View>
@@ -301,50 +223,6 @@ export default function ModifyUserScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F8FAFC" },
-  header: {
-    paddingHorizontal: 20,
-    paddingTop: Platform.OS === "web" ? 20 : 60,
-    paddingBottom: 20,
-    backgroundColor: "#FFFFFF",
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
-  },
-  headerTitle: { fontSize: 20, fontWeight: "600", color: "#1F2937" },
   form: { padding: 24 },
-  inputGroup: { marginBottom: 20 },
-  label: { fontSize: 14, fontWeight: "500", color: "#374151", marginBottom: 6 },
-  input: {
-    borderWidth: 1,
-    borderColor: "#D1D5DB",
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 16,
-    backgroundColor: "#FFFFFF",
-  },
-  segmentedControl: {
-    flexDirection: "row",
-    backgroundColor: "#F3F4F6",
-    borderRadius: 12,
-    padding: 4,
-  },
-  segment: { flex: 1, paddingVertical: 12, alignItems: "center", borderRadius: 8 },
-  segmentActive: { backgroundColor: "#6a90db" },
-  segmentText: { fontSize: 14, fontWeight: "500", color: "#6B7280" },
-  segmentTextActive: { color: "#FFFFFF" },
-  saveButton: {
-    backgroundColor: "#c9def9ff",
-    marginTop: 16,
-    padding: 14,
-    borderRadius: 12,
-    alignItems: "center",
-  },
-  saveButtonText: { color: "#2563EB", fontSize: 16, fontWeight: "600" },
-  loadingContainer: {
-    flex: 1,
-    backgroundColor: "#FFFFFF",
-    justifyContent: "center",
-    alignItems: "center",
-  },
+  inputIcon: { marginLeft: 4, marginBottom: -2 },
 });

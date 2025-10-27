@@ -6,6 +6,10 @@ import { useFocusEffect } from "@react-navigation/native";
 import { API_URL } from "@/constants/api";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
+import { LoadingScreen } from "@/components/loadingScreen";
+import { showAlert, confirmAction } from "@/utils/alertUtils";
+import { commonStyles } from "@/constants/styles";
+import { COLORS } from "@/constants/colors";
 
 interface Patient {
   patient_id: string;
@@ -35,10 +39,12 @@ export default function PatientDetailScreen() {
     try {
       const res = await fetch(`${API_URL}/patients/${patient_id}`);
       if (!res.ok) throw new Error("Failed to fetch patient");
+
       const data = await res.json();
       setPatient(data);
     } catch (error) {
-      console.error("Erreur patient:", error);
+      console.error("Error fetching patient:", error);
+      showAlert("Error", "Failed to load patient information.");
     } finally {
       setLoading(false);
     }
@@ -48,16 +54,23 @@ export default function PatientDetailScreen() {
     try {
       const res = await fetch(`${API_URL}/operations/by_patient/${patient_id}`);
       if (!res.ok) throw new Error("Failed to fetch operations");
-      
+
       const data: Operation[] = await res.json();
 
-      const uniqueOps = Array.from(new Map(data.map((op) => [op.name, op])).values());
+      const uniqueOps = Array.from(
+        new Map(data.map((op) => [op.name, op])).values()
+      );
 
-      uniqueOps.sort((a, b) => new Date(a.operation_date).getTime() - new Date(b.operation_date).getTime());
+      uniqueOps.sort(
+        (a, b) =>
+          new Date(a.operation_date).getTime() -
+          new Date(b.operation_date).getTime()
+      );
 
       setOperations(uniqueOps);
     } catch (error) {
-      console.error("Erreur op:", error);
+      console.error("Error fetching operations:", error);
+      showAlert("Error", "Failed to load patient operations.");
     }
   };
 
@@ -65,54 +78,46 @@ export default function PatientDetailScreen() {
     try {
       setExporting(true);
 
+      const url = `${API_URL}/patients/export-folder/${patient_id}`;
+
       if (Platform.OS === "web") {
-        const res = await fetch(`${API_URL}/patients/export-folder/${patient_id}`);
+        const res = await fetch(url);
 
         if (!res.ok) {
           const errorText = await res.text();
           try {
             const errorJson = JSON.parse(errorText);
             if (errorJson.status === "error") {
-              window.alert(
-                `No Files\n\n${errorJson.message || "No files found for this patient"}`
-              );
+              showAlert("No Files", errorJson.message || "No files found for this patient");
               return;
             }
-          } catch {
-          }
+          } catch {}
           throw new Error("Failed to download patient zip");
         }
 
         const blob = await res.blob();
-        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = window.URL.createObjectURL(blob);
+        link.download = `patient_${patient_id}.zip`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(link.href);
 
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `patient_${patient_id}.zip`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-
-        window.URL.revokeObjectURL(url);
-        window.alert("Download complete\n\nThe patient zip has been saved.");
+        showAlert("Download complete", "The patient zip has been saved successfully.");
       } else {
-        const fileUri = FileSystem.documentDirectory + `patient_${patient_id}.zip`;
-
-        const res = await FileSystem.downloadAsync(
-          `${API_URL}/patients/export-folder/${patient_id}`,
-          fileUri
-        );
+        const fileUri = `${FileSystem.documentDirectory}patient_${patient_id}.zip`;
+        const res = await FileSystem.downloadAsync(url, fileUri);
 
         if (res.status !== 200) {
           const errorText = await FileSystem.readAsStringAsync(res.uri);
           try {
             const errorJson = JSON.parse(errorText);
             if (errorJson.status === "error") {
-              Alert.alert("No Files", errorJson.message || "No files found for this patient");
+              showAlert("No Files", errorJson.message || "No files found for this patient");
               return;
             }
-          } catch {
-          }
+          } catch {}
           throw new Error("Failed to download patient zip");
         }
 
@@ -120,28 +125,24 @@ export default function PatientDetailScreen() {
         if (isAvailable) {
           await Sharing.shareAsync(res.uri);
         } else {
-          Alert.alert("Download complete", `Saved to ${res.uri}`);
+          showAlert("Download complete", `Saved to ${res.uri}`);
         }
       }
     } catch (error) {
       console.error("Export error:", error);
 
-      if (Platform.OS === "web") {
-        const retry = window.confirm(
-          "Error\n\nUnable to export patient folder.\n\nDo you want to retry?"
-        );
-        if (retry) handleExport();
-      } else {
-        Alert.alert("Error", "Unable to export patient folder", [
-          { text: "Cancel", style: "cancel" },
-          { text: "Retry", onPress: () => handleExport() },
-        ]);
-      }
+      const retry = await confirmAction(
+        "Error",
+        "Unable to export patient folder.\nDo you want to retry?",
+        "Retry",
+        "Cancel"
+      );
+
+      if (retry) handleExport();
     } finally {
       setExporting(false);
     }
   };
-
 
   useFocusEffect(
     useCallback(() => {
@@ -152,102 +153,61 @@ export default function PatientDetailScreen() {
     }, [patient_id])
   );
 
-  if (loading) {
-    return (
-      <View style={{ flex: 1, backgroundColor: "#FFFFFF", justifyContent: "center", alignItems: "center" }}>
-        <ActivityIndicator size="large" color="#6a90db"/>
-      </View>
-    );
-  }
-
-  if (exporting) {
-    return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#FFF" }}>
-        <ActivityIndicator size="large" color="#2563EB" />
-        <Text style={{ marginTop: 20, fontSize: 16, color: "#1F2937", textAlign: "center", paddingHorizontal: 30 }}>
-          Exporting patient folder... Please do not close the app.
-        </Text>
-      </View>
-    );
-  }
+  if (loading) return <LoadingScreen active={true} text="" />;
+  if (exporting) return <LoadingScreen active={true} text="Exporting patient data..." />;
 
   if (!patient) {
     return (
-      <View style={styles.container}>
-        <View style={styles.header}>
+      <View style={commonStyles.container}>
+        <View style={commonStyles.secondaryHeader}>
           <TouchableOpacity onPress={() => router.push('../(tabs)/patients')}>
-            <ArrowLeft size={28} color="#1F2937" />
+            <ArrowLeft size={28} color={COLORS.text} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Patient not found</Text>
-          <View style={{ width: 28 }} />
+          <Text style={commonStyles.secondaryHeaderTitle}>Patient not found</Text>
         </View>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-        <View style={styles.header}>
-          <View
-            style={{
-              width: width >= 700 ? 700 : "100%",
-              alignSelf: "center",
-              flexDirection: "row",
-              paddingHorizontal: width >= 700 ? 30 : 10,
-              position: "relative",
-            }}
-          >
-            <View
-              style={{
-                width: width >= 700 ? 700 : "100%",
-                alignSelf: "center",
-                flexDirection: "row",
-                justifyContent: "space-between",
-                alignItems: "center",
-                paddingHorizontal: width >= 700 ? 30 : 10,
-                position: "relative",
-              }}
+    <View style={commonStyles.container}>
+        <View style={commonStyles.secondaryHeader}>
+          <View style={[commonStyles.headerInfo, {width: width >= 700 ? 700 : "100%"}]}>
+            <TouchableOpacity onPress={() => router.push(`../(tabs)/patients`)}>
+                <ArrowLeft size={24} color={COLORS.text} />
+            </TouchableOpacity>
+            <Text pointerEvents="none" style={[commonStyles.secondaryHeaderTitle]}>
+              Patient: {patient.patient_id}
+            </Text>
+            <TouchableOpacity
+              style={commonStyles.addButton}
+              onPress={handleExport}
             >
-              <TouchableOpacity onPress={() => router.push(`../(tabs)/patients`)}>
-                <ArrowLeft size={24} color="#1F2937" />
-              </TouchableOpacity>
-
-              <Text style={[styles.headerTitle, { textAlign: "center" }]}>
-                Patient: {patient.patient_id}
-              </Text>
-
-              <TouchableOpacity
-                style={[styles.downloadButton, width >= 700 && { marginRight: 60,}]}
-                onPress={handleExport}
-              >
-                <Download size={20} color="#FFFFFF" />
-              </TouchableOpacity>
-            </View>
+              <Download size={20} color={COLORS.textButton} />
+            </TouchableOpacity>
           </View>
         </View>
 
-      <ScrollView 
-        showsVerticalScrollIndicator={false}
-      >
-        <View style = {width>= 700 && {width : 700, alignSelf : "center"}}>
+      <ScrollView showsVerticalScrollIndicator={false}>
+        <View style={[commonStyles.form, width >= 700 && {width : 700 , alignSelf : "center"}]}>
           <TouchableOpacity
-            style={styles.patientCard}
+            style={commonStyles.card}
             onPress={() => router.push(`/patient/modify/${patient.patient_id}`)}
           >
-            <View style={styles.patientHeader}>
-              <Text style={styles.patientId}>ID: {patient.patient_id}</Text>
+            <View style={commonStyles.cardHeader}>
+              <Text style={[commonStyles.title, {color :COLORS.primary}]}>ID: {patient.patient_id}</Text>
               <View style={styles.patientInfo}>
-                <Text style={styles.patientDetail}>
+                <Text style={commonStyles.subtitle}>
                   {patient.age ? `${patient.age}y` : '?'} • {patient.gender === 1 ? 'Female' : patient.gender === 2 ? 'Male' : '?'}
                 </Text>
-                <Text style={styles.patientDetail}>
+                <Text style={commonStyles.subtitle}>
                   BMI: {patient.bmi ? patient.bmi.toFixed(1) : '?'}
                 </Text>
               </View>
             </View>
 
-            <View style={styles.locationRow}>
-              <MapPin size={16} color="#6B7280" />
+            <View style={commonStyles.row}>
+              <MapPin size={16} color={COLORS.text}/>
               <Text style={styles.locationText}>
                 Lymphedema side: {
                   patient.lymphedema_side === 1 ? 'Right' :
@@ -257,12 +217,12 @@ export default function PatientDetailScreen() {
               </Text>
             </View>
 
-            <View style={styles.locationRow}>
+            <View style={commonStyles.row}>
               <View style ={{marginTop : 10}}>
-                <Notebook size={16} color="#6B7280" />
+                <Notebook size={16} color={COLORS.text} />
               </View>
               <Text 
-                style={[styles.patientNotes, { flexWrap: "wrap" }]} 
+                style={[commonStyles.notes, { flexWrap: "wrap" }]} 
                 numberOfLines={0}
               >
                 Notes: {patient.notes || "No notes available for this patient"}
@@ -270,7 +230,8 @@ export default function PatientDetailScreen() {
             </View>
           </TouchableOpacity>
 
-          <Text style={styles.followUpTitle}>Follow-up</Text>
+          <Text style={commonStyles.sectionTitle}>Follow-up</Text>
+          
           <View style={styles.timeline}>
             {operations.length === 0 ? (
               <Text style={styles.noFollowUp}>No follow-up available</Text>
@@ -282,7 +243,7 @@ export default function PatientDetailScreen() {
                   onPress={() => router.push(`/patient/followup/${op.id_operation}`)}
                 >
                   <View style={styles.timelineDot} />
-                  <View style={styles.timelineContent}>
+                  <View style={[commonStyles.card, {padding:6, paddingLeft : 15}]}>
                     <Text style={styles.timelineOperation}>{op.name}</Text>
                     <Text style={styles.timelineDate}>{new Date(op.operation_date).toLocaleDateString()}</Text>
                   </View>
@@ -290,111 +251,29 @@ export default function PatientDetailScreen() {
               ))
             )}
           </View>
-
           <TouchableOpacity
-            style={styles.addFollowUpButton}
+            style={[commonStyles.button,{marginTop : 40, marginBottom: 40}]}
             onPress={() => router.push(`/patient/followup/create_followup/${patient.patient_id}`)}
           >
-            <Plus size={25} color="#2563EB" />
-            <Text style={styles.addFollowUpButtonText}>Add Follow-Up</Text>
-          </TouchableOpacity>
+            <Text style={commonStyles.buttonText}>Add Follow-up</Text>
+          </TouchableOpacity>          
         </View>
-
-        <View style = {{alignSelf : "center", marginBottom : 30}}>
-          <Text style={styles.evolutionTitle}>Evolution</Text>
-
-              {/* Ici on va rajouter les graph d'évolution avec un graph pour chaque visite qui permet de 
-              voir pour chaque visite les mesures de chaque position (les 6)
-              en dessous voir 6 graphes globales qui compare chaque visite a chaque position
-              */}
-          <View style={ {width :700, flexDirection: "row", gap : 20, alignSelf : "center", flexWrap : "wrap", justifyContent : "center"}}>
-            <View style={styles.graphContainer}>
-              <Text style ={styles.titleGraphContainer}>Graph 1</Text>
-            </View>
-            <View style={styles.graphContainer}>
-              <Text style ={styles.titleGraphContainer}>Graph 2</Text>
-            </View>
-          </View>
-        </View>
-
       </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F8FAFC" },
-  header: {
-    paddingHorizontal: 20,
-    paddingTop : Platform.OS === 'web' ? 20 : 60,
-    paddingBottom: 20,
-    backgroundColor: "#FFFFFF",
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
+  patientInfo: { 
+    alignItems: "flex-end" 
   },
-  headerTitle: { fontSize: 20, fontWeight: "bold", color: "#1F2937" },
-  patientCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    padding: 20,
-    margin: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  patientHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  graphContainer : {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    padding: 20,
-  },
-  titleGraphContainer : {
-    color : "#1F2937",
-    fontSize : 18,
-    fontWeight : "600",
-    alignSelf : "center",
-
-  },
-  patientId: { fontSize: 18, fontWeight: "600", color: "#6a90db" },
-  patientInfo: { alignItems: "flex-end" },
-  patientDetail: { fontSize: 14, color: "#6B7280", marginBottom: 2 },
-  locationRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 8,
-    gap: 8,
-  },
-  locationText: { fontSize: 16, color: "#374151" },
-  patientNotes: {
-    marginTop: 10,
-    fontSize: 16,
-    color: "#6B7280",
-  },
-  followUpTitle: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: "#6a90db",
-    marginTop: 10,
-    alignSelf: "center",
-  },
-  evolutionTitle: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: "#6a90db",
-    alignSelf: "center",
-    marginTop : -10,
-    marginBottom : 30,
+  locationText: { 
+    fontSize: 16, 
+    color: COLORS.text,
   },
   noFollowUp: {
     fontSize: 14,
-    color: "#9CA3AF",
+    color: COLORS.subtitle,
     textAlign: "center",
     marginTop: 10,
   },
@@ -402,11 +281,11 @@ const styles = StyleSheet.create({
     marginTop: 20,
     marginHorizontal: 20,
     borderLeftWidth: 2,
-    borderLeftColor: "#6a90db",
+    borderLeftColor: COLORS.primary,
     paddingLeft: 15,
   },
   timelineItem: {
-    marginBottom: 20,
+    marginBottom: 5,
     paddingLeft: 10,
     position: "relative",
   },
@@ -414,81 +293,19 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: "#6a90db",
+    backgroundColor: COLORS.primary,
     position: "absolute",
     left: -22,
-    top: 10,
-  },
-  timelineContent: {
-    backgroundColor: "#FFFFFF",
-    padding: 10,
-    borderRadius: 8,
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 5,
-    elevation: 2,
+    top: 30,
   },
   timelineOperation: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#1F2937",
+    color: COLORS.text,
   },
   timelineDate: {
     fontSize: 14,
-    color: "#6B7280",
+    color: COLORS.subtitle,
+    paddingVertical:2,
   },
-  addFollowUpButton: {
-    flexDirection: "row",
-    gap : 10,
-    backgroundColor: '#c9def9ff',
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginTop: 24,
-    marginBottom: 60,
-    width: '50%',
-    alignSelf: 'center',
-    justifyContent: "center",
-  },
-  addFollowUpButtonText: {
-    color: '#2563EB',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-
-   footer: {
-    padding: 25,
-    borderTopWidth: 1,
-    borderTopColor: "#E5E7EB",
-    backgroundColor: "#FFFFFF",
-  },
-  exportButton: {
-    flexDirection: "row",
-    backgroundColor: "#6a90db",
-    borderRadius: 12,
-    paddingVertical: 16,
-    marginBottom : 15,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  exportButtonText: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "600",
-    marginLeft: 8,
-  },
-downloadButton: {
-  backgroundColor: "#6a90db",
-  width: 42,
-  height: 42,
-  borderRadius: 21,
-  justifyContent: "center",
-  alignItems: "center",
-  shadowColor: "#000",
-  shadowOffset: { width: 0, height: 2 },
-  shadowOpacity: 0.2,
-  shadowRadius: 4,
-  elevation: 3,
-  
-},
 });

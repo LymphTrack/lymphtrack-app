@@ -25,11 +25,11 @@ export const mapDbToSide = (side: number | null): LymphedemaSide => {
   return "Both";
 };
 
-
 export const validatePatientData = (
   ageStr: string | null,
   bmiStr: string | null,
-  idStr: string | null,
+  idStr?: string | null,
+  checkId: boolean = true, 
 ): {
   valid: boolean;
   error?: string;
@@ -37,10 +37,15 @@ export const validatePatientData = (
   bmi?: number | null;
   id?: string | null;
 } => {
-  if (idStr && idStr.trim() !== "") {
+  if (checkId && idStr && idStr.trim() !== "") {
     const id = idStr.trim().toUpperCase();
-    if (!id.startsWith("MV")) {
-      return { valid: false, error: "Patient ID must start with 'MV'" };
+
+    const idPattern = /^MV\d{3,}$/;
+    if (!idPattern.test(id)) {
+      return {
+        valid: false,
+        error: "Patient ID must start with 'MV' followed by at least 3 digits (e.g., MV025)",
+      };
     }
   }
 
@@ -62,6 +67,12 @@ export const validatePatientData = (
     bmi = parsedBmi;
   }
 
-  return { valid: true, age, bmi, id: idStr ? idStr.trim().toUpperCase() : null };
+  return {
+    valid: true,
+    age,
+    bmi,
+    id: idStr ? idStr.trim().toUpperCase() : null,
+  };
 };
+
 

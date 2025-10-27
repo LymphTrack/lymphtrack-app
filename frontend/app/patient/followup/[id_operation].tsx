@@ -1,20 +1,23 @@
-import { Platform, View, Text, Image, ScrollView, StyleSheet, ActivityIndicator, Alert, TouchableOpacity, useWindowDimensions } from "react-native";
+import { Platform, View, Text, Image, ScrollView, StyleSheet, TouchableOpacity, useWindowDimensions } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { ArrowLeft,Calendar,Download, Notebook, Plus, Save, Trash } from "lucide-react-native";
+import { ArrowLeft,Calendar,Download, Notebook, Plus} from "lucide-react-native";
 import { API_URL } from "@/constants/api";
-import { useState, useCallback , useEffect} from "react";
+import { useState, useCallback} from "react";
 import { useFocusEffect } from "@react-navigation/native";
 import * as DocumentPicker from "expo-document-picker";
+import { LoadingScreen } from "@/components/loadingScreen";
+import { showAlert, confirmAction } from "@/utils/alertUtils";
+import { commonStyles } from "@/constants/styles";
+import { COLORS } from "@/constants/colors";
+import { importAndUploadFiles } from "@/utils/uploadUtils";
 
 export default function PatientResultsScreen() {
   const { id_operation } = useLocalSearchParams<{ id_operation: string }>();
-
   const [operation, setOperation] = useState<any | null>(null);
   const [results, setResults] = useState<any[]>([]);
   const [photos, setPhotos] = useState<Array<{id:number; url:string; created_at?:string}>>([]);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [deleting, setDeleting] = useState(false);
   const [exporting, setExporting] = useState(false);
   const router = useRouter();
   const {width} = useWindowDimensions();
@@ -50,27 +53,33 @@ export default function PatientResultsScreen() {
   };
 
   const loadAllData = async () => {
+    setLoading(true);
     try {
-      const opRes = await fetch(`${API_URL}/operations/${id_operation}`);
-      if (!opRes.ok) throw new Error("Failed to fetch operation");
-      const opData = await opRes.json();
+      const [opRes, resultsRes] = await Promise.all([
+        fetch(`${API_URL}/operations/${id_operation}`),
+        fetch(`${API_URL}/results/by_operation/${id_operation}`),
+      ]);
 
-      const resultsRes = await fetch(`${API_URL}/results/by_operation/${id_operation}`);
+      if (!opRes.ok) throw new Error("Failed to fetch operation");
       if (!resultsRes.ok) throw new Error("Failed to fetch results");
+
+      const opData = await opRes.json();
       const resultsData = await resultsRes.json();
 
       setOperation(opData);
       setResults(resultsData);
+
       await loadPhotos();
     } catch (e) {
       console.error("Error loading patient data:", e);
+      showAlert("Error", "Unable to load operation data. Please try again later.");
     } finally {
       setLoading(false);
     }
   };
 
   const hasResultForPosition = (pos: number) => {
-    return results.some(r => r.position === pos);
+    return results.some((r) => r.position === pos);
   };
 
   const loadPhotos = async () => {
@@ -81,71 +90,7 @@ export default function PatientResultsScreen() {
       setPhotos(Array.isArray(data) ? data : []);
     } catch (e) {
       console.error("Error loading photos:", e);
-    }
-  };
-
-  const handleDelete = async () => {
-    if (Platform.OS === "web") {
-      const confirm = window.confirm(
-        "Confirm deletion\n\nAre you sure you want to delete this operation?"
-      );
-      if (confirm) {
-        setDeleting(true);
-        try {
-          const res = await fetch(`${API_URL}/operations/${id_operation}`, {
-            method: "DELETE",
-          });
-
-          if (!res.ok) {
-            const errData = await res.json();
-            window.alert(`Error\n\n${errData.detail || "Unable to delete the operation"}`);
-            return;
-          }
-
-          const data = await res.json();
-          setDeleting(false);
-          window.alert(`Success\n\n${data.message || "Operation deleted successfully"}`);
-
-          router.push(`../${data.patient_id}`);
-        } catch (err) {
-          console.error("Unexpected error:", err);
-          window.alert("Error\n\nSomething went wrong during deletion");
-        }
-      }
-    } else {
-      Alert.alert(
-        "Confirm deletion",
-        "Are you sure you want to delete this operation?",
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "Delete",
-            style: "destructive",
-            onPress: async () => {
-              setDeleting(true);
-              try {
-                const res = await fetch(`${API_URL}/operations/${id_operation}`, {
-                  method: "DELETE",
-                });
-
-                if (!res.ok) {
-                  const errData = await res.json();
-                  Alert.alert("Error", errData.detail || "Unable to delete the operation");
-                  return;
-                }
-
-                const data = await res.json();
-                Alert.alert("Success", data.message || "Operation deleted successfully");
-                setDeleting(false);
-                router.push(`../${data.patient_id}`);
-              } catch (err) {
-                console.error("Unexpected error:", err);
-                Alert.alert("Error", "Something went wrong during deletion");
-              }
-            },
-          },
-        ]
-      );
+      showAlert("Error", "Unable to load operation photos.");
     }
   };
 
@@ -179,172 +124,83 @@ export default function PatientResultsScreen() {
       }
 
       setUploadingPhoto(true);
+
       const res = await fetch(`${API_URL}/photos/${id_operation}`, {
         method: "POST",
         body: formData,
-        headers: {
-          Accept: "application/json",
-        },
+        headers: { Accept: "application/json" },
       });
 
       const text = await res.text();
-      if (!res.ok) {
-        if (Platform.OS === "web") {
-          window.alert(`Error\n\n${text || "Failed to upload photo"}`);
-        } else {
-          Alert.alert("Error", text || "Failed to upload photo");
-        }
-        return;
-      }
+      if (!res.ok) throw new Error(text || "Failed to upload photo");
 
       const data = JSON.parse(text);
       if (data?.photo?.url) {
         setPhotos((prev) => [...prev, data.photo]);
       }
 
-      if (Platform.OS === "web") {
-        window.alert("Photo uploaded successfully!");
-      } else {
-        Alert.alert("Success", "Photo uploaded successfully!");
-      }
+      showAlert("Success", "Photo uploaded successfully!");
     } catch (err: any) {
       console.error("Upload error:", err);
-      if (Platform.OS === "web") {
-        window.alert(`Error\n\n${err.message || err}`);
-      } else {
-        Alert.alert("Error", err.message || "An unexpected error occurred");
-      }
+      showAlert("Error", err.message || "Unexpected error during photo upload.");
     } finally {
       setUploadingPhoto(false);
     }
   };
 
   const importAndUploadAll = async () => {
+    const url = `${API_URL}/results/process-all/${id_operation}`;
+    await importAndUploadFiles(url, 18, () => router.push(`/patient/followup/${id_operation}`));
+  };
+
+  const downloadOperationFolder = async (id_operation: number, patient_id: string) => {
+    setExporting(true);
     try {
-      const res = await DocumentPicker.getDocumentAsync({
-        multiple: true,
-        type: [
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-          "application/vnd.ms-excel",
-          "text/csv",
-        ],
-        copyToCacheDirectory: true,
-      });
+      const res = await fetch(`${API_URL}/operations/export-folder/${id_operation}`);
+      if (!res.ok) throw new Error(`Download failed: ${res.status}`);
 
-      if (res.canceled || !res.assets?.length) {
-        return;
-      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
 
-      const assets = res.assets;
-      if (assets.length !== 18) {
-        const msg = `You selected ${assets.length} files. You should import 18 (3 per position × 6 positions).`;
-        Platform.OS === "web" ? window.alert(msg) : Alert.alert("Invalid number of files", msg);
-        return;
-      }
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${patient_id}_operation_${id_operation}.zip`;
+      a.click();
+      window.URL.revokeObjectURL(url);
 
-      const validExtensions = [".xlsx", ".xls", ".csv"];
-      const invalid = assets.filter(a => !validExtensions.some(ext => a.name?.toLowerCase().endsWith(ext)));
-      if (invalid.length) {
-        const msg = `Some files are not valid Excel or CSV files:\n\n${invalid.map(f => f.name || "(unnamed)") .join("\n")}`;
-        Platform.OS === "web" ? window.alert(msg) : Alert.alert("Invalid file type", msg);
-        return;
-      }
-
-      const fd = new FormData();
-
-      for (const f of assets) {
-        if (Platform.OS === "web") {
-          let blob: Blob;
-          if ((f as any).file instanceof File) {
-            blob = (f as any).file as File;
-          } else if (f.uri?.startsWith("blob:") || f.uri?.startsWith("http")) {
-            blob = await fetch(f.uri).then(r => r.blob());
-          } else {
-            blob = await fetch(f.uri).then(r => r.blob());
-          }
-          fd.append("files", blob, f.name || "measurement.csv");
-        } else {
-          fd.append("files", {
-            uri: f.uri,
-            name: f.name || "measurement.csv",
-            type: f.mimeType || "application/octet-stream",
-          } as any);
-        }
-      }
-
-      setExporting(true);
-
-      const resp = await fetch(`${API_URL}/results/process-all/${id_operation}`, {
-        method: "POST",
-        body: fd,
-        headers: { Accept: "application/json" },
-      });
-
-      const text = await resp.text();
-      console.log("Backend resp:", resp.status, text);
-      if (!resp.ok) throw new Error(text || `HTTP ${resp.status}`);
-
-      const data = JSON.parse(text);
-      if (data.status === "error") {
-        const msg = data.message || "Processing failed";
-        Platform.OS === "web" ? window.alert(`Error\n\n${msg}`) : Alert.alert("Error", msg);
-        return;
-      }
-
-      Platform.OS === "web"
-        ? window.alert("All measurements processed and saved!")
-        : Alert.alert("Success", "All measurements processed and saved!");
-      router.push(`/patient/followup/${id_operation}`);
-    } catch (e: any) {
-      console.error("Upload error:", e);
-      Platform.OS === "web"
-        ? window.alert("Error\n\n" + (e.message || e))
-        : Alert.alert("Error", e.message || String(e));
+      showAlert("Success", "Operation folder downloaded successfully!");
+    } catch (err) {
+      showAlert("Download error", "Unable to download operation folder.");
     } finally {
       setExporting(false);
     }
   };
 
-  if (loading) {
-    return (
-      <View style={styles.loaderContainer}>
-        <ActivityIndicator size="large" color="#6a90db" />
-      </View>
+  const deletePhoto = async (photoId: number, setPhotos: React.Dispatch<React.SetStateAction<any[]>>) => {
+    const confirmed = await confirmAction(
+      "Delete photo",
+      "Are you sure you want to delete this photo?",
+      "Delete",
+      "Cancel"
     );
-  }
+    if (!confirmed) return;
 
-  if (deleting) {
-    return (
-      <View style={{ flex: 1, backgroundColor: "#FFFFFF", justifyContent: "center", alignItems: "center" }}>
-        <ActivityIndicator size="large" color="#6a90db" />
-        <Text style={{ marginTop: 20, fontSize: 16, color: "#1F2937" }}>
-          Deleting FollowUp...
-        </Text>
-      </View>
-    );
-  }
+    try {
+      const resp = await fetch(`${API_URL}/photos/${photoId}`, { method: "DELETE" });
+      if (!resp.ok) throw new Error("Failed to delete photo");
 
-  if (uploadingPhoto) {
-    return (
-      <View style={{ flex: 1, backgroundColor: "#FFFFFF", justifyContent: "center", alignItems: "center" }}>
-        <ActivityIndicator size="large" color="#6a90db" />
-        <Text style={{ marginTop: 20, fontSize: 16, color: "#1F2937" }}>
-          Uploading Photo...
-        </Text>
-      </View>
-    );
-  }
+      setPhotos((prev) => prev.filter((x) => x.id !== photoId));
 
-  if (exporting) {
-    return (
-      <View style={{ flex: 1, backgroundColor: "#FFFFFF", justifyContent: "center", alignItems: "center" }}>
-        <ActivityIndicator size="large" color="#6a90db" />
-        <Text style={{ marginTop: 20, fontSize: 16, color: "#1F2937" }}>
-          Exporting FollowUp...
-        </Text>
-      </View>
-    );
-  }
+      showAlert("Success", "Photo deleted successfully!");
+    } catch (err) {
+      console.error("Delete error:", err);
+      showAlert("Error", "Could not delete photo.");
+    }
+  };
+
+  if (loading) return <LoadingScreen text="" />;
+  if (uploadingPhoto) return <LoadingScreen text="Uploading photo..." />;
+  if (exporting) return <LoadingScreen text="Exporting FollowUp..." />;
 
   if (!operation) {
     return (
@@ -355,499 +211,162 @@ export default function PatientResultsScreen() {
   }
 
   return (
-    <View style={{ flex: 1}}>
-      <ScrollView contentContainerStyle={styles.container}>
-        <View style={styles.header}>
-          <View
-            style={{
-              width: width >= 700 ? 700 : "100%",
-              alignSelf: "center",
-              flexDirection: "row",
-              paddingHorizontal: width >= 700 ? 30 : 10,
-              position: "relative",
-            }}
+    <View style={commonStyles.container}>
+      <View style={commonStyles.secondaryHeader}>
+        <View style={[commonStyles.headerInfo, { width: width >= 700 ? 700 : "100%" }]}>
+          <TouchableOpacity onPress={() => router.push(`/patient/${operation.patient_id}`)}>
+            <ArrowLeft size={24} color={COLORS.text} />
+          </TouchableOpacity>
+          <Text pointerEvents="none" style={[commonStyles.secondaryHeaderTitle]}>
+            Visit patient : {operation.patient_id}
+          </Text>
+          <TouchableOpacity
+            style={commonStyles.addButton}
+            onPress={() => downloadOperationFolder(operation.id_operation, operation.patient_id)}
           >
-            <View
-              style={{
-                width: width >= 700 ? 700 : "100%",
-                alignSelf: "center",
-                flexDirection: "row",
-                justifyContent: "space-between",
-                alignItems: "center",
-                paddingHorizontal: width >= 700 ? 30 : 10,
-                position: "relative",
-              }}
-            >
-              <TouchableOpacity onPress={() => router.push(`/patient/${operation.patient_id}`)}>
-                <ArrowLeft size={24} color="#1F2937" />
-              </TouchableOpacity>
-
-              <Text style={[styles.headerTitle, { textAlign: "center" }]}>
-                Visit patient : {operation.patient_id}
-              </Text>
-
-              <TouchableOpacity
-                style={[styles.downloadButton, width >= 700 && { marginRight: 60,}]}
-                onPress={async () => {
-                  setExporting(true);
-                  try {
-                    console.log("[FRONT] Downloading operation folder:", id_operation);
-                    const res = await fetch(`${API_URL}/operations/export-folder/${id_operation}`);
-                    
-                    if (!res.ok) 
-                      throw new Error(`Download failed: ${res.status}`);
-                    
-                    const blob = await res.blob();
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement("a");
-                    a.href = url;
-                    a.download = `${operation.patient_id}_operation_${id_operation}.zip`;
-                    a.click();
-                    window.URL.revokeObjectURL(url);
-                    console.log("[FRONT] Download successful");
-                  
-                  } catch (err) {
-                    console.error("[FRONT] Error downloading:", err);
-                    Alert.alert("Download error", "Unable to download operation folder");
-                    setExporting(false);
-                  }
-                  setExporting(false);
-                }}
-              >
-                <Download size={20} color="#FFFFFF" />
-              </TouchableOpacity>
-            </View>
-          </View>
+            <Download size={20} color={COLORS.textButton} />
+          </TouchableOpacity>
         </View>
+      </View>
 
-        <View style={width >= 700 && { width: 700, alignSelf: "center" }}>
-          <View style={styles.operationCard}>
-            <View style={styles.operationHeader}>
-              <Text style={styles.operationName}>Visit name : {operation.name}</Text>
-              <View style ={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                <Calendar size={16} color="#6B7280" />
-                <Text style={styles.operationDate}>
+      <ScrollView showsVerticalScrollIndicator={false}>
+        <View style={[styles.form, width >= 700 && { width: 700, alignSelf: "center" }]}>
+          <TouchableOpacity
+            style={commonStyles.card}
+            onPress={() => router.push(`../followup/modify_followup/${id_operation}`)}
+          >
+            <View style={commonStyles.cardHeader}>
+              <Text style={[commonStyles.title, { color: COLORS.primary }]}>
+                Visit name : {operation.name}
+              </Text>
+              <View style={commonStyles.row}>
+                <Calendar size={16} color={COLORS.subtitle} />
+                <Text style={commonStyles.subtitle}>
                   {new Date(operation.operation_date).toLocaleDateString()}
                 </Text>
               </View>
             </View>
 
-            <View style={styles.operationRow}>
-              <Notebook size={16} color="#6B7280" />
-              <Text style={styles.operationNotes}>
+            <View style={commonStyles.row}>
+              <Notebook size={16} color={COLORS.text} style={{ marginTop: 11 }} />
+              <Text style={commonStyles.notes} numberOfLines={0}>
                 Notes: {operation.notes || "No notes available for this visit"}
               </Text>
             </View>
-          </View>
-          <Text style={styles.positionpTitle}>Positions</Text>
+          </TouchableOpacity>
 
-          <View>
-            <View style={styles.operationCard}>
-              <View style={{ position: "relative" }}>
-                <Image
-                  source={require("../../../assets/images/body.png")}
-                  style={{ width: "100%", height: 400, resizeMode: "contain" }}
-                />
-
-                {Array.from({ length: 6 }).map((_, index) => {
-                  const pos = index + 1;
-                  const filled = hasResultForPosition(pos);
-                  return (
-                    <TouchableOpacity
-                      key={pos}
-                      style={[
-                        styles.positionButton,
-                        getPositionCoordinates(pos, width),
-                        { backgroundColor: filled ? "#6a90db" : "#9CA3AF" },
-                      ]}
-                      onPress={() =>
-                        router.push(`/patient/followup/position/${pos}?operation_id=${operation.id_operation}`)
-                      }
-                    >
-                      <Text style={styles.positionButtonText}>{pos}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
-
-              </View>
+          <Text style={commonStyles.sectionTitle}>Positions</Text>
+          <View style={commonStyles.card}>
+            <View style={{ position: "relative" }}>
+              <Image
+                source={require("../../../assets/images/body.png")}
+                style={{ width: "100%", height: 400, resizeMode: "contain" }}
+              />
+              {Array.from({ length: 6 }).map((_, index) => {
+                const pos = index + 1;
+                const filled = hasResultForPosition(pos);
+                return (
+                  <TouchableOpacity
+                    key={pos}
+                    style={[
+                      styles.positionButton,
+                      getPositionCoordinates(pos, width),
+                      { backgroundColor: filled ? COLORS.primary : COLORS.grayMedium },
+                    ]}
+                    onPress={() =>
+                      router.push(`/patient/followup/position/${pos}?operation_id=${operation.id_operation}`)
+                    }
+                  >
+                    <Text style={styles.positionButtonText}>{pos}</Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           </View>
-        </View>
-        <View>
-        <View style={width >= 700 && { width: 600, alignSelf: "center" }}>
+
           <TouchableOpacity
-            style={styles.importButton}
+            style={[commonStyles.button, { marginTop: 40, marginBottom: 40 }]}
             onPress={importAndUploadAll}
           >
-            <Plus size={20} color="#2563EB" />
-            <Text style={styles.importButtonText}>Import all results</Text>
+            <Text style={commonStyles.buttonText}>Import all results</Text>
           </TouchableOpacity>
-        </View>
-      </View>
 
-      {photos.length > 0 && (
-        <View style={width >= 700 && { width: 700, alignSelf: "center" }}>
-          <View style={[styles.operationCard, { marginTop: 0 }]}>
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-              <Text style={{ fontSize: 18, fontWeight: "600", color: "#1F2937" }}>
-                Photos ({photos.length})
-              </Text>
-              <TouchableOpacity
-                onPress={uploadPhoto}
-                disabled={uploadingPhoto}
-                style={[styles.photoAddBtn, uploadingPhoto && { opacity: 0.6 }]}
-              >
-                <Plus size={18} color="#2563EB" />
-                <Text style={styles.photoAddBtnText}>Add photo</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.photoGrid}>
-              {photos.map((p) => (
-                <View key={p.id} style={styles.photoItem}>
-                  <Image
-                    source={{ uri: p.url }}
-                    style={styles.photoImage}
-                    onError={(e) => {
-                      console.log("Image failed to load:", p.url, e.nativeEvent);
-                    }}
-                  />
-
+          {photos.length >= 0 && (
+            <View style={{ width: "100%", alignSelf: "center", marginBottom: 40 }}>
+              <View style={[commonStyles.card, { marginTop: 0 }]}>
+                <View
+                  style={commonStyles.cardHeader}
+                >
+                  <Text style={commonStyles.title}>
+                    Photos ({photos.length})
+                  </Text>
                   <TouchableOpacity
-                    style={styles.deletePhotoButton}
-                    onPress={async () => {
-                      if (Platform.OS === "web") {
-                        const confirmDelete = window.confirm("Are you sure you want to delete this photo?");
-                        if (!confirmDelete) return;
-
-                        try {
-                          const resp = await fetch(`${API_URL}/photos/${p.id}`, { method: "DELETE" });
-                          if (!resp.ok) throw new Error("Failed to delete photo");
-                          setPhotos((prev) => prev.filter((x) => x.id !== p.id));
-                        } catch (err) {
-                          console.error("Delete error:", err);
-                          window.alert("Error: Could not delete photo.");
-                        }
-                      } else {
-                        Alert.alert(
-                          "Delete photo",
-                          "Are you sure you want to delete this photo?",
-                          [
-                            { text: "Cancel", style: "cancel" },
-                            {
-                              text: "Delete",
-                              style: "destructive",
-                              onPress: async () => {
-                                try {
-                                  const resp = await fetch(`${API_URL}/photos/${p.id}`, { method: "DELETE" });
-                                  if (!resp.ok) throw new Error("Failed to delete photo");
-                                  setPhotos((prev) => prev.filter((x) => x.id !== p.id));
-                                } catch (err) {
-                                  console.error("Delete error:", err);
-                                  Alert.alert("Error", "Could not delete photo.");
-                                }
-                              },
-                            },
-                          ]
-                        );
-                      }
-                    }}
+                    onPress={uploadPhoto}
+                    disabled={uploadingPhoto}
+                    style={[styles.photoAddBtn, uploadingPhoto && { opacity: 0.6 }]}
                   >
-                    <Text style={styles.deletePhotoButtonText}>×</Text>
+                    <Plus size={18} color={COLORS.butonText} />
+                    <Text style={styles.photoAddBtnText}>Add photo</Text>
                   </TouchableOpacity>
                 </View>
-              ))}
-            </View>
-          </View>
-        </View>
-      )}
 
+                <View style={styles.photoGrid}>
+                  {photos.map((p) => (
+                    <View key={p.id} style={styles.photoItem}>
+                      <Image
+                        source={{ uri: p.url }}
+                        style={styles.photoImage}
+                        onError={(e) => {
+                          console.log("Image failed to load:", p.url, e.nativeEvent);
+                        }}
+                      />
+                      <TouchableOpacity
+                        style={styles.deletePhotoButton}
+                        onPress={() => deletePhoto(p.id, setPhotos)}
+                      >
+                        <Text style={styles.deletePhotoButtonText}>×</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            </View>
+          )}
+        </View>
       </ScrollView>
-
-      <View style={styles.footer}>
-        <View style={ styles.button}>
-          <TouchableOpacity
-              style={styles.modifyButton}
-              onPress={() =>
-                router.push(
-                  `/patient/followup/modify_followup/${operation.id_operation}`
-                )
-              }
-          >
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
-              <Save size={16} color="#2563EB" style={{ marginRight: 8 }} />
-                <Text style={styles.modifyButtonText}>Modify visit</Text>
-            </View>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
-              <Trash size={16} color="#891111ff" style={{ marginRight: 8 }} />
-                <Text style={styles.deleteButtonText}>Delete visit</Text>
-            </View>
-          </TouchableOpacity>
-        </View>
-      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flexGrow: 1,
-    backgroundColor: "#F8FAFC",
-    paddingBottom: 20,
-  },
-  header: {
-    paddingHorizontal: 20,
-    paddingTop : Platform.OS === 'web' ? 20 : 60,
-    paddingBottom: 20,
-    backgroundColor: "#FFFFFF",
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
-  },
-  headerTitle: { fontSize: 20, fontWeight: "bold", color: "#1F2937" },
   loaderContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
   },
-operationCard: {
-  backgroundColor: "#FFFFFF",
-  borderRadius: 16,
-  padding: 20,
-  margin: 20,
-  shadowColor: "#000",
-  shadowOffset: { width: 0, height: 2 },
-  shadowOpacity: 0.1,
-  shadowRadius: 8,
-  elevation: 4,
-},
-operationHeader: {
-  flexDirection: "row",
-  justifyContent: "space-between",
-  alignItems: "center",
-  marginBottom: 12,
-},
-operationName: { fontSize: 18, fontWeight: "600", color: "#6a90db" },
-operationDate: { fontSize: 14, color: "#6B7280" },
-operationRow: {
-  flexDirection: "row",
-  alignItems: "center",
-  marginBottom: 8,
-  gap: 8,
-},
-operationNotes: {
-  fontSize: 16,
-  color: "#6B7280",
-  flexShrink: 1,
-},
-
-  positionBlock: {
-    marginBottom: 12,
-    padding: 12,
-    backgroundColor: "#F3F4F6",
-    borderRadius: 10,
-  },
-  positionTitle: {
-    fontSize: 16,
-    fontWeight: "500",
-    color: "#6a90db",
-    marginBottom: 6,
-  },
-  positionLabel: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#1F2937",
-    marginBottom: 6,
-  },
-  measureBlock: {
-    marginLeft: 10,
-  },
-  measureTitle: {
-    fontSize: 15,
-    color: "#6a90db",
-    marginBottom: 8,
-  },
-  measureText: {
-    fontSize: 13,
-    color: "#4B5563",
-    marginBottom: 2,
-  },
-  measurementRow: {
-    marginBottom: 12,
-    padding: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#F3F4F6",
-  },
-  button : {
-    flexDirection: "row",
-    gap  : 25,
-    alignSelf : "center",
-  },
-  deleteButton: {
-  backgroundColor: "#f38181ff", 
-  borderRadius: 12,
-  padding: 14,
-  alignItems: "center",
-  width : 150,
-},
-deleteButtonText: {
-  color: "#891111ff",
-  fontSize: 16,
-  fontWeight: "600",
-},
-modifyButton: {
-  backgroundColor: "#c9def9ff",
-  padding: 14,
-  borderRadius: 12,
-  alignItems: "center",
-  width : 150,
-  },
-  modifyButtonText: {
-    color: "#2563EB",
-    fontSize: 16,
-    fontWeight: "600",
+  form: {
+    paddingHorizontal: 24,
   },
 
-  buttonContainer : {
-    marginHorizontal : 15,
-    width : 400,
-  },
-
-  addButton: {
-  backgroundColor: "#c9def9ff",
-  borderRadius: 12,
-  paddingVertical: 14,
-  alignItems: "center",
-  marginTop: 8,
-},
-addButtonText: {
-  color: "#2563EB",
-  fontSize: 16,
-  fontWeight: "600",
-},
-
-  positionpTitle: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: "#6a90db",
-    marginTop: 10,
-    alignSelf: "center",
-  },
-
-sectionTitle: {
-  fontSize: 18,
-  fontWeight: "600",
-  color: "#1F2937",
-  marginBottom: 16,
-},
-settingItem: {
-  flexDirection: "row",
-  justifyContent: "space-between",
-  alignItems: "center",
-  paddingVertical: 12,
-  borderBottomWidth: 1,
-  borderBottomColor: "#F3F4F6",
-},
-settingLeft: {
-  flexDirection: "row",
-  alignItems: "center",
-  flex: 1,
-},
-iconContainer: {
-  width: 40,
-  height: 40,
-  borderRadius: 20,
-  backgroundColor: "#EFF6FF",
-  justifyContent: "center",
-  alignItems: "center",
-  marginRight: 12,
-},
-settingTitle: {
-  fontSize: 16,
-  fontWeight: "500",
-  color: "#1F2937",
-  marginBottom: 2,
-},
-settingSubtitle: {
-  fontSize: 14,
-  color: "#6B7280",
-},
-
-positionIcon: {
-  width: 32,
-  height: 32,
-  borderRadius: 16,
-  backgroundColor: "#EFF6FF",
-  justifyContent: "center",
-  alignItems: "center",
-  marginRight: 12,
-},
-positionNumber: {
-  fontSize: 14,
-  fontWeight: "600",
-  color: "#2563EB",
-},
-
-downloadButton: {
-  backgroundColor: "#6a90db",
-  width: 42,
-  height: 42,
-  borderRadius: 21,
-  justifyContent: "center",
-  alignItems: "center",
-  shadowColor: "#000",
-  shadowOffset: { width: 0, height: 2 },
-  shadowOpacity: 0.2,
-  shadowRadius: 4,
-  elevation: 3,
-  
-},
-footer: {
-    padding: 25,
-    borderTopWidth: 1,
-    borderTopColor: "#E5E7EB",
-    backgroundColor: "#FFFFFF",
-  },
-positionButton: {
-  position: "absolute",
-  backgroundColor: "#6a90db",
-  width: 28,
-  height: 28,
-  borderRadius: 14,
-  justifyContent: "center",
-  alignItems: "center",
-  zIndex: 10,
-  shadowColor: "#000",
-  shadowOffset: { width: 0, height: 2 },
-  shadowOpacity: 0.2,
-  shadowRadius: 3,
-  elevation: 3,
-},
-positionButtonText: {
-  color: "white",
-  fontWeight: "600",
-  fontSize: 13,
-},
-  importButtonText: {
-    color: '#2563EB',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  importButton: {
-    flexDirection: "row",
-    gap : 10,
-    backgroundColor: '#c9def9ff',
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginTop: 24,
-    marginBottom: 30,
-    width: '50%',
-    alignSelf: 'center',
+  positionButton: {
+    position: "absolute",
+    backgroundColor: COLORS.primary,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     justifyContent: "center",
+    alignItems: "center",
+    zIndex: 10,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  positionButtonText: {
+    color: "white",
+    fontWeight: "600",
+    fontSize: 13,
   },
   photoGrid: {
     flexDirection: "row",
@@ -859,9 +378,9 @@ positionButtonText: {
     height: 100,
     borderRadius: 12,
     overflow: "hidden",
-    backgroundColor: "#E5E7EB",
+    backgroundColor: COLORS.grayLight,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: COLORS.grayLight,
     margin: 5,
     position: "relative",
   },
@@ -875,13 +394,13 @@ positionButtonText: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    backgroundColor: "#c9def9ff",
+    backgroundColor: COLORS.butonBackground,
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
   photoAddBtnText: {
-    color: "#2563EB",
+    color: COLORS.butonText,
     fontSize: 14,
     fontWeight: "600",
   },
@@ -889,7 +408,7 @@ positionButtonText: {
     position: "absolute",
     top: 4,
     right: 4,
-    backgroundColor: "#6a90db",
+    backgroundColor: COLORS.butonBackground,
     borderRadius: 12,
     width: 22,
     height: 22,
