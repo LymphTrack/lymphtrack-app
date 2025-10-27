@@ -11,6 +11,7 @@ import { LoadingScreen } from "@/components/loadingScreen";
 import { showAlert, confirmAction } from "@/utils/alertUtils";
 import { commonStyles } from "@/constants/styles";
 import { COLORS } from "@/constants/colors";
+import { exportFolder } from "@/utils/exportUtils";
 
 interface Patient {
   patient_id: string;
@@ -200,44 +201,9 @@ export default function PatientsScreen() {
 
   const handleExport = async () => {
     setExporting(true);
-
-    if (selectedPatients.length === 0) {
-      setExporting(false);
-      return;
-    }
-
-    try {
-      const res = await fetch(`${API_URL}/patients/export-multiple/`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ patient_ids: selectedPatients }),
-      });
-
-
-      if (!res.ok) {
-        const errorText = await res.text();
-        throw new Error(`Export failed: ${res.status}`);
-        setExporting(false);
-      }
-
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `patients_export_${selectedPatients.length}.zip`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-
-      window.URL.revokeObjectURL(url);
-
-    } catch (err) {
-      Alert.alert("Export error", "Unable to export selected patients");
-      setExporting(false);
-    } finally {
-      setExportMode(false);
-      setExporting(false);
-    }
+    const url = `${API_URL}/patients/export-multiple/`;
+    await exportFolder(url, `patients_export_${selectedPatients.length}.zip`);
+    setExporting(false);
   };
 
   const selectAll = () => {
@@ -282,7 +248,7 @@ export default function PatientsScreen() {
           renderItem={renderPatientItem}
           keyExtractor={(item) => item.patient_id}
           showsVerticalScrollIndicator={true}
-          contentContainerStyle={commonStyles.form}
+          contentContainerStyle={[commonStyles.form, width >=700 && {width : 700, alignSelf: "center"}]}
           ListHeaderComponent={
             <>
               <View

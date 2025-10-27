@@ -416,7 +416,7 @@ def export_position_folder(id_operation: int, position: int, db: Session = Depen
 
         visit_contents = m.get_files_in_node(visit_folder_id)
         position_folder_id = None
-        position_folder_name = f"position_{position}"
+        position_folder_name = str(position)
         for fid, meta in visit_contents.items():
             if meta["t"] == 1 and meta["a"]["n"].lower() == position_folder_name.lower():
                 position_folder_id = fid

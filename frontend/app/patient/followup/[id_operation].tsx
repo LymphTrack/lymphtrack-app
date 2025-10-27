@@ -10,6 +10,7 @@ import { showAlert, confirmAction } from "@/utils/alertUtils";
 import { commonStyles } from "@/constants/styles";
 import { COLORS } from "@/constants/colors";
 import { importAndUploadFiles } from "@/utils/uploadUtils";
+import { exportFolder } from "@/utils/exportUtils";
 
 export default function PatientResultsScreen() {
   const { id_operation } = useLocalSearchParams<{ id_operation: string }>();
@@ -153,27 +154,11 @@ export default function PatientResultsScreen() {
     await importAndUploadFiles(url, 18, () => router.push(`/patient/followup/${id_operation}`));
   };
 
-  const downloadOperationFolder = async (id_operation: number, patient_id: string) => {
+  const handleExport = async () => {
     setExporting(true);
-    try {
-      const res = await fetch(`${API_URL}/operations/export-folder/${id_operation}`);
-      if (!res.ok) throw new Error(`Download failed: ${res.status}`);
-
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${patient_id}_operation_${id_operation}.zip`;
-      a.click();
-      window.URL.revokeObjectURL(url);
-
-      showAlert("Success", "Operation folder downloaded successfully!");
-    } catch (err) {
-      showAlert("Download error", "Unable to download operation folder.");
-    } finally {
-      setExporting(false);
-    }
+    const url = `${API_URL}/operations/export-folder/${id_operation}`;
+    await exportFolder(url, `${operation.patient_id}_operation_${id_operation}.zip`);
+    setExporting(false);
   };
 
   const deletePhoto = async (photoId: number, setPhotos: React.Dispatch<React.SetStateAction<any[]>>) => {
@@ -222,7 +207,7 @@ export default function PatientResultsScreen() {
           </Text>
           <TouchableOpacity
             style={commonStyles.addButton}
-            onPress={() => downloadOperationFolder(operation.id_operation, operation.patient_id)}
+            onPress={() => handleExport()}
           >
             <Download size={20} color={COLORS.textButton} />
           </TouchableOpacity>

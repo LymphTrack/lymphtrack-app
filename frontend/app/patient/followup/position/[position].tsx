@@ -3,7 +3,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { Trash, ArrowLeft, Plus, Download } from "lucide-react-native";
 import { API_URL } from "@/constants/api";
-import * as DocumentPicker from "expo-document-picker";
+import { exportFolder } from "@/utils/exportUtils";
 import { LoadingScreen } from "@/components/loadingScreen";
 import { showAlert, confirmAction } from "@/utils/alertUtils";
 import { commonStyles } from "@/constants/styles";
@@ -56,31 +56,11 @@ export default function PositionScreen() {
     await importAndUploadFiles(url, [1, 6], loadMeasurements);
   };
 
-  const downloadPosition = async () => {
+  const handleExport = async () => {
     setExporting(true);
-    try {
-      console.log("[FRONT] Downloading operation folder:", operation_id);
-
-      const res = await fetch(`${API_URL}/operations/export-position/${operation_id}/${position}`);
-      if (!res.ok) throw new Error(`Download failed: ${res.status}`);
-
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${patient_id}_operation_${operation_id}_position_${position}.zip`;
-      a.click();
-      window.URL.revokeObjectURL(url);
-
-      console.log("[FRONT] Download successful");
-      showAlert("Download complete", "The position folder has been successfully saved.");
-    } catch (err) {
-      console.error("[FRONT] Error downloading:", err);
-      showAlert("Download error", "Unable to download operation folder.");
-    } finally {
-      setExporting(false);
-    }
+    const url = `${API_URL}/operations/export-position/${operation_id}/${position}`;
+    await exportFolder(url, `operation_${operation_id}_position_${position}.zip`);
+    setExporting(false);
   };
 
   const deleteMeasure = async (id_result: number, file_path: string) => {
@@ -138,7 +118,7 @@ export default function PositionScreen() {
           </Text>
           <TouchableOpacity
             style={commonStyles.addButton}
-            onPress={downloadPosition}
+            onPress={handleExport}
           >
             <Download size={20} color={COLORS.textButton} />
           </TouchableOpacity>
