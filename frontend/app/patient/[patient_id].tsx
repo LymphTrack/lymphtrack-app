@@ -1,11 +1,9 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Platform , View, Text, StyleSheet, Alert, TouchableOpacity, ActivityIndicator, ScrollView, useWindowDimensions } from "react-native";
-import { ArrowLeft, MapPin,Notebook, Share, Plus, Download } from "lucide-react-native";
+import { View, Text, StyleSheet,TouchableOpacity, ScrollView, useWindowDimensions } from "react-native";
+import { ArrowLeft, MapPin,Notebook, Download } from "lucide-react-native";
 import { useState, useCallback } from "react";
 import { useFocusEffect } from "@react-navigation/native";
 import { API_URL } from "@/constants/api";
-import * as FileSystem from "expo-file-system/legacy";
-import * as Sharing from "expo-sharing";
 import { LoadingScreen } from "@/components/loadingScreen";
 import { showAlert, confirmAction } from "@/utils/alertUtils";
 import { commonStyles } from "@/constants/styles";

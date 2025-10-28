@@ -1,17 +1,16 @@
-import { useState} from 'react';
+import { useState, useCallback} from 'react';
 import { useFocusEffect } from "@react-navigation/native";
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, TextInput , ActivityIndicator, Platform, useWindowDimensions,} from 'react-native';
 import { useRouter } from 'expo-router';
 import { Search, Plus,MapPin, Trash, Download , X, CheckCircle2, Circle} from 'lucide-react-native';
-import { Alert } from "react-native";
-import { useCallback } from "react";
 import DropDownPicker from "react-native-dropdown-picker";
 import { API_URL } from '@/constants/api';
 import { LoadingScreen } from "@/components/loadingScreen";
-import { showAlert, confirmAction } from "@/utils/alertUtils";
+import { showAlert} from "@/utils/alertUtils";
 import { commonStyles } from "@/constants/styles";
 import { COLORS } from "@/constants/colors";
 import { exportFolder } from "@/utils/exportUtils";
+import { deleteItem } from "@/utils/deleteUtils";
 
 interface Patient {
   patient_id: string;
@@ -24,7 +23,7 @@ interface Patient {
 
 export default function PatientsScreen() {
   const [patients, setPatients] = useState<Patient[]>([]);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -33,7 +32,21 @@ export default function PatientsScreen() {
   const [isFocused, setIsFocused] = useState(false);
   const [exportMode, setExportMode] = useState(false);
   const [selectedPatients, setSelectedPatients] = useState<string[]>([]);
-  
+  const [openSide, setOpenSide] = useState(false);
+  const [openGender, setOpenGender] = useState(false);
+  const [side, setSide] = useState([
+    { label: "All sides", value: "" },
+    { label: "Right", value: "1" },
+    { label: "Left", value: "2" },
+    { label: "Bilateral", value: "3" },
+  ]);
+  const [gender, setGender] = useState([
+    { label: "All gender", value: "" },
+    { label: "Female", value: "1" },
+    { label: "Male", value: "2" },
+  ]);
+  const [genderFilter, setGenderFilter] = useState<"" | "1" | "2">(""); 
+  const [sideFilter, setSideFilter] = useState<"" | "1" | "2" | "3">("");
 
   useFocusEffect(
     useCallback(() => {
@@ -57,45 +70,11 @@ export default function PatientsScreen() {
     }
   };
 
-  const confirmDeletePatient = async (patient_id: string) => {
-    const confirmed = await confirmAction(
-      "Confirm deletion",
-      "Are you sure you want to delete this patient?",
-      "Delete",
-      "Cancel"
-    );
-
-    if (confirmed) {
-      await deletePatient(patient_id);
-    }
-  };
-
   const deletePatient = async (patient_id: string) => {
-    try {
-      setDeletingId(patient_id);
-
-      const res = await fetch(`${API_URL}/patients/${patient_id}`, {
-        method: "DELETE",
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        showAlert("Error", errorData.detail || "Failed to delete patient");
-        return;
-      }
-
-      showAlert("Success", "Patient deleted successfully");
-      await loadPatients();
-    } catch (err) {
-      console.error("Error deleting patient:", err);
-      showAlert("Error", "Unable to delete patient. Please check your internet connection.");
-    } finally {
-      setDeletingId(null);
-    }
+    setDeletingId(true);
+    await deleteItem(`${API_URL}/patients/${patient_id}`, "patient", loadPatients);
+    setDeletingId(false);
   };
-
-  const [genderFilter, setGenderFilter] = useState<"" | "1" | "2">(""); 
-  const [sideFilter, setSideFilter] = useState<"" | "1" | "2" | "3">("");
 
   const filteredPatients = patients
     .slice()
@@ -113,19 +92,6 @@ export default function PatientsScreen() {
     sideFilter ? p.lymphedema_side === parseInt(sideFilter) : true
   );
 
-  const [openSide, setOpenSide] = useState(false);
-  const [openGender, setOpenGender] = useState(false);
-  const [side, setSide] = useState([
-    { label: "All sides", value: "" },
-    { label: "Right", value: "1" },
-    { label: "Left", value: "2" },
-    { label: "Bilateral", value: "3" },
-  ]);
-  const [gender, setGender] = useState([
-    { label: "All gender", value: "" },
-    { label: "Female", value: "1" },
-    { label: "Male", value: "2" },
-  ]);
 
   const renderPatientItem = ({ item }: { item: Patient }) => {
     const isSelected = selectedPatients.includes(item.patient_id);
@@ -184,14 +150,9 @@ export default function PatientsScreen() {
             )
           ) : (
             <TouchableOpacity
-              disabled={deletingId === item.patient_id}
-              onPress={() => confirmDeletePatient(item.patient_id)}
+              onPress={() => deletePatient(item.patient_id)}
             >
-              {deletingId === item.patient_id ? (
-                <ActivityIndicator size="small" color={COLORS.primary} />
-              ) : (
-                <Trash size={18} color={COLORS.secondary} />
-              )}
+              <Trash size={18} color={COLORS.secondary} />
             </TouchableOpacity>
           )}
         </View>
@@ -202,7 +163,14 @@ export default function PatientsScreen() {
   const handleExport = async () => {
     setExporting(true);
     const url = `${API_URL}/patients/export-multiple/`;
-    await exportFolder(url, `patients_export_${selectedPatients.length}.zip`);
+    await exportFolder(
+      `${API_URL}/patients/export-multiple/`,
+      `patients_export_${selectedPatients.length}.zip`,
+      setExporting,
+      "POST",
+      { patient_ids: selectedPatients }
+    );
+    ;
     setExporting(false);
   };
 
@@ -214,6 +182,7 @@ export default function PatientsScreen() {
     }
   };
 
+  if (deletingId) return <LoadingScreen text="Deleting the patient..." />;
   if (exporting) return <LoadingScreen text="Exporting the folder(s)..." />;
   if (loading) return <LoadingScreen text="Loading data..." />;
 

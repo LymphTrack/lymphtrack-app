@@ -11,6 +11,7 @@ import { showAlert, confirmAction } from "@/utils/alertUtils";
 import { commonStyles } from "@/constants/styles";
 import { COLORS } from "@/constants/colors";
 import { InputField } from '@/components/inputField';
+import { deleteItem } from "@/utils/deleteUtils";
 
 export default function ModifyPatientScreen() {
   const { patient_id } = useLocalSearchParams<{ patient_id : string }>();
@@ -58,33 +59,13 @@ export default function ModifyPatientScreen() {
   };
 
   const deletePatient = async () => {
-    const confirmed = await confirmAction(
-      "Confirm deletion",
-      "Are you sure you want to delete this patient?",
-      "Delete",
-      "Cancel"
-    );
-
-    if (!confirmed) return;
-
     setDeleting(true);
-    try {
-      const res = await fetch(`${API_URL}/patients/${patient_id}`, { method: "DELETE" });
-
-      if (!res.ok) {
-        const errorData = await res.json();
-        showAlert("Error", errorData.detail || "Failed to delete patient");
-        return;
-      }
-
-      showAlert("Success", "Patient deleted successfully!");
-      router.replace("/patients");
-    } catch (err) {
-      console.error("Error deleting patient:", err);
-      showAlert("Error", "Unexpected error occurred");
-    } finally {
-      setDeleting(false);
-    }
+    await deleteItem(
+      `${API_URL}/patients/${patient_id}`,
+      "patient",
+      () => router.replace("/patients")
+    );
+    setDeleting(false);
   };
 
   const handleSave = async () => {

@@ -6,11 +6,12 @@ import { useState, useCallback} from "react";
 import { useFocusEffect } from "@react-navigation/native";
 import * as DocumentPicker from "expo-document-picker";
 import { LoadingScreen } from "@/components/loadingScreen";
-import { showAlert, confirmAction } from "@/utils/alertUtils";
+import { showAlert} from "@/utils/alertUtils";
 import { commonStyles } from "@/constants/styles";
 import { COLORS } from "@/constants/colors";
 import { importAndUploadFiles } from "@/utils/uploadUtils";
 import { exportFolder } from "@/utils/exportUtils";
+import { deleteItem } from "@/utils/deleteUtils";
 
 export default function PatientResultsScreen() {
   const { id_operation } = useLocalSearchParams<{ id_operation: string }>();
@@ -161,26 +162,13 @@ export default function PatientResultsScreen() {
     setExporting(false);
   };
 
-  const deletePhoto = async (photoId: number, setPhotos: React.Dispatch<React.SetStateAction<any[]>>) => {
-    const confirmed = await confirmAction(
-      "Delete photo",
-      "Are you sure you want to delete this photo?",
-      "Delete",
-      "Cancel"
+  const deletePhoto = async (
+    photoId: number,
+    setPhotos: React.Dispatch<React.SetStateAction<any[]>>
+  ) => {
+    await deleteItem(`${API_URL}/photos/${photoId}`, "photo", () =>
+      setPhotos((prev) => prev.filter((p) => p.id !== photoId))
     );
-    if (!confirmed) return;
-
-    try {
-      const resp = await fetch(`${API_URL}/photos/${photoId}`, { method: "DELETE" });
-      if (!resp.ok) throw new Error("Failed to delete photo");
-
-      setPhotos((prev) => prev.filter((x) => x.id !== photoId));
-
-      showAlert("Success", "Photo deleted successfully!");
-    } catch (err) {
-      console.error("Delete error:", err);
-      showAlert("Error", "Could not delete photo.");
-    }
   };
 
   if (loading) return <LoadingScreen text="" />;

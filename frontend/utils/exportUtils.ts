@@ -4,10 +4,24 @@ import * as Sharing from "expo-sharing";
 import { showAlert, confirmAction } from "@/utils/alertUtils";
 
 
-export const exportFolder = async (url: string, filename: string) => {
+export const exportFolder = async (
+  url: string,
+  filename: string,
+  setExporting?: (val: boolean) => void,
+  method: "GET" | "POST" = "GET",
+  body?: any
+) => {
   try {
+    if (setExporting) setExporting(true);
+
+    const options: RequestInit = { method };
+    if (method === "POST" && body) {
+      options.headers = { "Content-Type": "application/json" };
+      options.body = JSON.stringify(body);
+    }
+
     if (Platform.OS === "web") {
-      const res = await fetch(url);
+      const res = await fetch(url, options);
       if (!res.ok) throw new Error(`Download failed: ${res.status}`);
 
       const blob = await res.blob();
@@ -23,7 +37,6 @@ export const exportFolder = async (url: string, filename: string) => {
     } else {
       const fileUri = `${FileSystem.documentDirectory}${filename}`;
       const res = await FileSystem.downloadAsync(url, fileUri);
-
       if (res.status !== 200) throw new Error(`Download failed: ${res.status}`);
 
       const isAvailable = await Sharing.isAvailableAsync();
@@ -41,6 +54,9 @@ export const exportFolder = async (url: string, filename: string) => {
       "Retry",
       "Cancel"
     );
-    if (retry) exportFolder(url, filename);
+    if (retry) await exportFolder(url, filename, setExporting, method, body);
+  } finally {
+    if (setExporting) setExporting(false);
   }
 };
+

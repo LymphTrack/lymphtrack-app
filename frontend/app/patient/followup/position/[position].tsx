@@ -1,14 +1,15 @@
-import { View, Platform, Alert, Text, ScrollView, StyleSheet, useWindowDimensions, TouchableOpacity, ActivityIndicator } from "react-native";
+import { View, Text, ScrollView, StyleSheet, useWindowDimensions, TouchableOpacity, ActivityIndicator } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { Trash, ArrowLeft, Plus, Download } from "lucide-react-native";
+import { Trash, ArrowLeft, Download } from "lucide-react-native";
 import { API_URL } from "@/constants/api";
 import { exportFolder } from "@/utils/exportUtils";
 import { LoadingScreen } from "@/components/loadingScreen";
-import { showAlert, confirmAction } from "@/utils/alertUtils";
+import { showAlert } from "@/utils/alertUtils";
 import { commonStyles } from "@/constants/styles";
 import { COLORS } from "@/constants/colors";
 import { importAndUploadFiles } from "@/utils/uploadUtils";
+import { deleteItem } from "@/utils/deleteUtils";
 
 export default function PositionScreen() {
   const { position, operation_id } = useLocalSearchParams<{ position: string; operation_id: string }>();
@@ -52,8 +53,10 @@ export default function PositionScreen() {
   };
 
   const importAndUploadPosition = async () => {
+    setCreateMeasurement(true);
     const url = `${API_URL}/results/process-results/${operation_id}/${position}`;
     await importAndUploadFiles(url, [1, 6], loadMeasurements);
+    setCreateMeasurement(false);
   };
 
   const handleExport = async () => {
@@ -64,41 +67,15 @@ export default function PositionScreen() {
   };
 
   const deleteMeasure = async (id_result: number, file_path: string) => {
-    const confirmed = await confirmAction(
-      "Delete Measurement",
-      "Are you sure you want to delete this measurement? This action cannot be undone.",
-      "Delete",
-      "Cancel"
-    );
-
-    if (!confirmed) return;
-
     setDeleting(true);
-    try {
-      const resp = await fetch(`${API_URL}/results/delete-measurements`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        body: JSON.stringify({ file_path }),
-      });
-
-      const data = await resp.json();
-      console.log("Delete response:", data);
-
-      if (!resp.ok || data.status !== "success") {
-        throw new Error(data.message || "Failed to delete measurement");
-      }
-
-      showAlert("Success", "Measurement deleted successfully.");
-      await loadMeasurements();
-    } catch (err: any) {
-      console.error("Delete error:", err);
-      showAlert("Error", err.message || "An unexpected error occurred while deleting measurement.");
-    } finally {
-      setDeleting(false);
-    }
+    await deleteItem(
+      `${API_URL}/results/delete-measurements`,
+      "measurement",
+      loadMeasurements,
+      "POST",
+      { file_path }
+    );
+    setDeleting(false);
   };
 
   if (loading) return <LoadingScreen text="" />;
@@ -109,7 +86,7 @@ export default function PositionScreen() {
   return (
     <View style={commonStyles.container}>
       <View style={commonStyles.secondaryHeader}>
-        <View style={[styles.headerInfo, { width: width >= 700 ? 700 : "100%" }]}>
+        <View style={[commonStyles.headerInfo, { width: width >= 700 ? 700 : "100%" }]}>
           <TouchableOpacity onPress={() => router.push(`../${operation_id}`)}>
             <ArrowLeft size={24} color={COLORS.text} />
           </TouchableOpacity>
@@ -126,11 +103,11 @@ export default function PositionScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
-        <View style={[styles.form, width >= 700 && { width: 700, alignSelf: "center" }]}>
+        <View style={[commonStyles.form, width >= 700 && { width: 700, alignSelf: "center" }]}>
           {measurements.length === 0 ? (
             <View style={width >= 700 && { width: 700, alignSelf: "center" }}>
               <View style={styles.noData}>
-                <Text style={styles.noDataText}>
+                <Text style={commonStyles.title}>
                   No measurements yet for this position.
                 </Text>
                 <TouchableOpacity
@@ -142,28 +119,28 @@ export default function PositionScreen() {
               </View>
             </View>
           ) : (
-            <View style={[styles.form, width >= 700 && { width: 700, alignSelf: "center" }]}>
+            <View style={[commonStyles.form, width >= 700 && { width: 700, alignSelf: "center" }]}>
               {measurements.map((m, i) => (
                 <View key={i} style={commonStyles.card}>
                   <View style={styles.measureBlock}>
-                    <View style={styles.measureTitle}>
-                      <Text style={styles.measureTitle}>
+                    <View style={[commonStyles.cardHeader, {marginTop:-30}]}>
+                      <Text style={[commonStyles.sectionTitle , {fontSize : 20}]}>
                         Measurement {m.measurement_number}
                       </Text>
                       <TouchableOpacity
                         onPress={() => deleteMeasure(m.id_result, m.file_path)}
                       >
-                        <Trash size={18} color={COLORS.secondary} />
+                        <Trash size={18} color={COLORS.secondary} style={{marginTop: 30}}/>
                       </TouchableOpacity>
                     </View>
 
-                    <Text style={styles.measureText}>
+                    <Text style={commonStyles.subtitle}>
                       RL: {m.min_return_loss_db ?? "?"} dB
                     </Text>
-                    <Text style={styles.measureText}>
+                    <Text style={commonStyles.subtitle}>
                       Frequency: {m.min_frequency_hz ?? "?"} Hz
                     </Text>
-                    <Text style={styles.measureText}>
+                    <Text style={commonStyles.subtitle}>
                       Bandwidth: {m.bandwidth_hz ?? "?"} Hz
                     </Text>
                   </View>
@@ -184,40 +161,11 @@ export default function PositionScreen() {
 }
 
 const styles = StyleSheet.create({
-  headerInfo :{
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: "center",
-    alignSelf: "center",
-    paddingHorizontal:20,
-  },
-  form: {
-    paddingHorizontal: 20,
-  },
   noData: { 
     alignItems: "center", 
     marginTop: 60 
   },
-  noDataText: { 
-    fontSize: 16, 
-    color: "#6B7280",
-     marginBottom: 20 
-    },
   measureBlock: { 
     marginBottom: 0, 
-  },
-  measureTitle: { 
-    fontSize: 16, 
-    marginBottom: 12,
-    fontWeight: "600", 
-    color: "#6a90db", 
-    flexDirection: "row", 
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  measureText: { 
-    fontSize: 14, 
-    color: "#4B5563", 
-    marginBottom: 4 
   },
 });

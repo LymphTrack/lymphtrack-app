@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import {Platform, View,Text,TextInput,TouchableOpacity,StyleSheet,Alert,ScrollView,ActivityIndicator, useWindowDimensions} from "react-native";
+import {Platform, View,Text,TouchableOpacity,StyleSheet,ScrollView, useWindowDimensions} from "react-native";
 import { ArrowLeft, ClipboardList , Notebook, Calendar, Save, Trash} from "lucide-react-native";
 import { useRouter, useLocalSearchParams,  } from "expo-router";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -10,6 +10,7 @@ import { showAlert, confirmAction } from "@/utils/alertUtils";
 import { commonStyles } from "@/constants/styles";
 import { COLORS } from "@/constants/colors";
 import { InputField } from '@/components/inputField';
+import { deleteItem } from "@/utils/deleteUtils";
 
 export default function ModifyFollowUpScreen() {
   const { id_operation } = useLocalSearchParams<{ id_operation: string }>();
@@ -21,7 +22,7 @@ export default function ModifyFollowUpScreen() {
   const {width} = useWindowDimensions();
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
-
+  const [patientId, setPatientId] = useState<string | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -38,6 +39,7 @@ export default function ModifyFollowUpScreen() {
       setName(data?.name || "");
       setDate(data?.operation_date ? new Date(data.operation_date) : new Date());
       setNotes(data?.notes || "");
+      setPatientId(data?.patient_id || null);
     } catch (err) {
       console.error("Error loading follow-up:", err);
       showAlert("Error", "Unable to load follow-up data");
@@ -95,37 +97,15 @@ export default function ModifyFollowUpScreen() {
   };
 
   const handleDelete = async () => {
-    const confirmed = await confirmAction(
-      "Confirm deletion",
-      "Are you sure you want to delete this operation?",
-      "Delete",
-      "Cancel"
-    );
-
-    if (!confirmed) return;
-
     setDeleting(true);
-    try {
-      const res = await fetch(`${API_URL}/operations/${id_operation}`, {
-        method: "DELETE",
-      });
+    await deleteItem(
+      `${API_URL}/operations/${id_operation}`,
+      "operation",
+      () => router.push(`../../${patientId}`)
+    );
+    setDeleting(false);
+  };
 
-      const data = await res.json().catch(() => ({}));
-
-      if (!res.ok) {
-        showAlert("Error", data.detail || "Unable to delete the operation");
-        return;
-      }
-
-      showAlert("Success", data.message || "Operation deleted successfully");
-      router.push(`../${data.patient_id}`);
-    } catch (err) {
-      console.error("Unexpected error:", err);
-      showAlert("Error", "Something went wrong during deletion");
-    } finally {
-      setDeleting(false);
-    }
-  }; 
 
   if (loading) return <LoadingScreen text="" />;
   if (saving) return <LoadingScreen text="Saving changes..." />;
