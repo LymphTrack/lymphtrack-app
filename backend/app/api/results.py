@@ -4,12 +4,13 @@ from app.db.models import Result, Operation
 from app.db.database import get_db
 from mega import Mega
 
-import os, re
+import os, re, tempfile
 import traceback
 import pandas as pd
 import numpy as np
 from dotenv import load_dotenv
 from datetime import datetime, timezone
+from mega import Mega
 
 import logging
 logger = logging.getLogger(__name__)
@@ -617,9 +618,14 @@ def delete_measurements(payload: dict, db: Session = Depends(get_db)):
 
 
 
-@router.get("/plot-data/{operation_id}/{position}")
+@router.get("/results/plot-data/{operation_id}/{position}")
 async def get_plot_data(operation_id: int, position: int, db: Session = Depends(get_db)):
     try:
+        # 🔹 Connexion à MEGA via ta fonction
+        m = login_mega()
+        if m is None:
+            raise HTTPException(status_code=500, detail="Cannot connect to MEGA. Check credentials.")
+
         results = db.query(Result).filter(
             Result.id_operation == operation_id,
             Result.position == position
@@ -629,21 +635,73 @@ async def get_plot_data(operation_id: int, position: int, db: Session = Depends(
             raise HTTPException(status_code=404, detail="No measurements found for this position.")
 
         measure_arrays = []
+
         for r in results:
             file_path = r.file_path
-            print("[PLOT DATA] trying:", file_path)
-            if not os.path.exists(file_path):
-                logging.warning(f"[PLOT DATA] Missing file: {file_path}")
+            logging.info(f"[PLOT DATA] Trying to load from MEGA: {file_path}")
+
+            # Exemple : MV130/1-PreOP_24032025/1/VNA_250324_140615.csv
+            parts = file_path.split("/")
+            if len(parts) < 3:
+                logging.warning(f"[PLOT DATA] Invalid path format: {file_path}")
                 continue
 
-            data = read_measurement_file(file_path)
+            patient_id, visit_folder, position_folder = parts[0], parts[1], parts[2]
+
+            # Patient folder
+            patient_node = m.find(f"lymphtrack-data/{patient_id}")
+            if not patient_node:
+                logging.warning(f"[PLOT DATA] Patient folder {patient_id} not found in MEGA")
+                continue
+
+            # Visit folder
+            visit_node = None
+            subfolders = m.get_files_in_node(patient_node[0])
+            for fid, meta in subfolders.items():
+                if meta["t"] == 1 and meta["a"]["n"] == visit_folder:
+                    visit_node = fid
+                    break
+            if not visit_node:
+                logging.warning(f"[PLOT DATA] Visit folder {visit_folder} not found")
+                continue
+
+            # Position folder
+            visit_contents = m.get_files_in_node(visit_node)
+            pos_node = None
+            for fid, meta in visit_contents.items():
+                if meta["t"] == 1 and meta["a"]["n"].lower() == position_folder.lower():
+                    pos_node = fid
+                    break
+            if not pos_node:
+                logging.warning(f"[PLOT DATA] Position folder {position_folder} not found")
+                continue
+
+            # Target file
+            position_files = m.get_files_in_node(pos_node)
+            target_file_id = None
+            for fid, meta in position_files.items():
+                if meta["a"]["n"] == parts[-1]:
+                    target_file_id = fid
+                    break
+            if not target_file_id:
+                logging.warning(f"[PLOT DATA] File {parts[-1]} not found in MEGA")
+                continue
+
+            # Téléchargement temporaire
+            import tempfile
+            tmp_dir = tempfile.mkdtemp()
+            local_path = m.download(target_file_id, dest_path=tmp_dir)
+            logging.info(f"[PLOT DATA] Downloaded {file_path} -> {local_path}")
+
+            # Lecture réelle
+            data = read_measurement_file(local_path)
             if data:
                 measure_arrays.append(data)
             else:
                 logging.warning(f"[PLOT DATA] Empty data in {file_path}")
 
         if not measure_arrays:
-            raise HTTPException(status_code=400, detail="Could not read any valid data files.")
+            raise HTTPException(status_code=400, detail="Could not read any valid data files from MEGA.")
 
         graph_data = merge_measurements_for_chart(measure_arrays)
 
