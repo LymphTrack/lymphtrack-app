@@ -631,6 +631,7 @@ async def get_plot_data(operation_id: int, position: int, db: Session = Depends(
         measure_arrays = []
         for r in results:
             file_path = r.file_path
+            print("[PLOT DATA] trying:", file_path)
             if not os.path.exists(file_path):
                 logging.warning(f"[PLOT DATA] Missing file: {file_path}")
                 continue
