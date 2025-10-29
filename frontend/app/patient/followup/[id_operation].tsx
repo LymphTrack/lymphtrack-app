@@ -33,8 +33,8 @@ export default function PatientResultsScreen() {
   );
 
   const getPositionCoordinates = (pos: number, width: number) => {
-    const offsetX = width >= 700 ? 180 : 120;
-    const offsetY = width >= 700 ? 60 : 40;
+    const offsetX = width >= 700 ? 150 : width*0.18;
+    const offsetY = 40;
 
     switch (pos) {
       case 1:

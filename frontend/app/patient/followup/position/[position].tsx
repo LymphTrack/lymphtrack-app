@@ -1,7 +1,7 @@
 import { View, Text, ScrollView, StyleSheet, useWindowDimensions, TouchableOpacity, ActivityIndicator } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { Trash, ArrowLeft, Download } from "lucide-react-native";
+import { Trash, ArrowLeft, Download, Plus } from "lucide-react-native";
 import { API_URL } from "@/constants/api";
 import { exportFolder } from "@/utils/exportUtils";
 import { LoadingScreen } from "@/components/loadingScreen";
@@ -10,6 +10,7 @@ import { commonStyles } from "@/constants/styles";
 import { COLORS } from "@/constants/colors";
 import { importAndUploadFiles } from "@/utils/uploadUtils";
 import { deleteItem } from "@/utils/deleteUtils";
+import { LineChart, Line, XAxis, YAxis,Legend, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 export default function PositionScreen() {
   const { position, operation_id } = useLocalSearchParams<{ position: string; operation_id: string }>();
@@ -21,6 +22,7 @@ export default function PositionScreen() {
   const [deleting, setDeleting] = useState(false);
   const [createMeasurement, setCreateMeasurement] = useState(false);
   const [patient_id, setPatientId] = useState<string | number | null>(null);
+  const [graphData, setGraphData] = useState<any[]>([]);
 
   useEffect(() => {
     if (operation_id && position) {
@@ -31,19 +33,23 @@ export default function PositionScreen() {
   const loadMeasurements = async () => {
     setLoading(true);
     try {
-      const [res, opRes] = await Promise.all([
+      const [res, opRes, plotRes] = await Promise.all([
         fetch(`${API_URL}/results/${operation_id}/${position}`),
         fetch(`${API_URL}/operations/${operation_id}`),
+        fetch(`${API_URL}/results/plot-data/${operation_id}/${position}`),
       ]);
 
       if (!res.ok) throw new Error("Failed to fetch measurements");
       if (!opRes.ok) throw new Error("Failed to fetch operation");
+      if (!plotRes.ok) throw new Error("Failed to fetch graph data");
 
       const data = await res.json();
       const opData = await opRes.json();
+      const plotData = await plotRes.json();
 
       setMeasurements(data);
       setPatientId(opData?.patient_id ?? null);
+      setGraphData(plotData.graph_data ?? []);
     } catch (err) {
       console.error("Error loading measurements:", err);
       showAlert("Error", "Unable to load measurements data.");
@@ -124,7 +130,7 @@ export default function PositionScreen() {
                 <View key={i} style={commonStyles.card}>
                   <View style={styles.measureBlock}>
                     <View style={[commonStyles.cardHeader, {marginTop:-30}]}>
-                      <Text style={[commonStyles.sectionTitle , {fontSize : 20}]}>
+                      <Text style={[commonStyles.sectionTitle , {fontSize : 20, fontWeight : "600"}]}>
                         Measurement {m.measurement_number}
                       </Text>
                       <TouchableOpacity
@@ -147,13 +153,87 @@ export default function PositionScreen() {
                 </View>
               ))}
               <TouchableOpacity
-                style={[commonStyles.button,{marginTop : 40, marginBottom: 40}]}
+                style={[commonStyles.button,{marginTop : 40, marginBottom: 10}]}
                 onPress={importAndUploadPosition}
               >
-                <Text style={commonStyles.buttonText}>Add measurement(s)</Text>
+                <View style={commonStyles.row}>
+                  <Plus size={16} color={COLORS.butonText} />
+                  <Text style={commonStyles.buttonText}>Add measurement(s)</Text>
+                </View>
               </TouchableOpacity>  
             </View>
           )}
+
+          <View style={commonStyles.form}>
+            <Text style={commonStyles.sectionTitle}>Outcomes</Text>
+
+            {measurements.length === 0 ? (
+              <View style={[commonStyles.card, { marginBottom: 40 }]}>
+                <Text style={commonStyles.subtitle}>No measurements yet.</Text>
+              </View>
+            ) : (
+              <View style={{ marginBottom: 40 }}>
+                <View style={[commonStyles.card]}>
+                  <Text style={[commonStyles.sectionTitle, { fontSize: 16, marginBottom: 25, marginTop:0 }]}>
+                    Comparison graph of measurements
+                  </Text>
+
+                  <View style={{ height: 300}}>
+                    <ResponsiveContainer width="100%" height="100%" >
+                      <LineChart data={graphData} margin={{ top: 40, right: 20, left: 20, bottom: 40 }}>
+                        <CartesianGrid stroke={COLORS.grayLight} />
+                        <XAxis 
+                          dataKey="freq" 
+                          label={{ 
+                            value: "Frequency (GHz)", 
+                            position: "top" ,
+                            fill : COLORS.subtitle,
+                            fontSize : 16,
+                            fontWeight : "500",
+                            dy:50,
+                          }} 
+                        />
+                        <YAxis 
+                          label={{ 
+                            value: "Return Loss (dB)", 
+                            angle: -90, 
+                            position: "insideLeft",
+                            fill : COLORS.subtitle,
+                            fontSize : 16,
+                            fontWeight : "500",
+                            dy : 50,
+                          }} 
+                        />
+                        <Tooltip />
+                        
+                        {measurements.map((m, i) => (
+                          <Line
+                            key={i}
+                            type="monotone"
+                            dataKey={`loss${i + 1}`}
+                            stroke={COLORS[`color${(i % 6) + 1}`]} 
+                            strokeWidth={2}
+                            dot={false}
+                            name={`Measurement ${m.measurement_number ?? i + 1}`}
+                          />
+                        ))}
+
+                        <Legend
+                          verticalAlign="bottom"
+                          align="center"
+                          wrapperStyle={{
+                            paddingTop: 40,
+                            fontSize: 13,
+                            color: COLORS.subtitle,
+                          }}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </View>   
+                </View>
+              </View>
+            )}
+          </View>
         </View>
       </ScrollView>
     </View> 
@@ -168,4 +248,13 @@ const styles = StyleSheet.create({
   measureBlock: { 
     marginBottom: 0, 
   },
+  metricText: {
+    fontSize: 14,
+    lineHeight: 18,
+  },
+  metricValue: {
+    fontWeight: "600",
+    color: COLORS.text,
+  },
+
 });

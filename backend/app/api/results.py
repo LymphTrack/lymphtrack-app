@@ -39,6 +39,88 @@ def infer_header_and_data(raw_df, key_cols, max_header_row=10):
             return df
     return None
 
+def read_measurement_file(file_path: str):
+    suffix = file_path.split(".")[-1].lower()
+
+    try:
+        if suffix == "csv":
+            tmp = pd.read_csv(file_path, header=0, sep=None, engine="python")
+            cols = tmp.columns.astype(str).str.strip().str.lower().str.replace(r"\s+", "", regex=True)
+
+            if any("freq" in c for c in cols) and any("s11" in c or "returnloss" in c for c in cols):
+                df = tmp.copy()
+                df.columns = cols
+            else:
+                raw = pd.read_csv(file_path, header=None, sep=None, engine="python")
+                df = infer_header_and_data(raw, key_cols=["freq", "returnloss"])
+        else:
+            tmp = pd.read_excel(file_path, header=0)
+            cols = tmp.columns.astype(str).str.strip().str.lower().str.replace(r"\s+", "", regex=True)
+
+            if any("freq" in c for c in cols) and any("s11" in c or "returnloss" in c for c in cols):
+                df = tmp.copy()
+                df.columns = cols
+            else:
+                raw = pd.read_excel(file_path, header=None)
+                df = infer_header_and_data(raw, key_cols=["freq", "returnloss"])
+    except Exception as e:
+        logging.warning(f"[PLOT READ] {file_path}: read error {e}")
+        return []
+
+    if df is None:
+        logging.warning(f"[PLOT READ] {file_path}: could not infer header")
+        return []
+
+    df.columns = df.columns.astype(str).str.strip().str.lower().str.replace(r"\s+", "", regex=True)
+
+    freq_cols = [c for c in df.columns if "freq" in c]
+    rl_cols = [c for c in df.columns if "s11" in c or "returnloss" in c]
+    if not freq_cols or not rl_cols:
+        logging.warning(f"[PLOT READ] {file_path}: missing freq or return loss cols")
+        return []
+
+    freq_col, rl_col = freq_cols[0], rl_cols[0]
+
+    df_vals = df[[freq_col, rl_col]].astype(str).map(lambda x: x.replace(",", "."))
+    df_sub = df_vals.apply(pd.to_numeric, errors="coerce").dropna()
+
+    if df_sub.empty:
+        logging.warning(f"[PLOT READ] {file_path}: no numeric data after coercion")
+        return []
+
+    data_points = [
+        {
+            "freq_hz": float(row[freq_col]),
+            "loss_db": float(row[rl_col]),
+        }
+        for _, row in df_sub.iterrows()
+    ]
+
+    return data_points
+
+
+def merge_measurements_for_chart(measure_arrays: list[list[dict]]):
+    if not measure_arrays or not measure_arrays[0]:
+        return []
+
+    length = len(measure_arrays[0])
+    merged = []
+
+    for idx in range(length):
+        point = {}
+        freq_hz = measure_arrays[0][idx]["freq_hz"]
+        point["freq"] = freq_hz / 1e9 
+
+        for m_index, arr in enumerate(measure_arrays):
+            if idx < len(arr):
+                point[f"loss{m_index + 1}"] = arr[idx]["loss_db"]
+
+        merged.append(point)
+
+    return merged
+
+
+
 def extract_time_from_filename(filename: str) -> int | None:
     match = re.search(r"_(\d{6})", filename)
     if not match:
@@ -119,7 +201,6 @@ def process_measurement_file(file: UploadFile, id_operation: int, position: int,
             if m:
                 patient_folder = m.find(f"lymphtrack-data/{patient_id}")
                 if not patient_folder:
-                    # Crée (ou log seulement, au choix)
                     try:
                         m.create_folder(f"lymphtrack-data/{patient_id}")
                         patient_folder = m.find(f"lymphtrack-data/{patient_id}")
@@ -137,7 +218,6 @@ def process_measurement_file(file: UploadFile, id_operation: int, position: int,
                     if not visit_folder:
                         try:
                             node = m.create_folder(visit_str, patient_folder[0])
-                            # tolérer réponses non standard
                             if isinstance(node, dict) and "f" in node:
                                 folder_id = node["f"][0]["h"]
                                 visit_folder = (folder_id, node["f"][0])
@@ -182,7 +262,6 @@ def process_measurement_file(file: UploadFile, id_operation: int, position: int,
                             logging.warning(f"[MEGA] create_folder position failed: {e}")
                             dest_folder = None
 
-                # Upload tolérant
                 try:
                     if dest_folder:
                         up = m.upload(tmp_path, dest_folder[0], dest_filename=file.filename)
@@ -193,12 +272,9 @@ def process_measurement_file(file: UploadFile, id_operation: int, position: int,
                     logging.warning(f"[MEGA] Upload failed for {file.filename}: {e}")
             else:
                 logging.debug("[MEGA] Client is None, skipping Mega operations")
-            # ======== FIN MEGA ========
-
-            # Nettoyage
+           
             os.remove(tmp_path)
 
-            # Enregistrement DB
             result = Result(
                 id_operation=int(id_operation),
                 position=int(position),
@@ -308,14 +384,12 @@ async def create_all_results(
     db: Session = Depends(get_db),
 ):
     try:
-        # --- Check operation existence ---
         operation = db.query(Operation).filter(Operation.id_operation == id_operation).first()
         if not operation:
             return {"status": "error", "message": "Operation not found"}
 
         patient_id = operation.patient_id
 
-        # --- Build visit name ---
         all_ops = (
             db.query(Operation)
             .filter(Operation.patient_id == patient_id)
@@ -326,7 +400,6 @@ async def create_all_results(
         visit_name = operation.name.replace(" ", "_")
         visit_str = f"{visit_number}-{visit_name}_{operation.operation_date.strftime('%d%m%Y')}"
 
-        # --- Sort files by timestamp ---
         timed_files = []
         for f in files:
             t = extract_time_from_filename(f.filename)
@@ -341,22 +414,18 @@ async def create_all_results(
         timed_files.sort(key=lambda x: x[0])
         sorted_files = [f for _, f in timed_files]
 
-        # --- Group by position (3 files per position) ---
         grouped = {pos: sorted_files[(pos - 1) * 3 : pos * 3] for pos in range(1, 7)}
 
-        # --- Initialize Mega and variables ---
         m = login_mega()
         all_results = []
         counter_db = 0
         counter_files = 0
         batch_size_db = 5
 
-        # --- Main processing loop ---
         for pos, pos_files in grouped.items():
             for idx, f in enumerate(pos_files, start=1):
                 counter_files += 1
 
-                # 🔄 Refresh Mega every 3 uploads to avoid session loss
                 if counter_files % 3 == 1 and counter_files != 1:
                     m = login_mega()
 
@@ -368,21 +437,18 @@ async def create_all_results(
                     visit_str,
                     patient_id,
                     measurement_number=idx,
-                    m=m,  # ✅ pass Mega client safely
+                    m=m,
                 )
 
                 if result:
                     all_results.append(result)
                     counter_db += 1
 
-                    # 💾 Commit every few inserts to avoid DB overload
                     if counter_db % batch_size_db == 0:
                         db.commit()
 
-        # Final commit
         db.commit()
 
-        # --- Final response ---
         if not all_results:
             return {"status": "error", "message": "No valid files were processed"}
 
@@ -548,3 +614,47 @@ def delete_measurements(payload: dict, db: Session = Depends(get_db)):
         db.rollback()
         return {"status": "error", "message": str(e)}
 
+
+
+
+@router.get("/results/plot-data/{operation_id}/{position}")
+async def get_plot_data(operation_id: int, position: int, db: Session = Depends(get_db)):
+    try:
+        results = db.query(Result).filter(
+            Result.id_operation == operation_id,
+            Result.position == position
+        ).order_by(Result.measurement_number.asc()).all()
+
+        if not results:
+            raise HTTPException(status_code=404, detail="No measurements found for this position.")
+
+        measure_arrays = []
+        for r in results:
+            file_path = r.file_path
+            if not os.path.exists(file_path):
+                logging.warning(f"[PLOT DATA] Missing file: {file_path}")
+                continue
+
+            data = read_measurement_file(file_path)
+            if data:
+                measure_arrays.append(data)
+            else:
+                logging.warning(f"[PLOT DATA] Empty data in {file_path}")
+
+        if not measure_arrays:
+            raise HTTPException(status_code=400, detail="Could not read any valid data files.")
+
+        graph_data = merge_measurements_for_chart(measure_arrays)
+
+        return {
+            "operation_id": operation_id,
+            "position": position,
+            "n_measurements": len(measure_arrays),
+            "graph_data": graph_data
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"[PLOT DATA] Unexpected error: {e}")
+        raise HTTPException(status_code=500, detail="Internal error while building plot data.")

@@ -192,7 +192,13 @@ export default function PatientDetailScreen() {
             onPress={() => router.push(`/patient/followup/create_followup/${patient.patient_id}`)}
           >
             <Text style={commonStyles.buttonText}>Add Follow-up</Text>
-          </TouchableOpacity>          
+          </TouchableOpacity> 
+        
+          <Text style={commonStyles.sectionTitle}>Outcomes</Text>
+          <View style={[commonStyles.card, {marginBottom: 40, justifyContent: "center", alignItems: "center"}]}>
+            <Text style={commonStyles.title}>🏗️ Under construction</Text>
+            <Text style={commonStyles.subtitle}>To be implemented ...</Text>
+          </View>
         </View>
       </ScrollView>
     </View>

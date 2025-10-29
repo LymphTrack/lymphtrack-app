@@ -35,4 +35,11 @@ export const COLORS = {
   darkText: "#E5E7EB",
   darkRed : "#b91c1c",
   darkGreen : "#006400",
+
+  color1: "#E63946",
+  color2: "#457B9D",
+  color3: "#2A9D8F",
+  color4: "#F4A261",
+  color5: "#8A2BE2",
+  color6: "#FFD60A",
 };
