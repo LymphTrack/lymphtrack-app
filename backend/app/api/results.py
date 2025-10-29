@@ -657,10 +657,19 @@ async def get_plot_data(operation_id: int, position: int, db: Session = Depends(
             # Visit folder
             visit_node = None
             subfolders = m.get_files_in_node(patient_node[0])
+            if isinstance(subfolders, str):
+                import json
+                subfolders = json.loads(subfolders) 
+            
+            logging.info(f"[PLOT DATA] type of subfolders: {type(subfolders)}")
+
             for fid, meta in subfolders.items():
-                if meta["t"] == 1 and meta["a"]["n"] == visit_folder:
+                if isinstance(meta, str):
+                    continue 
+                if meta.get("t") == 1 and meta.get("a", {}).get("n") == visit_folder:
                     visit_node = fid
                     break
+
             if not visit_node:
                 logging.warning(f"[PLOT DATA] Visit folder {visit_folder} not found")
                 continue
