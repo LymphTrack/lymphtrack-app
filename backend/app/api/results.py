@@ -617,7 +617,7 @@ def delete_measurements(payload: dict, db: Session = Depends(get_db)):
 
 
 
-@router.get("/results/plot-data/{operation_id}/{position}")
+@router.get("/plot-data/{operation_id}/{position}")
 async def get_plot_data(operation_id: int, position: int, db: Session = Depends(get_db)):
     try:
         results = db.query(Result).filter(
