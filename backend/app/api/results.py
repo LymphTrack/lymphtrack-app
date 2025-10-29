@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from app.db.models import Result, Operation
 from app.db.database import get_db
 from mega import Mega
+from pathlib import Path
 
 import os, re, tempfile
 import traceback
@@ -685,7 +686,7 @@ def get_plot_data(id_operation: int, position: int, db: Session = Depends(get_db
         measure_arrays = []
 
         for r in results:
-            filename = r.file_path.split("/")[-1]
+            filename = Path(r.file_path).name
             target_file_id = None
             for fid, meta in position_files.items():
                 if isinstance(meta, dict) and meta.get("a", {}).get("n") == filename:
