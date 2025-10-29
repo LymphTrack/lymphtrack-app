@@ -12,6 +12,8 @@ import { COLORS } from "@/constants/colors";
 import { importAndUploadFiles } from "@/utils/uploadUtils";
 import { exportFolder } from "@/utils/exportUtils";
 import { deleteItem } from "@/utils/deleteUtils";
+import { LineChart, Line, XAxis, YAxis,Legend, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+
 
 export default function PatientResultsScreen() {
   const { id_operation } = useLocalSearchParams<{ id_operation: string }>();
@@ -21,6 +23,7 @@ export default function PatientResultsScreen() {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
+  const [graphData, setGraphData] = useState<any[]>([]);
   const router = useRouter();
   const {width} = useWindowDimensions();
   
@@ -57,19 +60,23 @@ export default function PatientResultsScreen() {
   const loadAllData = async () => {
     setLoading(true);
     try {
-      const [opRes, resultsRes] = await Promise.all([
+      const [opRes, resultsRes, plotRes] = await Promise.all([
         fetch(`${API_URL}/operations/${id_operation}`),
         fetch(`${API_URL}/results/by_operation/${id_operation}`),
+        fetch(`${API_URL}/results/plot-data/${id_operation}`)
       ]);
 
       if (!opRes.ok) throw new Error("Failed to fetch operation");
       if (!resultsRes.ok) throw new Error("Failed to fetch results");
+      if (!plotRes.ok) throw new Error("Failed to fetch plot data");
 
       const opData = await opRes.json();
       const resultsData = await resultsRes.json();
+      const plotData = await plotRes.json();
 
       setOperation(opData);
       setResults(resultsData);
+      setGraphData(plotData);
 
       await loadPhotos();
     } catch (e) {
@@ -306,6 +313,81 @@ export default function PatientResultsScreen() {
             </View>
           )}
         </View>
+          <View style={commonStyles.form}>
+            <Text style={commonStyles.sectionTitle}>Outcomes</Text>
+
+              {results.length === 0 ? (
+                <View style={[commonStyles.card, { marginBottom: 10, maxWidth: 800 }]}>
+                  <Text style={commonStyles.subtitle}>No measurements yet.</Text>
+                </View>
+              ) : (
+              <View style={{ marginBottom: 40, maxWidth:1120, width:"100%", alignSelf:"center"}}>
+                <View style={[commonStyles.card,]}>
+                  <Text style={[commonStyles.sectionTitle, { fontSize: 16, marginTop:0 }]}>
+                    Comparison graph of measurements
+                  </Text>
+
+                  <View style={{ height: 500}}>
+                    <ResponsiveContainer width="100%" height="100%" >
+                      <LineChart data={graphData} margin={{ top: 40, right: 20, left: 20, bottom: 20 }}>
+                        <CartesianGrid stroke={COLORS.grayLight} />
+                        <XAxis 
+                          dataKey="freq" 
+                          tickFormatter={(value) => value.toFixed(3)}
+                          label={{ 
+                            value: "Frequency (GHz)", 
+                            position: "top" ,
+                            fill : COLORS.subtitle,
+                            fontSize : 16,
+                            fontWeight : "500",
+                            dy:50,
+                          }} 
+                        />
+                        <YAxis 
+                          label={{ 
+                            value: "Return Loss (dB)", 
+                            angle: -90, 
+                            position: "insideLeft",
+                            fill : COLORS.subtitle,
+                            fontSize : 16,
+                            fontWeight : "500",
+                            dy : 50,
+                          }} 
+                        />
+                        <Tooltip />
+                        
+                        {Array.from({ length: 6 }).map((_, index) => {
+                          const pos = index + 1;
+                          if (!graphData.some((d) => d[`loss${pos}`] !== undefined)) return null;
+                          return (
+                            <Line
+                              key={pos}
+                              type="monotone"
+                              dataKey={`loss${pos}`}
+                              stroke={COLORS[`color${pos}`]}
+                              strokeWidth={2}
+                              dot={false}
+                              name={`Position ${pos}`}
+                            />
+                          );
+                        })}
+
+                        <Legend
+                          verticalAlign="bottom"
+                          align="center"
+                          wrapperStyle={{
+                            paddingTop: 40,
+                            fontSize: 15,
+                            color: COLORS.subtitle,
+                          }}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </View>   
+                </View>
+              </View>
+            )}
+          </View>
       </ScrollView>
     </View>
   );

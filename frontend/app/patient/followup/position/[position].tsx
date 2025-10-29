@@ -163,27 +163,28 @@ export default function PositionScreen() {
               </TouchableOpacity>  
             </View>
           )}
-
+        </View>
           <View style={commonStyles.form}>
             <Text style={commonStyles.sectionTitle}>Outcomes</Text>
 
             {measurements.length === 0 ? (
-              <View style={[commonStyles.card, { marginBottom: 40 }]}>
+              <View style={[commonStyles.card, { marginBottom: 10, maxWidth:800 }]}>
                 <Text style={commonStyles.subtitle}>No measurements yet.</Text>
               </View>
             ) : (
-              <View style={{ marginBottom: 40 }}>
-                <View style={[commonStyles.card]}>
-                  <Text style={[commonStyles.sectionTitle, { fontSize: 16, marginBottom: 25, marginTop:0 }]}>
+              <View style={{ marginBottom: 40, maxWidth:1120, width:"100%", alignSelf:"center"}}>
+                <View style={[commonStyles.card,]}>
+                  <Text style={[commonStyles.sectionTitle, { fontSize: 16, marginTop:0 }]}>
                     Comparison graph of measurements
                   </Text>
 
-                  <View style={{ height: 300}}>
+                  <View style={{ height: 500}}>
                     <ResponsiveContainer width="100%" height="100%" >
-                      <LineChart data={graphData} margin={{ top: 40, right: 20, left: 20, bottom: 40 }}>
+                      <LineChart data={graphData} margin={{ top: 40, right: 20, left: 20, bottom: 20 }}>
                         <CartesianGrid stroke={COLORS.grayLight} />
                         <XAxis 
                           dataKey="freq" 
+                          tickFormatter={(value) => value.toFixed(3)}
                           label={{ 
                             value: "Frequency (GHz)", 
                             position: "top" ,
@@ -223,7 +224,7 @@ export default function PositionScreen() {
                           align="center"
                           wrapperStyle={{
                             paddingTop: 40,
-                            fontSize: 13,
+                            fontSize: 15,
                             color: COLORS.subtitle,
                           }}
                         />
@@ -234,7 +235,7 @@ export default function PositionScreen() {
               </View>
             )}
           </View>
-        </View>
+        
       </ScrollView>
     </View> 
   );
