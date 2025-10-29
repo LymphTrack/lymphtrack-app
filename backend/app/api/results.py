@@ -759,8 +759,8 @@ def merge_position_curves(position_curves):
     return merged
 
 
-@router.get("/plot-data/{id_operation}")
-def get_plot_data(id_operation: int, db: Session = Depends(get_db)):
+@router.get("/plot-data/operation/{id_operation}")
+def get_plot_data_operation(id_operation: int, db: Session = Depends(get_db)):
     try:
         m = login_mega()
         if m is None:

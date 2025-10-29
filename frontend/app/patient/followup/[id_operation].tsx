@@ -59,11 +59,12 @@ export default function PatientResultsScreen() {
 
   const loadAllData = async () => {
     setLoading(true);
+    const id_op = parseInt(id_operation);
     try {
       const [opRes, resultsRes, plotRes] = await Promise.all([
         fetch(`${API_URL}/operations/${id_operation}`),
         fetch(`${API_URL}/results/by_operation/${id_operation}`),
-        fetch(`${API_URL}/results/plot-data/${id_operation}`)
+        fetch(`${API_URL}/results/plot-data/operation/${id_op}`)
       ]);
 
       if (!opRes.ok) throw new Error("Failed to fetch operation");
@@ -76,7 +77,7 @@ export default function PatientResultsScreen() {
 
       setOperation(opData);
       setResults(resultsData);
-      setGraphData(plotData);
+      setGraphData(plotData.graph_data || []);
 
       await loadPhotos();
     } catch (e) {
