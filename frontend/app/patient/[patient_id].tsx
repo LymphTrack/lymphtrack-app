@@ -194,7 +194,7 @@ export default function PatientDetailScreen() {
             <Text style={commonStyles.buttonText}>Add Follow-up</Text>
           </TouchableOpacity> 
         
-          <Text style={commonStyles.sectionTitle}>Outcomes</Text>
+          <Text style={[commonStyles.sectionTitle, {marginTop : 0}]}>Outcomes</Text>
           <View style={[commonStyles.card, {marginBottom: 40, justifyContent: "center", alignItems: "center"}]}>
             <Text style={commonStyles.title}>🏗️ Under construction</Text>
             <Text style={commonStyles.subtitle}>To be implemented ...</Text>

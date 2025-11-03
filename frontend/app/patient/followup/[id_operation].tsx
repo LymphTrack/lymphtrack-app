@@ -65,7 +65,7 @@ export default function PatientResultsScreen() {
       const [opRes, resultsRes, plotRes] = await Promise.all([
         fetch(`${API_URL}/operations/${id_operation}`),
         fetch(`${API_URL}/results/by_operation/${id_operation}`),
-        fetch(`${API_URL}/results/plot-data/by-operation/${id_op}`),
+        fetch(`${API_URL}/results/plot-data/by-operation/${id_operation}`),
       ]);
 
       if (!opRes.ok) throw new Error("Failed to fetch operation");
@@ -316,7 +316,7 @@ export default function PatientResultsScreen() {
           )}
         </View>
           <View style={commonStyles.form}>
-            <Text style={commonStyles.sectionTitle}>Outcomes</Text>
+            <Text style={[commonStyles.sectionTitle, {marginTop: 0}]}>Outcomes</Text>
 
               {results.length === 0 ? (
                 <View style={[commonStyles.card, { marginBottom: 10, maxWidth: 800 }]}>

@@ -505,34 +505,6 @@ def get_results_by_patient(patient_id: str, db: Session = Depends(get_db)):
     )
     return results
 
-
-
-# -----------------------------------
-# READ RESULT BY VISIT AND POSITION
-# -----------------------------------
-@router.get("/{id_operation}/{position}")
-def get_results(id_operation: int, position: int, db: Session = Depends(get_db)):
-    results = (
-        db.query(Result)
-        .filter(Result.id_operation == id_operation, Result.position == position)
-        .order_by(Result.measurement_number.asc())
-        .all()
-    )
-
-    return [
-        {
-            "id": r.id,
-            "measurement_number": r.measurement_number,
-            "file_path": r.file_path,
-            "file_name": r.file_path.split("/")[-1] if r.file_path else None,
-            "min_return_loss_db": r.min_return_loss_db,
-            "min_frequency_hz": r.min_frequency_hz,
-            "bandwidth_hz": r.bandwidth_hz,
-        }
-        for r in results
-    ]
-
-
 # ---------------------
 # DELETE RESULT
 # ---------------------
@@ -870,3 +842,30 @@ def get_plot_data_operation(id_operation: int, db: Session = Depends(get_db)):
     except Exception as e:
         logging.error(f"[PLOT DATA] Unexpected error: {e}")
         raise HTTPException(status_code=500, detail=f"Internal error while building plot data: {e}")
+    
+
+# -----------------------------------
+# READ RESULT BY VISIT AND POSITION
+# -----------------------------------
+@router.get("/{id_operation}/{position}")
+def get_results(id_operation: int, position: int, db: Session = Depends(get_db)):
+    results = (
+        db.query(Result)
+        .filter(Result.id_operation == id_operation, Result.position == position)
+        .order_by(Result.measurement_number.asc())
+        .all()
+    )
+
+    return [
+        {
+            "id": r.id,
+            "measurement_number": r.measurement_number,
+            "file_path": r.file_path,
+            "file_name": r.file_path.split("/")[-1] if r.file_path else None,
+            "min_return_loss_db": r.min_return_loss_db,
+            "min_frequency_hz": r.min_frequency_hz,
+            "bandwidth_hz": r.bandwidth_hz,
+        }
+        for r in results
+    ]
+

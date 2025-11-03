@@ -259,9 +259,36 @@ export default function PatientsScreen() {
                       }}
                       setItems={setSide}
                       placeholder="Select side"
-                      style={[commonStyles.input,]}
+                      style={[commonStyles.input]}
                       textStyle={{ fontSize: 16, color: COLORS.subtitle}}
                       listMode='MODAL'
+                      modalContentContainerStyle={{
+                        backgroundColor: COLORS.background,
+                        paddingVertical: 50,
+                        paddingHorizontal: "10%",
+                        borderRadius: 16,
+                      }}
+                      modalTitle="Select side"
+                      modalTitleStyle={{
+                        fontSize: 20,
+                        fontWeight: "bold",
+                        color: COLORS.primary,
+                        textAlign: "center",
+                        marginBottom: 10,
+                      }}
+                      modalProps={{
+                        animationType: "slide",
+                        presentationStyle: "pageSheet", 
+                      }}
+                      listItemContainerStyle={{
+                        borderBottomWidth: 1,
+                        paddingVertical: 10,
+                        borderBottomColor: COLORS.grayLight,
+                      }}
+                      listItemLabelStyle={{
+                        fontSize: 16,
+                        color: COLORS.text,
+                      }}
                     />
                   </View>
 
@@ -277,9 +304,36 @@ export default function PatientsScreen() {
                       }}
                       setItems={setGender}
                       placeholder="Select gender"
-                      style={[commonStyles.input,]}
+                      style={[commonStyles.input]}
                       textStyle={{ fontSize: 16, color: COLORS.subtitle }}
                       listMode='MODAL'
+                      modalContentContainerStyle={{
+                        backgroundColor: COLORS.background,
+                        paddingVertical: 50,
+                        paddingHorizontal: "10%",
+                        borderRadius: 16,
+                      }}
+                      modalTitle="Select gender"
+                      modalTitleStyle={{
+                        fontSize: 20,
+                        fontWeight: "bold",
+                        color: COLORS.primary,
+                        textAlign: "center",
+                        marginBottom: 10,
+                      }}
+                      modalProps={{
+                        animationType: "slide",
+                        presentationStyle: "pageSheet", 
+                      }}
+                      listItemContainerStyle={{
+                        borderBottomWidth: 1,
+                        paddingVertical: 10,
+                        borderBottomColor: COLORS.grayLight,
+                      }}
+                      listItemLabelStyle={{
+                        fontSize: 16,
+                        color: COLORS.text,
+                      }}
                     />
                   </View>
                 </View>
