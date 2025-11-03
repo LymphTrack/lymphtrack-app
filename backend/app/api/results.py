@@ -731,8 +731,8 @@ def merge_position_curves(position_curves):
     return merged
 
 
-@router.get("/plot-data/by-operation/{id_operation}")
-def get_plot_data_operation(id_operation: int, db: Session = Depends(get_db)):
+@router.get("/plot-data/operation-average/{id_operation}")
+def get_plot_data_operation_average(id_operation: int, db: Session = Depends(get_db)):
     try:
         m = login_mega()
         if m is None:

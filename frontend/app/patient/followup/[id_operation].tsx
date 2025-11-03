@@ -65,7 +65,7 @@ export default function PatientResultsScreen() {
       const [opRes, resultsRes, plotRes] = await Promise.all([
         fetch(`${API_URL}/operations/${id_operation}`),
         fetch(`${API_URL}/results/by_operation/${id_operation}`),
-        fetch(`${API_URL}/results/plot-data/by-operation/${id_operation}`),
+        fetch(`${API_URL}/results/plot-data/operation-average/${id_operation}`),
       ]);
 
       if (!opRes.ok) throw new Error("Failed to fetch operation");
