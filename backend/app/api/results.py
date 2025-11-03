@@ -296,6 +296,33 @@ def process_measurement_file(file: UploadFile, id_operation: int, position: int,
         traceback.print_exc()
         return None
 
+def average_measurements(measure_arrays):
+    merged = defaultdict(list)
+
+    for arr in measure_arrays:
+        for point in arr:
+            freq = round(point["freq_hz"], 6)
+            merged[freq].append(point["loss_db"])
+
+    averaged = [
+        {"freq": freq, "loss": float(np.mean(vals))}
+        for freq, vals in sorted(merged.items())
+    ]
+    return averaged
+
+def merge_position_curves(position_curves):
+    all_freqs = sorted({p["freq"] for arr in position_curves.values() for p in arr})
+    merged = []
+
+    for freq in all_freqs:
+        entry = {"freq": freq}
+        for pos, arr in position_curves.items():
+            closest = min(arr, key=lambda x: abs(x["freq"] - freq))
+            entry[f"loss{pos}"] = closest["loss"]
+        merged.append(entry)
+
+    return merged
+
 
 load_dotenv()
 
@@ -702,33 +729,6 @@ def get_plot_data(id_operation: int, position: int, db: Session = Depends(get_db
         logging.error(f"[PLOT DATA] Unexpected error: {e}")
         raise HTTPException(status_code=500, detail=f"Internal error while building plot data: {e}")
 
-
-def average_measurements(measure_arrays):
-    merged = defaultdict(list)
-
-    for arr in measure_arrays:
-        for point in arr:
-            freq = round(point["freq_hz"], 6)
-            merged[freq].append(point["loss_db"])
-
-    averaged = [
-        {"freq": freq, "loss": float(np.mean(vals))}
-        for freq, vals in sorted(merged.items())
-    ]
-    return averaged
-
-def merge_position_curves(position_curves):
-    all_freqs = sorted({p["freq"] for arr in position_curves.values() for p in arr})
-    merged = []
-
-    for freq in all_freqs:
-        entry = {"freq": freq}
-        for pos, arr in position_curves.items():
-            closest = min(arr, key=lambda x: abs(x["freq"] - freq))
-            entry[f"loss{pos}"] = closest["loss"]
-        merged.append(entry)
-
-    return merged
 
 
 @router.get("/plot-data/operation-average/{id_operation}")
