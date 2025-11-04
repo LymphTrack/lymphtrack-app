@@ -2,43 +2,22 @@ from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
 from sqlalchemy.orm import Session
 from app.db.models import Result, Operation
 from app.db.database import get_db
-from mega import Mega
 
-import os, re, tempfile
-import traceback
+import os, re, tempfile, traceback, shutil
 import pandas as pd
 import numpy as np
-from collections import defaultdict
-from dotenv import load_dotenv
+from pathlib import Path
 from datetime import datetime, timezone
-from mega import Mega
-
 import logging
-logger = logging.getLogger(__name__)
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
-load_dotenv()
+DATA_ROOT = Path(r"C:\Users\Pimprenelle\Documents\LymphTrackData")
 
-EMAIL = os.getenv("MEGA_EMAIL")
-PASSWORD = os.getenv("MEGA_PASSWORD")
-
-mega = Mega()
-m = mega.login(EMAIL, PASSWORD)
-
-
-def login_mega():
-    email = os.getenv("MEGA_EMAIL")
-    password = os.getenv("MEGA_PASSWORD")
-    if not email or not password:
-        logging.warning("[MEGA] Missing MEGA_EMAIL/MEGA_PASSWORD env vars; Mega features disabled")
-        return None
-    try:
-        return Mega().login(email, password)
-    except Exception as e:
-        logging.warning(f"[MEGA] Login failed: {e}")
-        return None
-
+# ---------------------
+# Utility functions
+# ---------------------
 
 def infer_header_and_data(raw_df, key_cols, max_header_row=10):
     for idx in range(min(max_header_row, len(raw_df))):
@@ -311,75 +290,39 @@ def process_measurement_file(file: UploadFile, id_operation: int, position: int,
 # ---------------------
 # CREATE RESULT
 # ---------------------
-
 @router.post("/process-results/{id_operation}/{position}")
-async def create_result(
-    id_operation: int,
-    position: int,
-    files: list[UploadFile] = File(...),
-    db: Session = Depends(get_db),
-):
+async def create_result(id_operation: int, position: int, files: list[UploadFile] = File(...), db: Session = Depends(get_db)):
     try:
         operation = db.query(Operation).filter(Operation.id_operation == id_operation).first()
         if not operation:
             raise HTTPException(status_code=404, detail="Operation not found")
 
         patient_id = operation.patient_id
-        all_ops = (
-            db.query(Operation)
-            .filter(Operation.patient_id == patient_id)
-            .order_by(Operation.operation_date.asc())
-            .all()
-        )
-        visit_number = {op.id_operation: idx + 1 for idx, op in enumerate(all_ops)}[operation.id_operation]
-        visit_name = operation.name.replace(" ", "_")
-        visit_str = f"{visit_number}-{visit_name}_{operation.operation_date.strftime('%d%m%Y')}"
+        all_ops = db.query(Operation).filter(Operation.patient_id == patient_id).order_by(Operation.operation_date.asc()).all()
+        visit_number = {op.id_operation: idx + 1 for idx, op in enumerate(all_ops)}[id_operation]
+        visit_str = f"{visit_number}-{operation.name.replace(' ', '_')}_{operation.operation_date.strftime('%d%m%Y')}"
 
-        m = login_mega()
-
-        existing_results = (
-            db.query(Result)
-            .filter(Result.id_operation == id_operation, Result.position == position)
-            .order_by(Result.measurement_number.asc())
-            .all()
-        )
-        existing_count = len(existing_results)
-        start_index = existing_count + 1 
+        existing_results = db.query(Result).filter(Result.id_operation == id_operation, Result.position == position).order_by(Result.measurement_number.asc()).all()
+        start_index = len(existing_results) + 1
 
         all_results = []
         for offset, f in enumerate(files, start=start_index):
-            result = process_measurement_file(
-                f,
-                id_operation,
-                position,
-                db,
-                visit_str,
-                patient_id,
-                measurement_number=offset, 
-                m=m,
-            )
+            result = process_measurement_file(f, id_operation, position, db, visit_str, patient_id, measurement_number=offset)
             if result:
                 all_results.append(result)
-
         db.commit()
 
         if not all_results:
             return {"status": "error", "message": "No valid files were processed"}
-
-        return {
-            "status": "success",
-            "message": f"Processed {len(all_results)} file(s)",
-            "results": all_results,
-        }
+        return {"status": "success", "message": f"Processed {len(all_results)} file(s)", "results": all_results}
 
     except Exception as e:
         db.rollback()
-        traceback.print_exc()
         return {"status": "error", "message": str(e)}
 
 
 # ---------------------
-# CREATE ALL RESULTS (18 files → 6 positions)
+# CREATE ALL RESULT
 # ---------------------
 
 @router.post("/process-all/{id_operation}")
@@ -401,6 +344,7 @@ async def create_all_results(
             .order_by(Operation.operation_date.asc())
             .all()
         )
+
         visit_number = {op.id_operation: idx + 1 for idx, op in enumerate(all_ops)}[operation.id_operation]
         visit_name = operation.name.replace(" ", "_")
         visit_str = f"{visit_number}-{visit_name}_{operation.operation_date.strftime('%d%m%Y')}"
@@ -419,21 +363,14 @@ async def create_all_results(
         timed_files.sort(key=lambda x: x[0])
         sorted_files = [f for _, f in timed_files]
 
-        grouped = {pos: sorted_files[(pos - 1) * 3 : pos * 3] for pos in range(1, 7)}
+        grouped = {pos: sorted_files[(pos - 1) * 3: pos * 3] for pos in range(1, 7)}
 
-        m = login_mega()
         all_results = []
         counter_db = 0
-        counter_files = 0
         batch_size_db = 5
 
         for pos, pos_files in grouped.items():
             for idx, f in enumerate(pos_files, start=1):
-                counter_files += 1
-
-                if counter_files % 3 == 1 and counter_files != 1:
-                    m = login_mega()
-
                 result = process_measurement_file(
                     f,
                     id_operation,
@@ -442,13 +379,10 @@ async def create_all_results(
                     visit_str,
                     patient_id,
                     measurement_number=idx,
-                    m=m,
                 )
-
                 if result:
                     all_results.append(result)
                     counter_db += 1
-
                     if counter_db % batch_size_db == 0:
                         db.commit()
 
@@ -465,10 +399,9 @@ async def create_all_results(
 
     except Exception as e:
         db.rollback()
-        traceback.print_exc()
         logging.error(f"[PROCESS-ALL] {e}")
+        traceback.print_exc()
         return {"status": "error", "message": str(e)}
-
 
 # ---------------------
 # READ ALL RESULTS
@@ -546,7 +479,7 @@ def delete_measurements(payload: dict, db: Session = Depends(get_db)):
         if not file_path:
             return {"status": "error", "message": "No file_path provided"}
 
-        parts = file_path.split("/")
+        parts = Path(file_path).parts
         if len(parts) < 4:
             return {"status": "error", "message": f"Invalid file_path format: {file_path}"}
 
@@ -559,38 +492,16 @@ def delete_measurements(payload: dict, db: Session = Depends(get_db)):
         id_operation = result.id_operation
         measurement_number = result.measurement_number
 
-        patient_folder = m.find(f"lymphtrack-data/{patient_id}")
-        if not patient_folder:
-            return {"status": "error", "message": f"Patient folder {patient_id} not found in Mega"}
-
-        visit_folder = None
-        subfolders = m.get_files_in_node(patient_folder[0])
-        for fid, meta in subfolders.items():
-            if meta["t"] == 1 and meta["a"]["n"] == visit_str:
-                visit_folder = fid
-                break
-        if not visit_folder:
-            return {"status": "error", "message": f"Visit folder {visit_str} not found in Mega"}
-
-        pos_folder = None
-        subfolders = m.get_files_in_node(visit_folder)
-        for fid, meta in subfolders.items():
-            if meta["t"] == 1 and meta["a"]["n"] == position:
-                pos_folder = fid
-                break
-        if not pos_folder:
-            return {"status": "error", "message": f"Position folder {position} not found in Mega"}
-
-        files = m.get_files_in_node(pos_folder)
-        deleted = False
-        for fid, meta in files.items():
-            if meta["t"] == 0 and meta["a"]["n"] == file_name:
-                m.delete(fid)
-                deleted = True
-                print(f"[INFO] Deleted {file_name} from Mega")
-                break
-        if not deleted:
-            print(f"[WARN] File {file_name} not found in Mega, skipping deletion")
+        abs_path = DATA_ROOT / file_path
+        deleted_files = []
+        if abs_path.exists():
+            try:
+                abs_path.unlink()
+                deleted_files.append(str(abs_path))
+            except Exception as e:
+                return {"status": "error", "message": f"Failed to delete file: {e}"}
+        else:
+            return {"status": "error", "message": f"File not found: {abs_path}"}
 
         db.delete(result)
         db.commit()
@@ -604,14 +515,13 @@ def delete_measurements(payload: dict, db: Session = Depends(get_db)):
         )
 
         for r in results_to_update:
-            old_number = r.measurement_number
-            r.measurement_number = old_number - 1
+            r.measurement_number -= 1
 
         db.commit()
 
         return {
             "status": "success",
-            "deleted": [file_path],
+            "deleted": deleted_files,
             "reindexed": [r.id for r in results_to_update],
         }
 
@@ -621,21 +531,14 @@ def delete_measurements(payload: dict, db: Session = Depends(get_db)):
 
 
 
-
 @router.get("/plot-data/{id_operation}/{position}")
 def get_plot_data(id_operation: int, position: int, db: Session = Depends(get_db)):
     try:
-        m = login_mega()
-        if m is None:
-            raise HTTPException(status_code=500, detail="Cannot connect to MEGA. Check credentials.")
-
-        # --- Récupération de l'opération ---
         operation = db.query(Operation).filter(Operation.id_operation == id_operation).first()
         if not operation:
             raise HTTPException(status_code=404, detail=f"Operation {id_operation} not found")
 
         patient_id = operation.patient_id
-
         all_ops = (
             db.query(Operation)
             .filter(Operation.patient_id == patient_id)
@@ -647,35 +550,10 @@ def get_plot_data(id_operation: int, position: int, db: Session = Depends(get_db
         visit_name = operation.name.replace(" ", "_")
         visit_str = f"{visit_number}-{visit_name}_{operation.operation_date.strftime('%d%m%Y')}"
 
-        # --- Trouver le dossier patient ---
-        patient_folder = m.find(f"lymphtrack-data/{patient_id}")
-        if not patient_folder:
-            raise HTTPException(status_code=404, detail=f"Patient folder {patient_id} not found")
+        position_folder = DATA_ROOT / patient_id / visit_str / str(position)
+        if not position_folder.exists():
+            raise HTTPException(status_code=404, detail=f"Position folder {position} not found in {visit_str}")
 
-        # --- Trouver le dossier visite ---
-        subfolders = m.get_files_in_node(patient_folder[0])
-        visit_folder_id = None
-        for fid, meta in subfolders.items():
-            if isinstance(meta, dict) and meta.get("t") == 1 and meta.get("a", {}).get("n") == visit_str:
-                visit_folder_id = fid
-                break
-
-        if not visit_folder_id:
-            raise HTTPException(status_code=404, detail=f"Visit folder {visit_str} not found in MEGA")
-
-        # --- Trouver le dossier position ---
-        visit_contents = m.get_files_in_node(visit_folder_id)
-        position_folder_id = None
-        position_folder_name = str(position)
-        for fid, meta in visit_contents.items():
-            if isinstance(meta, dict) and meta.get("t") == 1 and meta.get("a", {}).get("n", "").lower() == position_folder_name.lower():
-                position_folder_id = fid
-                break
-
-        if not position_folder_id:
-            raise HTTPException(status_code=404, detail=f"Position folder {position_folder_name} not found in {visit_str}")
-
-        # --- Récupération des fichiers de mesure ---
         results = (
             db.query(Result)
             .filter(Result.id_operation == id_operation, Result.position == position)
@@ -683,38 +561,23 @@ def get_plot_data(id_operation: int, position: int, db: Session = Depends(get_db
             .all()
         )
         if not results:
-            raise HTTPException(status_code=404, detail="No measurements found for this position.")
+            raise HTTPException(status_code=404, detail="No measurements found for this position")
 
-        position_files = m.get_files_in_node(position_folder_id)
         measure_arrays = []
-
         for r in results:
-            file_path = str(r.file_path)
-            filename = file_path.split("/")[-1]
-            target_file_id = None
-            for fid, meta in position_files.items():
-                if isinstance(meta, dict) and meta.get("a", {}).get("n") == filename:
-                    target_file_id = fid
-                    break
-
-            if not target_file_id:
-                logging.warning(f"[PLOT DATA] File {filename} not found in MEGA")
+            file_path = DATA_ROOT / r.file_path
+            if not file_path.exists():
+                logging.warning(f"[PLOT DATA] Missing file: {file_path}")
                 continue
 
-            # Téléchargement temporaire
-            tmp_dir = tempfile.mkdtemp()
-            local_path = m.download((target_file_id, position_files[target_file_id]), dest_path=tmp_dir)
-            logging.info(f"[PLOT DATA] Downloaded {filename} -> {local_path}")
-
-            # Lecture et ajout des données
-            data = read_measurement_file(local_path)
+            data = read_measurement_file(file_path)
             if data:
                 measure_arrays.append(data)
             else:
-                logging.warning(f"[PLOT DATA] Empty or invalid data in {filename}")
+                logging.warning(f"[PLOT DATA] Invalid data: {file_path}")
 
         if not measure_arrays:
-            raise HTTPException(status_code=400, detail="Could not read any valid data files from MEGA.")
+            raise HTTPException(status_code=400, detail="No valid measurement data found locally")
 
         graph_data = merge_measurements_for_chart(measure_arrays)
 
@@ -726,11 +589,8 @@ def get_plot_data(id_operation: int, position: int, db: Session = Depends(get_db
             "graph_data": graph_data,
         }
 
-    except HTTPException as e:
-        raise e
+    except HTTPException:
+        raise
     except Exception as e:
-        logging.error(f"[PLOT DATA] Unexpected error: {e}")
+        logging.error(f"[PLOT DATA ERROR] {e}")
         raise HTTPException(status_code=500, detail=f"Internal error while building plot data: {e}")
-
-
-

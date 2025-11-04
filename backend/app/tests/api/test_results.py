@@ -1,88 +1,150 @@
-import requests, os
+import requests
+import os
+from pathlib import Path
 
 API_URL = "http://localhost:8000/results"
+BASE_DIR = Path(__file__).resolve().parent
+TEST_FILE = BASE_DIR / "VNA_test.xls"  
+TEST_OPERATION_ID = 1              
+TEST_PATIENT_ID = "MV001"            
+TEST_POSITION = 1
 
 
 # ---------------------
 # CREATE RESULT
 # ---------------------
+def test_create_result():
+    print("\n=== CREATE RESULT ===")
+    if not TEST_FILE.exists():
+        print(f"Test file not found: {TEST_FILE}")
+        return
 
-def test_create_results(id_operation, position, file_path):
-    files = {
-        "files": (os.path.basename(file_path), open(file_path, "rb"), "application/vnd.ms-excel")
-    }
-    r = requests.post(f"{API_URL}/process-results/{id_operation}/{position}", files=files)
+    files = [("files", (TEST_FILE.name, open(TEST_FILE, "rb"), "application/vnd.ms-excel"))]
+    r = requests.post(f"{API_URL}/process-results/{TEST_OPERATION_ID}/{TEST_POSITION}", files=files)
     try:
-        print("CREATE RESULTS:", r.status_code, r.json())
+        print("Status:", r.status_code)
+        print("Response:", r.json())
     except Exception:
-        print("CREATE RESULTS (raw):", r.status_code, r.text)
-
+        print("Raw:", r.status_code, r.text)
 
 
 # ---------------------
-# READ ALL RESULTS (limit 20)
+# GET ALL RESULTS
 # ---------------------
-
-def test_get_all_results(limit=20):
-    r = requests.get(API_URL + "/")
+def test_get_all_results(limit=10):
+    print("\n=== GET ALL RESULTS ===")
+    r = requests.get(f"{API_URL}/")
     if r.status_code == 200:
         data = r.json()
-        print("GET ALL RESULTS:", r.status_code, f"{len(data)} results (showing {min(len(data), limit)})")
+        print(f"Found {len(data)} results (showing {min(len(data), limit)})")
         print(data[:limit])
         return data
     else:
-        print("ERROR:", r.status_code, r.text)
+        print("Error:", r.status_code, r.text)
         return []
 
 
 # ---------------------
-# READ RESULTS BY OPERATION
+# GET RESULTS BY OPERATION
 # ---------------------
-
-def test_get_results_by_operation(id_operation):
-    r = requests.get(f"{API_URL}/by_operation/{id_operation}")
-    print("GET RESULTS BY OPERATION:", r.status_code, r.json())
-
-
-# ---------------------
-# READ RESULTS BY PATIENT
-# ---------------------
-
-def test_get_results_by_patient(patient_id):
-    r = requests.get(f"{API_URL}/by_patient/{patient_id}")
-    print("GET RESULTS BY PATIENT:", r.status_code, r.text)
+def test_get_results_by_operation():
+    print("\n=== GET RESULTS BY OPERATION ===")
+    r = requests.get(f"{API_URL}/by_operation/{TEST_OPERATION_ID}")
+    print("Status:", r.status_code)
+    try:
+        print("Response:", r.json())
+    except Exception:
+        print("Raw:", r.text)
 
 
 # ---------------------
-# READ RESULTS BY OPERATION + POSITION
+# GET RESULTS BY PATIENT
 # ---------------------
+def test_get_results_by_patient():
+    print("\n=== GET RESULTS BY PATIENT ===")
+    r = requests.get(f"{API_URL}/by_patient/{TEST_PATIENT_ID}")
+    print("Status:", r.status_code)
+    try:
+        print("Response:", r.json())
+    except Exception:
+        print("Raw:", r.text)
 
-def test_get_results_by_operation_position(id_operation, position):
-    r = requests.get(f"{API_URL}/{id_operation}/{position}")
-    print("GET RESULTS BY OPERATION+POSITION:", r.status_code, r.json())
+
+# ---------------------
+# GET RESULTS BY OPERATION + POSITION
+# ---------------------
+def test_get_results_by_operation_position():
+    print("\n=== GET RESULTS BY OPERATION + POSITION ===")
+    r = requests.get(f"{API_URL}/{TEST_OPERATION_ID}/{TEST_POSITION}")
+    print("Status:", r.status_code)
+    try:
+        data = r.json()
+        print("Response:", data)
+        return data
+    except Exception:
+        print("Raw:", r.text)
+        return []
+
+
+# ---------------------
+# PLOT DATA
+# ---------------------
+def test_get_plot_data():
+    print("\n=== GET PLOT DATA ===")
+    r = requests.get(f"{API_URL}/plot-data/{TEST_OPERATION_ID}/{TEST_POSITION}")
+    print("Status:", r.status_code)
+    try:
+        print("Response:", r.json())
+    except Exception:
+        print("Raw:", r.text)
 
 
 # ---------------------
 # DELETE MEASUREMENT
 # ---------------------
-
 def test_delete_measurement(file_path):
+    print("\n=== DELETE MEASUREMENT ===")
     payload = {"file_path": file_path}
     r = requests.post(f"{API_URL}/delete-measurements", json=payload)
-    print("DELETE MEASUREMENT:", r.status_code, r.json())
+    print("Status:", r.status_code)
+    try:
+        print("Response:", r.json())
+    except Exception:
+        print("Raw:", r.text)
 
 
 # ---------------------
-# MAIN
+# MAIN TEST SEQUENCE
 # ---------------------
-
 if __name__ == "__main__":
-    test_file = "backend/VNA_test.xls"      
-    test_operation_id = 6625               
-    test_position = 1
+    print("=== TEST RESULTS API (LOCAL MODE) ===")
 
-    #test_create_results(test_operation_id, test_position, test_file)
-    #test_get_results_by_patient(test_patient)
-    test_delete_measurement("MV131/1-PreOp_19082025/1/VNA_test.xls")
+    # Create a result
+    test_create_result()
 
+    # List all results
+    all_data = test_get_all_results()
 
+    # By operation
+    test_get_results_by_operation()
+
+    # By patient
+    test_get_results_by_patient()
+
+    # By operation + position
+    data = test_get_results_by_operation_position()
+
+    # Plot data (graph API)
+    test_get_plot_data()
+
+    # Delete the test file (if found)
+    if data and isinstance(data, list) and len(data) > 0:
+        fp = data[0].get("file_path")
+        if fp:
+            test_delete_measurement(fp)
+        else:
+            print("No file_path found to delete.")
+    else:
+        print("No result to delete.")
+
+    print("\n=== ALL TESTS COMPLETED ===")
