@@ -132,6 +132,7 @@ def delete_patient(patient_id: str, db: Session = Depends(get_db)):
         "deleted_folders": deleted_files
     }
 
+
 # ---------------------
 # EXPORT PATIENT FOLDER
 # ---------------------
@@ -144,20 +145,31 @@ def export_patient_folder(patient_id: str):
     backend_dir = Path(__file__).resolve().parent
     output_zip = backend_dir / f"{patient_id}.zip"
 
-    with zipfile.ZipFile(output_zip, "w", zipfile.ZIP_DEFLATED) as zipf:
-        for file_path in patient_folder.rglob("*"):
-            if file_path.is_file():
-                rel_path = file_path.relative_to(DATA_ROOT)
-                zipf.write(file_path, rel_path)
+    try:
+        with zipfile.ZipFile(output_zip, "w", zipfile.ZIP_DEFLATED) as zipf:
+            for file_path in patient_folder.rglob("*"):
+                if file_path.is_file():
+                    rel_path = file_path.relative_to(DATA_ROOT)
+                    zipf.write(file_path, rel_path)
 
-    with open(output_zip, "rb") as f:
-        content = f.read()
+        with open(output_zip, "rb") as f:
+            content = f.read()
 
-    return Response(
-        content=content,
-        media_type="application/zip",
-        headers={"Content-Disposition": f"attachment; filename={patient_id}.zip"},
-    )
+        return Response(
+            content=content,
+            media_type="application/zip",
+            headers={
+                "Content-Disposition": f"attachment; filename={patient_id}.zip",
+                "Content-Type": "application/octet-stream"
+            },
+        )
+    finally:
+        if output_zip.exists():
+            try:
+                output_zip.unlink()
+                print(f"Deleted temporary file: {output_zip}")
+            except Exception as e:
+                print(f"Failed to delete temporary zip {output_zip}: {e}")
 
 
 # ---------------------
@@ -175,21 +187,32 @@ def export_multiple_patients(request: PatientsExportRequest):
     backend_dir = Path(__file__).resolve().parent
     output_zip = backend_dir / f"patients_export_{len(patient_ids)}.zip"
 
-    with zipfile.ZipFile(output_zip, "w", zipfile.ZIP_DEFLATED) as zipf:
-        for pid in patient_ids:
-            folder_path = DATA_ROOT / pid
-            if not folder_path.exists():
-                continue
-            for file_path in folder_path.rglob("*"):
-                if file_path.is_file():
-                    rel_path = file_path.relative_to(DATA_ROOT)
-                    zipf.write(file_path, rel_path)
+    try:
+        with zipfile.ZipFile(output_zip, "w", zipfile.ZIP_DEFLATED) as zipf:
+            for pid in patient_ids:
+                folder_path = DATA_ROOT / pid
+                if not folder_path.exists():
+                    continue
+                for file_path in folder_path.rglob("*"):
+                    if file_path.is_file():
+                        rel_path = file_path.relative_to(DATA_ROOT)
+                        zipf.write(file_path, rel_path)
 
-    with open(output_zip, "rb") as f:
-        content = f.read()
+        with open(output_zip, "rb") as f:
+            content = f.read()
 
-    return Response(
-        content=content,
-        media_type="application/zip",
-        headers={"Content-Disposition": f"attachment; filename={output_zip.name}"},
-    )
+        return Response(
+            content=content,
+            media_type="application/zip",
+            headers={
+                "Content-Disposition": f"attachment; filename={output_zip.name}",
+                "Content-Type": "application/octet-stream"
+            },
+        )
+    finally:
+        if output_zip.exists():
+            try:
+                output_zip.unlink()
+                print(f"Deleted temporary file: {output_zip}")
+            except Exception as e:
+                print(f"Failed to delete temporary zip {output_zip}: {e}")
