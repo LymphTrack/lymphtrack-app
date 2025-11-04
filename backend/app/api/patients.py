@@ -5,31 +5,18 @@ from app.db.database import get_db
 import io
 import zipfile
 import os
-from dotenv import load_dotenv
-from botocore.config import Config
-from mega import Mega
-import time, shutil, pathlib
+import shutil
 from pydantic import BaseModel
+from pathlib import Path
 
 router = APIRouter()
 
-load_dotenv()
-
-EMAIL = os.getenv("MEGA_EMAIL")
-PASSWORD = os.getenv("MEGA_PASSWORD")
-
-mega = Mega()
-m = mega.login(EMAIL, PASSWORD)
-
-root_folder = m.find("lymphtrack-data")
-if not root_folder:
-    raise Exception("Folder 'lymphtrack-data' was not found in Mega.nz")
-root_id = root_folder[0]
+# Dossier racine des patients
+DATA_ROOT = Path(r"C:\Users\Pimprenelle\Documents\LymphTrackData")
 
 # ---------------------
 # CREATE PATIENT
 # ---------------------
-
 @router.post("/")
 def create_patient(patient: dict, db: Session = Depends(get_db)):
     prefix = "MV"
@@ -38,23 +25,12 @@ def create_patient(patient: dict, db: Session = Depends(get_db)):
     if custom_id:
         if not custom_id.startswith(prefix):
             raise HTTPException(status_code=400, detail="Patient ID must start with 'MV'")
-        existing = (
-            db.query(models.SickPatient)
-            .filter(models.SickPatient.patient_id == custom_id)
-            .first()
-        )
+        existing = db.query(models.SickPatient).filter(models.SickPatient.patient_id == custom_id).first()
         if existing:
             raise HTTPException(status_code=400, detail=f"Patient ID {custom_id} already exists")
-
         patient_id = custom_id
-
     else:
-        last_patient = (
-            db.query(models.SickPatient)
-            .order_by(models.SickPatient.patient_id.desc())
-            .first()
-        )
-
+        last_patient = db.query(models.SickPatient).order_by(models.SickPatient.patient_id.desc()).first()
         if last_patient and last_patient.patient_id.startswith(prefix):
             try:
                 last_number = int(last_patient.patient_id.replace(prefix, ""))
@@ -63,7 +39,6 @@ def create_patient(patient: dict, db: Session = Depends(get_db)):
                 next_number = "001"
         else:
             next_number = "001"
-
         patient_id = f"{prefix}{next_number}"
 
     new_patient = models.SickPatient(
@@ -79,15 +54,17 @@ def create_patient(patient: dict, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(new_patient)
 
-    m.create_folder(f"lymphtrack-data/{patient_id}")
+    try:
+        patient_folder = DATA_ROOT / patient_id
+        patient_folder.mkdir(parents=True, exist_ok=True)
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"Erreur de création de dossier pour {patient_id}")
 
     return new_patient
 
-
 # ---------------------
-# READ PATIENT BY ID
+# GET PATIENT
 # ---------------------
-
 @router.get("/{patient_id}")
 def get_patient(patient_id: str, db: Session = Depends(get_db)):
     patient = db.query(models.SickPatient).filter(models.SickPatient.patient_id == patient_id).first()
@@ -97,9 +74,8 @@ def get_patient(patient_id: str, db: Session = Depends(get_db)):
 
 
 # ---------------------
-# READ ALL PATIENTS
+# GET ALL PATIENTS
 # ---------------------
-
 @router.get("/")
 def get_patients(db: Session = Depends(get_db)):
     return db.query(models.SickPatient).all()
@@ -108,7 +84,6 @@ def get_patients(db: Session = Depends(get_db)):
 # ---------------------
 # UPDATE PATIENT
 # ---------------------
-
 @router.put("/{patient_id}")
 def update_patient(patient_id: str, updated_data: dict, db: Session = Depends(get_db)):
     patient = db.query(models.SickPatient).filter(models.SickPatient.patient_id == patient_id).first()
@@ -130,139 +105,91 @@ def update_patient(patient_id: str, updated_data: dict, db: Session = Depends(ge
 
 @router.delete("/{patient_id}")
 def delete_patient(patient_id: str, db: Session = Depends(get_db)):
-    patient = (
-        db.query(models.SickPatient)
-        .filter(models.SickPatient.patient_id == patient_id)
-        .first()
-    )
+    patient = db.query(models.SickPatient).filter(models.SickPatient.patient_id == patient_id).first()
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
 
     db.delete(patient)
     db.commit()
 
-    try:
-        folder = m.find(f"lymphtrack-data/{patient_id}")
-        if folder:
-            m.delete(folder[0])
-            deleted_files = [patient_id]
-        else:
-            deleted_files = []
+    patient_folder = DATA_ROOT / patient_id
+    deleted_files = []
 
+    try:
+        if patient_folder.exists():
+            shutil.rmtree(patient_folder)
+            deleted_files.append(str(patient_folder.resolve()))
+            print(f"Dossier supprimé : {patient_folder.resolve()}")
+        else:
+            print(f"Aucun dossier à supprimer pour {patient_id}")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error deleting files: {str(e)}")
+        print(f"Erreur lors de la suppression du dossier {patient_folder}: {e}")
+        raise HTTPException(status_code=500, detail=f"Error deleting folder for {patient_id}: {str(e)}")
 
     return {
+        "status": "success",
         "message": f"Patient {patient_id} deleted successfully",
-        "deleted_files": deleted_files,
+        "deleted_folders": deleted_files
     }
 
-
-# ------------------------
+# ---------------------
 # EXPORT PATIENT FOLDER
-# ------------------------
-
-def add_node_to_zip(node_id, meta, zipf, base_path=""):
-    try:
-        name = meta["a"].get("n", str(node_id))
-        node_type = meta.get("t")
-
-        zip_path = os.path.join(base_path, name)
-
-        if node_type == 0:
-            if name == ".DS_Store":
-                return
-
-            try:
-                downloaded_path = m.download((node_id, meta),
-                                             dest_path=".",
-                                             dest_filename=f"tmp_{name}")
-
-                with open(downloaded_path, "rb") as f:
-                    zipf.writestr(zip_path, f.read())
-                os.remove(downloaded_path)
-
-            except Exception as e:
-                print(f"❌ [DEBUG] Echec download {name}: {e}")
-                return
-
-        elif node_type == 1: 
-            children = m.get_files_in_node(node_id)
-            for child_id, child_meta in children.items():
-                add_node_to_zip(child_id, child_meta, zipf, base_path=zip_path)
-
-    except Exception as e:
-        print(f"❌ [DEBUG] Erreur dans add_node_to_zip pour {node_id}: {e}")
-
-
+# ---------------------
 @router.get("/export-folder/{patient_id}")
 def export_patient_folder(patient_id: str):
-    try:
-        folder = m.find(f"lymphtrack-data/{patient_id}")
-        if not folder:
-            return {"status": "error", "message": f"No folder found for {patient_id}"}
+    patient_folder = DATA_ROOT / patient_id
+    if not patient_folder.exists():
+        raise HTTPException(status_code=404, detail=f"No folder found for {patient_id}")
 
-        files = m.get_files_in_node(folder[0])
+    backend_dir = Path(__file__).resolve().parent
+    output_zip = backend_dir / f"{patient_id}.zip"
 
-        if not files:
-            return {"status": "error", "message": f"No files found for {patient_id}"}
+    with zipfile.ZipFile(output_zip, "w", zipfile.ZIP_DEFLATED) as zipf:
+        for file_path in patient_folder.rglob("*"):
+            if file_path.is_file():
+                rel_path = file_path.relative_to(DATA_ROOT)
+                zipf.write(file_path, rel_path)
 
-        zip_buffer = io.BytesIO()
-        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zipf:
-            for file_id, meta in files.items():
-                add_node_to_zip(file_id, meta, zipf, base_path=patient_id)
+    with open(output_zip, "rb") as f:
+        content = f.read()
 
-        zip_buffer.seek(0)
-        return Response(
-            content=zip_buffer.read(),
-            media_type="application/zip",
-            headers={"Content-Disposition": f"attachment; filename={patient_id}.zip"},
-        )
-
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
+    return Response(
+        content=content,
+        media_type="application/zip",
+        headers={"Content-Disposition": f"attachment; filename={patient_id}.zip"},
+    )
 
 
 # ---------------------
-# EXPORT MULTIPLE PATIENT FOLDERS
+# EXPORT MULTIPLE FOLDERS
 # ---------------------
-
 class PatientsExportRequest(BaseModel):
     patient_ids: list[str]
 
 @router.post("/export-multiple/")
 def export_multiple_patients(request: PatientsExportRequest):
     patient_ids = request.patient_ids
-    try:
-        if not patient_ids:
-            return {"status": "error", "message": "No patient IDs provided"}
+    if not patient_ids:
+        raise HTTPException(status_code=400, detail="No patient IDs provided")
 
-        zip_buffer = io.BytesIO()
-        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zipf:
-            for patient_id in patient_ids:
-                try:
-                    folder = m.find(f"lymphtrack-data/{patient_id}")
-                    if not folder:
-                        continue
+    backend_dir = Path(__file__).resolve().parent
+    output_zip = backend_dir / f"patients_export_{len(patient_ids)}.zip"
 
-                    files = m.get_files_in_node(folder[0])
-                    if not files:
-                        continue
+    with zipfile.ZipFile(output_zip, "w", zipfile.ZIP_DEFLATED) as zipf:
+        for pid in patient_ids:
+            folder_path = DATA_ROOT / pid
+            if not folder_path.exists():
+                continue
+            for file_path in folder_path.rglob("*"):
+                if file_path.is_file():
+                    rel_path = file_path.relative_to(DATA_ROOT)
+                    zipf.write(file_path, rel_path)
 
-                    for file_id, meta in files.items():
-                        add_node_to_zip(file_id, meta, zipf, base_path=patient_id)
+    with open(output_zip, "rb") as f:
+        content = f.read()
 
-                except Exception as e:
-                    continue
-
-        zip_buffer.seek(0)
-        filename = f"patients_export_{len(patient_ids)}.zip"
-
-        return Response(
-            content=zip_buffer.read(),
-            media_type="application/zip",
-            headers={"Content-Disposition": f"attachment; filename={filename}"}
-        )
-
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
+    return Response(
+        content=content,
+        media_type="application/zip",
+        headers={"Content-Disposition": f"attachment; filename={output_zip.name}"},
+    )
