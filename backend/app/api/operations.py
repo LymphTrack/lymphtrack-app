@@ -4,6 +4,8 @@ from app.db.models import Operation
 from app.db.database import get_db
 from datetime import datetime
 from pathlib import Path
+import shutil
+from app.db import models
 import zipfile
 from pydantic import BaseModel
 
@@ -148,48 +150,67 @@ def update_operation(id_operation: int, updated_data: dict, db: Session = Depend
 
     return op
 
+
 # ---------------------
 # DELETE OPERATION
 # ---------------------
 @router.delete("/{id_operation}")
 def delete_operation(id_operation: int, db: Session = Depends(get_db)):
-    op = db.query(Operation).filter(Operation.id_operation == id_operation).first()
-    if not op:
-        raise HTTPException(status_code=404, detail="Operation not found")
+    try:
+        op = db.query(models.Operation).filter(models.Operation.id_operation == id_operation).first()
+        if not op:
+            raise HTTPException(status_code=404, detail="Operation not found")
 
-    patient_id = op.patient_id
-    op_date_str = op.operation_date.strftime("%d%m%Y")
-    op_folder = None
+        patient_id = op.patient_id
+        op_date_str = op.operation_date.strftime("%d%m%Y")
+        patient_folder = DATA_ROOT / patient_id
 
-    patient_folder = DATA_ROOT / patient_id
-    for f in patient_folder.glob(f"*{op_date_str}"):
-        if f.is_dir() and op.name.replace(" ", "_") in f.name:
-            op_folder = f
-            break
+        op_folder = None
+        for f in patient_folder.glob(f"*{op_date_str}"):
+            if f.is_dir() and op.name.replace(" ", "_") in f.name:
+                op_folder = f
+                break
 
-    db.delete(op)
-    db.commit()
+        db.delete(op)
+        db.commit()
 
-    if op_folder and op_folder.exists():
-        for sub in op_folder.rglob("*"):
-            if sub.is_file():
-                sub.unlink()
-        op_folder.rmdir()
+        if op_folder and op_folder.exists():
+            try:
+                shutil.rmtree(op_folder)
+                print(f"Dossier supprimé : {op_folder}")
+            except Exception as e:
+                print(f"Erreur suppression dossier {op_folder}: {e}")
 
-    # Renumber remaining folders
-    remaining_ops = (
-        db.query(Operation)
-        .filter(Operation.patient_id == patient_id)
-        .order_by(Operation.operation_date.asc())
-        .all()
-    )
-    for i, o in enumerate(remaining_ops, start=1):
-        old_folder = next(patient_folder.glob(f"*{o.operation_date.strftime('%d%m%Y')}"), None)
-        new_name = f"{i}-{o.name.replace(' ', '_')}_{o.operation_date.strftime('%d%m%Y')}"
-        if old_folder and old_folder.name != new_name:
-            old_folder.rename(patient_folder / new_name)
+        remaining_ops = (
+            db.query(models.Operation)
+            .filter(models.Operation.patient_id == patient_id)
+            .order_by(models.Operation.operation_date.asc())
+            .all()
+        )
 
-    return {"status": "success", "message": f"Operation {id_operation} deleted."}
+        for i, o in enumerate(remaining_ops, start=1):
+            old_folder = next(patient_folder.glob(f"*{o.operation_date.strftime('%d%m%Y')}"), None)
+            if old_folder:
+                new_name = f"{i}-{o.name.replace(' ', '_')}_{o.operation_date.strftime('%d%m%Y')}"
+                if old_folder.name != new_name:
+                    try:
+                        old_folder.rename(patient_folder / new_name)
+                        print(f"Dossier renommé : {old_folder.name} → {new_name}")
+                    except Exception as e:
+                        print(f"Erreur renommage {old_folder}: {e}")
+
+        return {
+            "status": "success",
+            "message": f"Operation {id_operation} deleted successfully",
+            "deleted_folder": str(op_folder) if op_folder else None
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        print(f"[ERREUR BACKEND] delete_operation: {e}")
+        return {"status": "error", "message": str(e)}
 
 # ---------------------
 # EXPORT OPERATION FOLDER

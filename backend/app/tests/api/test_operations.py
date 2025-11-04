@@ -139,12 +139,12 @@ if __name__ == "__main__":
     export_operation(op1)
 
     # export a position folder (if one exists)
-    export_position(op1, 1)
+    #export_position(op1, 1)
 
     # delete an operation
-    delete_operation(op2)
+    delete_operation(op1)
 
     # delete the patient
-    delete_patient(pid)
+    #delete_patient(pid)
 
     print("\nAll tests completed.")
