@@ -13,9 +13,9 @@ app = FastAPI(title=settings.APP_NAME)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://lymphtrack-app.vercel.app",
         "http://localhost:19006", 
         "http://localhost:3000" ,
+        "http://130.238.147.150:8000",
         "*",    
     ],
     allow_credentials=True,

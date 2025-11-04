@@ -18,6 +18,14 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+load_dotenv()
+
+EMAIL = os.getenv("MEGA_EMAIL")
+PASSWORD = os.getenv("MEGA_PASSWORD")
+
+mega = Mega()
+m = mega.login(EMAIL, PASSWORD)
+
 
 def login_mega():
     email = os.getenv("MEGA_EMAIL")
@@ -31,6 +39,7 @@ def login_mega():
         logging.warning(f"[MEGA] Login failed: {e}")
         return None
 
+
 def infer_header_and_data(raw_df, key_cols, max_header_row=10):
     for idx in range(min(max_header_row, len(raw_df))):
         header = raw_df.iloc[idx].astype(str)
@@ -40,6 +49,7 @@ def infer_header_and_data(raw_df, key_cols, max_header_row=10):
             df.columns = cols
             return df
     return None
+
 
 def read_measurement_file(file_path: str):
     file_path = str(file_path)
@@ -138,6 +148,7 @@ def extract_time_from_filename(filename: str) -> int | None:
         return None
 
     return hour * 3600 + minute * 60 + second
+
 
 def process_measurement_file(file: UploadFile, id_operation: int, position: int, db: Session, visit_str: str, patient_id: str, measurement_number=1, m=None):
     try:
@@ -295,42 +306,6 @@ def process_measurement_file(file: UploadFile, id_operation: int, position: int,
         logging.error(f"[PROCESS FILE] {file.filename}: {e}")
         traceback.print_exc()
         return None
-
-def average_measurements(measure_arrays):
-    merged = defaultdict(list)
-
-    for arr in measure_arrays:
-        for point in arr:
-            freq = round(point["freq_hz"], 6)
-            merged[freq].append(point["loss_db"])
-
-    averaged = [
-        {"freq": freq, "loss": float(np.mean(vals))}
-        for freq, vals in sorted(merged.items())
-    ]
-    return averaged
-
-def merge_position_curves(position_curves):
-    all_freqs = sorted({p["freq"] for arr in position_curves.values() for p in arr})
-    merged = []
-
-    for freq in all_freqs:
-        entry = {"freq": freq}
-        for pos, arr in position_curves.items():
-            closest = min(arr, key=lambda x: abs(x["freq"] - freq))
-            entry[f"loss{pos}"] = closest["loss"]
-        merged.append(entry)
-
-    return merged
-
-
-load_dotenv()
-
-EMAIL = os.getenv("MEGA_EMAIL")
-PASSWORD = os.getenv("MEGA_PASSWORD")
-
-mega = Mega()
-m = mega.login(EMAIL, PASSWORD)
 
 
 # ---------------------
@@ -494,6 +469,7 @@ async def create_all_results(
         logging.error(f"[PROCESS-ALL] {e}")
         return {"status": "error", "message": str(e)}
 
+
 # ---------------------
 # READ ALL RESULTS
 # ---------------------
@@ -531,6 +507,33 @@ def get_results_by_patient(patient_id: str, db: Session = Depends(get_db)):
         .all()
     )
     return results
+
+
+# -----------------------------------
+# READ RESULT BY VISIT AND POSITION
+# -----------------------------------
+@router.get("/{id_operation}/{position}")
+def get_results(id_operation: int, position: int, db: Session = Depends(get_db)):
+    results = (
+        db.query(Result)
+        .filter(Result.id_operation == id_operation, Result.position == position)
+        .order_by(Result.measurement_number.asc())
+        .all()
+    )
+
+    return [
+        {
+            "id": r.id,
+            "measurement_number": r.measurement_number,
+            "file_path": r.file_path,
+            "file_name": r.file_path.split("/")[-1] if r.file_path else None,
+            "min_return_loss_db": r.min_return_loss_db,
+            "min_frequency_hz": r.min_frequency_hz,
+            "bandwidth_hz": r.bandwidth_hz,
+        }
+        for r in results
+    ]
+
 
 # ---------------------
 # DELETE RESULT
@@ -730,142 +733,4 @@ def get_plot_data(id_operation: int, position: int, db: Session = Depends(get_db
         raise HTTPException(status_code=500, detail=f"Internal error while building plot data: {e}")
 
 
-
-@router.get("/plot-data/operation-average/{id_operation}")
-def get_plot_data_operation_average(id_operation: int, db: Session = Depends(get_db)):
-    try:
-        m = login_mega()
-        if m is None:
-            raise HTTPException(status_code=500, detail="Cannot connect to MEGA. Check credentials.")
-
-        # --- Récupération de l'opération ---
-        operation = db.query(Operation).filter(Operation.id_operation == id_operation).first()
-        if not operation:
-            raise HTTPException(status_code=404, detail=f"Operation {id_operation} not found")
-
-        patient_id = operation.patient_id
-        all_ops = (
-            db.query(Operation)
-            .filter(Operation.patient_id == patient_id)
-            .order_by(Operation.operation_date.asc())
-            .all()
-        )
-
-        visit_number = {op.id_operation: idx + 1 for idx, op in enumerate(all_ops)}[operation.id_operation]
-        visit_name = operation.name.replace(" ", "_")
-        visit_str = f"{visit_number}-{visit_name}_{operation.operation_date.strftime('%d%m%Y')}"
-
-        # --- Trouver le dossier patient ---
-        patient_folder = m.find(f"lymphtrack-data/{patient_id}")
-        if not patient_folder:
-            raise HTTPException(status_code=404, detail=f"Patient folder {patient_id} not found")
-
-        # --- Trouver le dossier visite ---
-        subfolders = m.get_files_in_node(patient_folder[0])
-        visit_folder_id = None
-        for fid, meta in subfolders.items():
-            if isinstance(meta, dict) and meta.get("t") == 1 and meta.get("a", {}).get("n") == visit_str:
-                visit_folder_id = fid
-                break
-
-        if not visit_folder_id:
-            raise HTTPException(status_code=404, detail=f"Visit folder {visit_str} not found in MEGA")
-
-        visit_contents = m.get_files_in_node(visit_folder_id)
-        position_curves = {}  # { position: averaged_curve }
-
-        # --- Boucle sur les 6 positions ---
-        for position in range(1, 7):
-            position_folder_id = None
-            for fid, meta in visit_contents.items():
-                if isinstance(meta, dict) and meta.get("t") == 1 and meta.get("a", {}).get("n", "").lower() == str(position).lower():
-                    position_folder_id = fid
-                    break
-
-            if not position_folder_id:
-                continue  # pas de dossier = pas de mesure pour cette position
-
-            position_files = m.get_files_in_node(position_folder_id)
-            results = (
-                db.query(Result)
-                .filter(Result.id_operation == id_operation, Result.position == position)
-                .order_by(Result.measurement_number.asc())
-                .all()
-            )
-
-            if not results:
-                continue
-
-            measure_arrays = []
-            for r in results:
-                file_path = str(r.file_path)
-                filename = file_path.split("/")[-1]
-                target_file_id = None
-                for fid, meta in position_files.items():
-                    if isinstance(meta, dict) and meta.get("a", {}).get("n") == filename:
-                        target_file_id = fid
-                        break
-
-                if not target_file_id:
-                    logging.warning(f"[PLOT DATA] File {filename} not found in MEGA")
-                    continue
-
-                tmp_dir = tempfile.mkdtemp()
-                local_path = m.download((target_file_id, position_files[target_file_id]), dest_path=tmp_dir)
-                data = read_measurement_file(local_path)
-                if data:
-                    measure_arrays.append(data)
-
-            if not measure_arrays:
-                continue
-
-            # --- Calcul de la moyenne des mesures pour cette position ---
-            averaged = average_measurements(measure_arrays)
-            if averaged:
-                position_curves[position] = averaged
-
-        if not position_curves:
-            raise HTTPException(status_code=404, detail="No valid measurement data found for any position.")
-
-        # --- Fusionner les courbes (par fréquence) pour le graphe global ---
-        graph_data = merge_position_curves(position_curves)
-
-        return {
-            "status": "success",
-            "operation_id": id_operation,
-            "n_positions": len(position_curves),
-            "graph_data": graph_data,
-        }
-
-    except HTTPException as e:
-        raise e
-    except Exception as e:
-        logging.error(f"[PLOT DATA] Unexpected error: {e}")
-        raise HTTPException(status_code=500, detail=f"Internal error while building plot data: {e}")
-    
-
-# -----------------------------------
-# READ RESULT BY VISIT AND POSITION
-# -----------------------------------
-@router.get("/{id_operation}/{position}")
-def get_results(id_operation: int, position: int, db: Session = Depends(get_db)):
-    results = (
-        db.query(Result)
-        .filter(Result.id_operation == id_operation, Result.position == position)
-        .order_by(Result.measurement_number.asc())
-        .all()
-    )
-
-    return [
-        {
-            "id": r.id,
-            "measurement_number": r.measurement_number,
-            "file_path": r.file_path,
-            "file_name": r.file_path.split("/")[-1] if r.file_path else None,
-            "min_return_loss_db": r.min_return_loss_db,
-            "min_frequency_hz": r.min_frequency_hz,
-            "bandwidth_hz": r.bandwidth_hz,
-        }
-        for r in results
-    ]
 
