@@ -689,6 +689,7 @@ def get_plot_data_by_visit(id_operation: int, db: Session = Depends(get_db)):
             avg_curve = average_measurements(measure_arrays)
             position_curves[pos] = avg_curve
 
+        logging.info(f"[DEBUG PLOT VISIT] Position curves found: {list(position_curves.keys())}")
         if not position_curves:
             raise HTTPException(status_code=400, detail="No valid data found for this visit")
 
