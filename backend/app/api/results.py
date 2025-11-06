@@ -36,27 +36,33 @@ def read_measurement_file(file_path: str):
 
     try:
         if suffix == "csv":
-            tmp = pd.read_csv(file_path, header=0, sep=None, engine="python")
-            cols = tmp.columns.astype(str).str.strip().str.lower().str.replace(r"\s+", "", regex=True)
-
-            if any("freq" in c for c in cols) and any("s11" in c or "returnloss" in c for c in cols):
-                df = tmp.copy()
-                df.columns = cols
-            else:
-                raw = pd.read_csv(file_path, header=None, sep=None, engine="python")
-                df = infer_header_and_data(raw, key_cols=["freq", "returnloss"])
+            try:
+                tmp = pd.read_csv(file_path, header=0, sep=None, engine="python")
+                cols = tmp.columns.astype(str).str.strip().str.lower().str.replace(r"\s+", "", regex=True)
+                if any("freq" in c for c in cols) and any("s11" in c or "returnloss" in c for c in cols):
+                    df = tmp.copy()
+                    df.columns = cols
+                else:
+                    raw = pd.read_csv(file_path, header=None, sep=None, engine="python")
+                    df = infer_header_and_data(raw, key_cols=["freq", "returnloss"])
+            except Exception:
+                logging.warning(f"[PLOT READ] CSV read failed for {file_path}")
+                return []
         else:
-            tmp = pd.read_excel(file_path, header=0)
-            cols = tmp.columns.astype(str).str.strip().str.lower().str.replace(r"\s+", "", regex=True)
-
-            if any("freq" in c for c in cols) and any("s11" in c or "returnloss" in c for c in cols):
-                df = tmp.copy()
-                df.columns = cols
-            else:
-                raw = pd.read_excel(file_path, header=None)
-                df = infer_header_and_data(raw, key_cols=["freq", "returnloss"])
+            try:
+                tmp = pd.read_excel(file_path, header=0)
+                cols = tmp.columns.astype(str).str.strip().str.lower().str.replace(r"\s+", "", regex=True)
+                if any("freq" in c for c in cols) and any("s11" in c or "returnloss" in c for c in cols):
+                    df = tmp.copy()
+                    df.columns = cols
+                else:
+                    raw = pd.read_excel(file_path, header=None)
+                    df = infer_header_and_data(raw, key_cols=["freq", "returnloss"])
+            except Exception:
+                logging.warning(f"[PLOT READ] Excel read failed for {file_path}")
+                return []
     except Exception as e:
-        logging.warning(f"[PLOT READ] {file_path}: read error {e}")
+        logging.warning(f"[PLOT READ] {file_path}: unexpected read error {e}")
         return []
 
     if df is None:
@@ -64,7 +70,6 @@ def read_measurement_file(file_path: str):
         return []
 
     df.columns = df.columns.astype(str).str.strip().str.lower().str.replace(r"\s+", "", regex=True)
-
     freq_cols = [c for c in df.columns if "freq" in c]
     rl_cols = [c for c in df.columns if "s11" in c or "returnloss" in c]
     if not freq_cols or not rl_cols:
@@ -81,10 +86,7 @@ def read_measurement_file(file_path: str):
         return []
 
     data_points = [
-        {
-            "freq_hz": float(row[freq_col]),
-            "loss_db": float(row[rl_col]),
-        }
+        {"freq_hz": float(row[freq_col]), "loss_db": float(row[rl_col])}
         for _, row in df_sub.iterrows()
     ]
 
@@ -129,7 +131,15 @@ def extract_time_from_filename(filename: str) -> int | None:
     return hour * 3600 + minute * 60 + second
 
 
-def process_measurement_file(file: UploadFile, id_operation: int, position: int, db: Session, visit_str: str, patient_id: str, measurement_number=1, m=None):
+def process_measurement_file(
+    file: UploadFile,
+    id_operation: int,
+    position: int,
+    db: Session,
+    visit_str: str,
+    patient_id: str,
+    measurement_number=1
+):
     try:
         suffix = file.filename.split(".")[-1].lower()
         df = None
@@ -142,6 +152,7 @@ def process_measurement_file(file: UploadFile, id_operation: int, position: int,
                     df = tmp.copy()
                     df.columns = cols
                 else:
+                    file.file.seek(0)
                     raw = pd.read_csv(file.file, header=None, sep=None, engine="python")
                     df = infer_header_and_data(raw, key_cols=["freq", "returnloss"])
             else:
@@ -151,6 +162,7 @@ def process_measurement_file(file: UploadFile, id_operation: int, position: int,
                     df = tmp.copy()
                     df.columns = cols
                 else:
+                    file.file.seek(0)
                     raw = pd.read_excel(file.file, header=None)
                     df = infer_header_and_data(raw, key_cols=["freq", "returnloss"])
         except Exception as e:
@@ -160,7 +172,7 @@ def process_measurement_file(file: UploadFile, id_operation: int, position: int,
         if df is None:
             logging.warning(f"Skipping {file.filename}: could not infer header")
             return None
-
+        
         df.columns = df.columns.astype(str).str.strip().str.lower().str.replace(r"\s+", "", regex=True)
         freq_cols = [c for c in df.columns if "freq" in c]
         rl_cols = [c for c in df.columns if "s11" in c or "returnloss" in c]
@@ -174,7 +186,7 @@ def process_measurement_file(file: UploadFile, id_operation: int, position: int,
         if df_sub.empty:
             logging.warning(f"Skipping {file.filename}: no numeric data after coercion")
             return None
-
+        
         min_idx = df_sub[rl_col].idxmin()
         min_freq = df_sub.at[min_idx, freq_col]
         min_rl = df_sub.at[min_idx, rl_col]
@@ -186,139 +198,37 @@ def process_measurement_file(file: UploadFile, id_operation: int, position: int,
             bw = freqs.max() - freqs.min()
 
         file.file.seek(0)
-        archive_path = f"{patient_id}/{visit_str}/{position}/{file.filename}"
-        tmp_path = f"tmp_{file.filename}"
-        with open(tmp_path, "wb") as tmp_f:
-            tmp_f.write(file.file.read())
+        archive_dir = DATA_ROOT / patient_id / visit_str / str(position)
+        archive_dir.mkdir(parents=True, exist_ok=True)
+        archive_path = archive_dir / file.filename
 
-            if m:
-                patient_folder = m.find(f"lymphtrack-data/{patient_id}")
-                if not patient_folder:
-                    try:
-                        m.create_folder(f"lymphtrack-data/{patient_id}")
-                        patient_folder = m.find(f"lymphtrack-data/{patient_id}")
-                    except Exception as e:
-                        logging.warning(f"[MEGA] create_folder patient failed: {e}")
-                        patient_folder = None
+        try:
+            with open(archive_path, "wb") as out_f:
+                shutil.copyfileobj(file.file, out_f)
+        except Exception as e:
+            if archive_path.exists():
+                archive_path.unlink() 
+            logging.error(f"[SAVE FILE] Failed to save {file.filename}: {e}")
+            return None
 
-                visit_folder = None
-                if patient_folder:
-                    sub = m.get_files_in_node(patient_folder[0])
-                    for fid, meta in sub.items():
-                        if meta.get("t") == 1 and meta.get("a", {}).get("n") == visit_str:
-                            visit_folder = (fid, meta)
-                            break
-                    if not visit_folder:
-                        try:
-                            node = m.create_folder(visit_str, patient_folder[0])
-                            if isinstance(node, dict) and "f" in node:
-                                folder_id = node["f"][0]["h"]
-                                visit_folder = (folder_id, node["f"][0])
-                            elif isinstance(node, dict) and "h" in node:
-                                visit_folder = (node["h"], node)
-                            elif isinstance(node, str):
-                                visit_folder = (node, {"a": {"n": visit_str}, "t": 1})
-                            elif isinstance(node, dict) and any(k.isdigit() for k in node):
-                                folder_id = list(node.values())[0]
-                                visit_folder = (folder_id, {"a": {"n": visit_str}, "t": 1})
-                            else:
-                                logging.warning(f"[MEGA] Unexpected visit folder response: {node}")
-                                visit_folder = None
-                        except Exception as e:
-                            logging.warning(f"[MEGA] create_folder visit failed: {e}")
-                            visit_folder = None
-
-                dest_folder = None
-                if visit_folder:
-                    subfolders = m.get_files_in_node(visit_folder[0])
-                    for fid, meta in subfolders.items():
-                        if meta.get("t") == 1 and meta.get("a", {}).get("n") == str(position):
-                            dest_folder = (fid, meta)
-                            break
-                    if not dest_folder:
-                        try:
-                            node = m.create_folder(str(position), visit_folder[0])
-                            if isinstance(node, dict) and "f" in node:
-                                folder_id = node["f"][0]["h"]
-                                dest_folder = (folder_id, node["f"][0])
-                            elif isinstance(node, dict) and "h" in node:
-                                dest_folder = (node["h"], node)
-                            elif isinstance(node, str):
-                                dest_folder = (node, {"a": {"n": str(position)}, "t": 1})
-                            elif isinstance(node, dict) and any(k.isdigit() for k in node):
-                                folder_id = list(node.values())[0]
-                                dest_folder = (folder_id, {"a": {"n": str(position)}, "t": 1})
-                            else:
-                                logging.warning(f"[MEGA] Unexpected position folder response: {node}")
-                                dest_folder = None
-                        except Exception as e:
-                            logging.warning(f"[MEGA] create_folder position failed: {e}")
-                            dest_folder = None
-
-                try:
-                    if dest_folder:
-                        up = m.upload(tmp_path, dest_folder[0], dest_filename=file.filename)
-                        logging.info(f"[MEGA] Uploaded {file.filename}: {up}")
-                    else:
-                        logging.warning(f"[MEGA] Skip upload (no dest folder) for {file.filename}")
-                except Exception as e:
-                    logging.warning(f"[MEGA] Upload failed for {file.filename}: {e}")
-            else:
-                logging.debug("[MEGA] Client is None, skipping Mega operations")
-           
-            os.remove(tmp_path)
-
-            result = Result(
-                id_operation=int(id_operation),
-                position=int(position),
-                measurement_number=measurement_number,
-                min_return_loss_db=float(min_rl),
-                min_frequency_hz=int(min_freq),
-                bandwidth_hz=float(bw) if not pd.isna(bw) else None,
-                file_path=archive_path,
-                uploaded_at=datetime.now(timezone.utc),
-            )
-            db.add(result)
-            return result
+        relative_path = str(archive_path.relative_to(DATA_ROOT))
+        result = Result(
+            id_operation=int(id_operation),
+            position=int(position),
+            measurement_number=measurement_number,
+            min_return_loss_db=float(min_rl),
+            min_frequency_hz=int(min_freq),
+            bandwidth_hz=float(bw) if not pd.isna(bw) else None,
+            file_path=relative_path,
+            uploaded_at=datetime.now(timezone.utc),
+        )
+        db.add(result)
+        return result
 
     except Exception as e:
         logging.error(f"[PROCESS FILE] {file.filename}: {e}")
         traceback.print_exc()
         return None
-
-
-# ---------------------
-# CREATE RESULT
-# ---------------------
-@router.post("/process-results/{id_operation}/{position}")
-async def create_result(id_operation: int, position: int, files: list[UploadFile] = File(...), db: Session = Depends(get_db)):
-    try:
-        operation = db.query(Operation).filter(Operation.id_operation == id_operation).first()
-        if not operation:
-            raise HTTPException(status_code=404, detail="Operation not found")
-
-        patient_id = operation.patient_id
-        all_ops = db.query(Operation).filter(Operation.patient_id == patient_id).order_by(Operation.operation_date.asc()).all()
-        visit_number = {op.id_operation: idx + 1 for idx, op in enumerate(all_ops)}[id_operation]
-        visit_str = f"{visit_number}-{operation.name.replace(' ', '_')}_{operation.operation_date.strftime('%d%m%Y')}"
-
-        existing_results = db.query(Result).filter(Result.id_operation == id_operation, Result.position == position).order_by(Result.measurement_number.asc()).all()
-        start_index = len(existing_results) + 1
-
-        all_results = []
-        for offset, f in enumerate(files, start=start_index):
-            result = process_measurement_file(f, id_operation, position, db, visit_str, patient_id, measurement_number=offset)
-            if result:
-                all_results.append(result)
-        db.commit()
-
-        if not all_results:
-            return {"status": "error", "message": "No valid files were processed"}
-        return {"status": "success", "message": f"Processed {len(all_results)} file(s)", "results": all_results}
-
-    except Exception as e:
-        db.rollback()
-        return {"status": "error", "message": str(e)}
 
 
 # ---------------------
@@ -362,7 +272,6 @@ async def create_all_results(
 
         timed_files.sort(key=lambda x: x[0])
         sorted_files = [f for _, f in timed_files]
-
         grouped = {pos: sorted_files[(pos - 1) * 3: pos * 3] for pos in range(1, 7)}
 
         all_results = []
@@ -371,29 +280,34 @@ async def create_all_results(
 
         for pos, pos_files in grouped.items():
             for idx, f in enumerate(pos_files, start=1):
-                result = process_measurement_file(
-                    f,
-                    id_operation,
-                    pos,
-                    db,
-                    visit_str,
-                    patient_id,
-                    measurement_number=idx,
-                )
-                if result:
-                    all_results.append(result)
-                    counter_db += 1
-                    if counter_db % batch_size_db == 0:
-                        db.commit()
+                try:
+                    result = process_measurement_file(
+                        f,
+                        id_operation,
+                        pos,
+                        db,
+                        visit_str,
+                        patient_id,
+                        measurement_number=idx,
+                    )
+                    if result:
+                        all_results.append(result)
+                        counter_db += 1
+                        if counter_db % batch_size_db == 0:
+                            db.commit()
+                except Exception as e:
+                    logging.error(f"[PROCESS-ALL] Failed processing file {f.filename}: {e}")
+                    continue
 
         db.commit()
 
         if not all_results:
             return {"status": "error", "message": "No valid files were processed"}
 
+        positions_done = len(set(r.position for r in all_results))
         return {
             "status": "success",
-            "message": f"Processed {len(all_results)} files across 6 positions",
+            "message": f"Processed {len(all_results)} files across {positions_done} positions",
             "results": all_results,
         }
 
@@ -402,6 +316,7 @@ async def create_all_results(
         logging.error(f"[PROCESS-ALL] {e}")
         traceback.print_exc()
         return {"status": "error", "message": str(e)}
+
 
 # ---------------------
 # READ ALL RESULTS

@@ -4,10 +4,10 @@ from pathlib import Path
 
 API_URL = "http://localhost:8000/results"
 BASE_DIR = Path(__file__).resolve().parent
-TEST_FILE = BASE_DIR / "VNA_test.xls"  
+TEST_FILE = BASE_DIR.parents[2] / "VNA_test.xls" 
 TEST_OPERATION_ID = 1              
 TEST_PATIENT_ID = "MV001"            
-TEST_POSITION = 1
+TEST_POSITION = 84446
 
 
 # ---------------------
@@ -123,28 +123,18 @@ if __name__ == "__main__":
     test_create_result()
 
     # List all results
-    all_data = test_get_all_results()
+    #all_data = test_get_all_results()
 
     # By operation
-    test_get_results_by_operation()
+    #test_get_results_by_operation()
 
     # By patient
-    test_get_results_by_patient()
+    #test_get_results_by_patient()
 
     # By operation + position
     data = test_get_results_by_operation_position()
 
     # Plot data (graph API)
-    test_get_plot_data()
+    #test_get_plot_data()
 
     # Delete the test file (if found)
-    if data and isinstance(data, list) and len(data) > 0:
-        fp = data[0].get("file_path")
-        if fp:
-            test_delete_measurement(fp)
-        else:
-            print("No file_path found to delete.")
-    else:
-        print("No result to delete.")
-
-    print("\n=== ALL TESTS COMPLETED ===")
