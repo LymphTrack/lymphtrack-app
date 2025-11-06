@@ -75,12 +75,34 @@ export default function PatientResultsScreen() {
       setOperation(opData);
       setResults(resultsData);
 
+      await loadGraphData();
       await loadPhotos();
+
     } catch (e) {
       console.error("Error loading patient data:", e);
       showAlert("Error", "Unable to load operation data. Please try again later.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadGraphData = async () => {
+    try {
+      const res = await fetch(`${API_URL}/results/plot-data/by-visit/${id_operation}`);
+      if (!res.ok) {
+        console.warn("No visit graph found:", res.status);
+        setGraphData([]);
+        return;
+      }
+      const data = await res.json();
+      if (data?.graph_data) {
+        setGraphData(data.graph_data);
+      } else {
+        setGraphData([]);
+      }
+    } catch (e) {
+      console.error("Error loading graph data:", e);
+      setGraphData([]);
     }
   };
 
@@ -131,7 +153,7 @@ export default function PatientResultsScreen() {
 
       setUploadingPhoto(true);
 
-      const res = await fetch(`${API_URL}/photos/${id_operation}`, {
+      const res = await fetch(`${API_URL}/upload/photos/${id_operation}`, {
         method: "POST",
         body: formData,
         headers: { Accept: "application/json" },
@@ -355,12 +377,12 @@ export default function PatientResultsScreen() {
                         
                         {Array.from({ length: 6 }).map((_, index) => {
                           const pos = index + 1;
-                          if (!graphData.some((d) => d[`loss${pos}`] !== undefined)) return null;
+                          if (!graphData.some((d) => d[`pos${pos}`] !== undefined)) return null;
                           return (
                             <Line
                               key={pos}
                               type="monotone"
-                              dataKey={`loss${pos}`}
+                              dataKey={`pos${pos}`}
                               stroke={COLORS[`color${pos}`]}
                               strokeWidth={2}
                               dot={false}

@@ -113,6 +113,38 @@ def merge_measurements_for_chart(measure_arrays: list[list[dict]]):
 
     return merged
 
+def average_measurements(measure_arrays: list[list[dict]]):
+    if not measure_arrays:
+        return []
+    
+    base_freqs = [p["freq_hz"] for p in measure_arrays[0]]
+    combined = []
+    for i, freq in enumerate(base_freqs):
+        vals = []
+        for arr in measure_arrays:
+            if i < len(arr):
+                vals.append(arr[i]["loss_db"])
+        if vals:
+            avg_loss = float(np.mean(vals))
+            combined.append({"freq_hz": freq, "avg_loss_db": avg_loss})
+    return combined
+
+
+def merge_positions_for_chart(position_curves: dict[int, list[dict]]):
+    if not position_curves:
+        return []
+
+    base_freqs = [p["freq_hz"] for p in next(iter(position_curves.values()))]
+    merged = []
+
+    for i, freq in enumerate(base_freqs):
+        point = {"freq": freq / 1e9}  # en GHz
+        for pos, curve in position_curves.items():
+            if i < len(curve):
+                point[f"pos{pos}"] = curve[i]["avg_loss_db"]
+        merged.append(point)
+
+    return merged
 
 
 def extract_time_from_filename(filename: str) -> int | None:
@@ -531,6 +563,9 @@ def delete_measurements(payload: dict, db: Session = Depends(get_db)):
         return {"status": "error", "message": str(e)}
 
 
+# ---------------------
+# PLOT DATA BY POSITION
+# ---------------------
 
 @router.get("/plot-data/{id_operation}/{position}")
 def get_plot_data(id_operation: int, position: int, db: Session = Depends(get_db)):
@@ -595,3 +630,80 @@ def get_plot_data(id_operation: int, position: int, db: Session = Depends(get_db
     except Exception as e:
         logging.error(f"[PLOT DATA ERROR] {e}")
         raise HTTPException(status_code=500, detail=f"Internal error while building plot data: {e}")
+
+
+
+# ---------------------
+# PLOT DATA BY VISIT
+# ---------------------
+
+@router.get("/plot-data/by-visit/{id_operation}")
+def get_plot_data_by_visit(id_operation: int, db: Session = Depends(get_db)):
+    try:
+        operation = db.query(Operation).filter(Operation.id_operation == id_operation).first()
+        if not operation:
+            raise HTTPException(status_code=404, detail=f"Operation {id_operation} not found")
+
+        patient_id = operation.patient_id
+        all_ops = (
+            db.query(Operation)
+            .filter(Operation.patient_id == patient_id)
+            .order_by(Operation.operation_date.asc())
+            .all()
+        )
+
+        visit_number = {op.id_operation: idx + 1 for idx, op in enumerate(all_ops)}[operation.id_operation]
+        visit_name = operation.name.replace(" ", "_")
+        visit_str = f"{visit_number}-{visit_name}_{operation.operation_date.strftime('%d%m%Y')}"
+
+        visit_dir = DATA_ROOT / patient_id / visit_str
+        if not visit_dir.exists():
+            raise HTTPException(status_code=404, detail=f"Visit folder not found: {visit_str}")
+
+        results_all = db.query(Result).filter(Result.id_operation == id_operation).all()
+        if not results_all:
+            raise HTTPException(status_code=404, detail="No measurements found for this visit")
+
+        position_curves = {}
+
+        for pos in range(1, 7):
+            pos_results = [r for r in results_all if r.position == pos]
+            if not pos_results:
+                continue
+
+            measure_arrays = []
+            for r in pos_results:
+                file_path = DATA_ROOT / r.file_path
+                if not file_path.exists():
+                    logging.warning(f"[PLOT VISIT] Missing file: {file_path}")
+                    continue
+                data = read_measurement_file(file_path)
+                if data:
+                    measure_arrays.append(data)
+                else:
+                    logging.warning(f"[PLOT VISIT] Invalid data: {file_path}")
+
+            if not measure_arrays:
+                continue
+
+            avg_curve = average_measurements(measure_arrays)
+            position_curves[pos] = avg_curve
+
+        if not position_curves:
+            raise HTTPException(status_code=400, detail="No valid data found for this visit")
+
+        graph_data = merge_positions_for_chart(position_curves)
+
+        return {
+            "status": "success",
+            "operation_id": id_operation,
+            "visit": visit_str,
+            "n_positions": len(position_curves),
+            "graph_data": graph_data,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"[PLOT VISIT ERROR] {e}")
+        raise HTTPException(status_code=500, detail=f"Internal error while building visit plot: {e}")

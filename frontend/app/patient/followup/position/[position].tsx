@@ -58,6 +58,7 @@ export default function PositionScreen() {
     }
   };
 
+
   const importAndUploadPosition = async () => {
     setCreateMeasurement(true);
     const url = `${API_URL}/results/process-results/${operation_id}/${position}`;

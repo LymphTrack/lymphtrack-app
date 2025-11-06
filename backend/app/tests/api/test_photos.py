@@ -50,7 +50,7 @@ def create_operation(patient_id):
         "operation_date": date.today().isoformat(),
         "notes": "Test photo upload"
     }
-    r = requests.post(f"upload/{OPERATIONS_URL}/", json=payload)
+    r = requests.post(f"{OPERATIONS_URL}/", json=payload)
     data = must_json(r)
     print("Status:", r.status_code, "Response:", data)
     if "operation" not in data or "id_operation" not in data["operation"]:
@@ -68,7 +68,7 @@ def upload_photo(id_operation, file_path):
     files = {
         "file": (os.path.basename(file_path), open(file_path, "rb"), "image/jpeg")
     }
-    r = requests.post(f"{PHOTOS_URL}/{id_operation}", files=files)
+    r = requests.post(f"{PHOTOS_URL}/upload/{id_operation}", files=files)
     data = must_json(r)
     print("Status:", r.status_code, "Response:", data)
     if data.get("status") != "success":
