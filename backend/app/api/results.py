@@ -488,7 +488,7 @@ def get_results_by_patient(patient_id: str, db: Session = Depends(get_db)):
 # -----------------------------------
 # READ RESULT BY VISIT AND POSITION
 # -----------------------------------
-@router.get("/{id_operation}/{position}")
+@router.get("by-visit-and-position/{id_operation}/{position}")
 def get_results(id_operation: int, position: int, db: Session = Depends(get_db)):
     results = (
         db.query(Result)
@@ -645,5 +645,75 @@ def get_plot_data_by_visit(id_operation: int, db: Session = Depends(get_db)):
     except Exception as e:
         logging.error(f"[PLOT VISIT ERROR] {e}")
         raise HTTPException(status_code=500, detail=f"Internal error while building visit plot: {e}")
+
+
+
+# ---------------------
+# PLOT DATA BY POSITION
+# ---------------------
+@router.get("/plot-data-by-position/{id_operation}/{position}")
+def get_plot_data_by_position(id_operation: int, position: int, db: Session = Depends(get_db)):
+    try:
+        operation = db.query(Operation).filter(Operation.id_operation == id_operation).first()
+        if not operation:
+            raise HTTPException(status_code=404, detail=f"Operation {id_operation} not found")
+
+        patient_id = operation.patient_id
+        all_ops = (
+            db.query(Operation)
+            .filter(Operation.patient_id == patient_id)
+            .order_by(Operation.operation_date.asc())
+            .all()
+        )
+
+        visit_number = {op.id_operation: idx + 1 for idx, op in enumerate(all_ops)}[operation.id_operation]
+        visit_name = operation.name.replace(" ", "_")
+        visit_str = f"{visit_number}-{visit_name}_{operation.operation_date.strftime('%d%m%Y')}"
+
+        position_folder = DATA_ROOT / patient_id / visit_str / str(position)
+        if not position_folder.exists():
+            raise HTTPException(status_code=404, detail=f"Position folder {position} not found in {visit_str}")
+
+        results = (
+            db.query(Result)
+            .filter(Result.id_operation == id_operation, Result.position == position)
+            .order_by(Result.measurement_number.asc())
+            .all()
+        )
+        if not results:
+            raise HTTPException(status_code=404, detail="No measurements found for this position")
+
+        measure_arrays = []
+        for r in results:
+            file_path = DATA_ROOT / r.file_path
+            if not file_path.exists():
+                logging.warning(f"[PLOT DATA] Missing file: {file_path}")
+                continue
+
+            data = read_measurement_file(file_path)
+            if data:
+                measure_arrays.append(data)
+            else:
+                logging.warning(f"[PLOT DATA] Invalid data: {file_path}")
+
+        if not measure_arrays:
+            raise HTTPException(status_code=400, detail="No valid measurement data found locally")
+
+        graph_data = merge_measurements_for_chart(measure_arrays)
+
+        return {
+            "status": "success",
+            "operation_id": id_operation,
+            "position": position,
+            "n_measurements": len(measure_arrays),
+            "graph_data": graph_data,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"[PLOT DATA ERROR] {e}")
+        raise HTTPException(status_code=500, detail=f"Internal error while building plot data: {e}")
+
 
 
