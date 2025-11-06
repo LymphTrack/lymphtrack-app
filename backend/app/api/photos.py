@@ -12,7 +12,7 @@ DATA_ROOT = Path(r"C:\Users\Pimprenelle\Documents\LymphTrackData")
 # ---------------------
 # UPLOAD PHOTO
 # ---------------------
-@router.post("/{id_operation}")
+@router.post("/upload/{id_operation}")
 def upload_photo(id_operation: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
     try:
         op = db.query(Operation).filter(Operation.id_operation == id_operation).first()
@@ -89,10 +89,6 @@ def get_photos(id_operation: int, db: Session = Depends(get_db)):
 # ---------------------
 @router.post("/delete-photo")
 def delete_photo(payload: dict, db: Session = Depends(get_db)):
-    """
-    Supprime la photo du disque local et de la base.
-    Payload: {"url": "MV131/1-Visit_1_06112025/photos/photo.jpg"}
-    """
     try:
         url = payload.get("url")
         if not url:
