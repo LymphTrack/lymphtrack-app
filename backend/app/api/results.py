@@ -488,7 +488,7 @@ def get_results_by_patient(patient_id: str, db: Session = Depends(get_db)):
 # -----------------------------------
 # READ RESULT BY VISIT AND POSITION
 # -----------------------------------
-@router.get("by-visit-and-position/{id_operation}/{position}")
+@router.get("/by-visit-and-position/{id_operation}/{position}")
 def get_results(id_operation: int, position: int, db: Session = Depends(get_db)):
     results = (
         db.query(Result)
