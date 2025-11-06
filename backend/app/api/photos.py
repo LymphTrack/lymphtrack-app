@@ -2,137 +2,121 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 from app.db.models import Photo, Operation
 from app.db.database import get_db
-import os, tempfile, re
-from dotenv import load_dotenv
-from mega import Mega
 from datetime import datetime, timezone
-
-load_dotenv()
+from pathlib import Path
+import os, re, shutil, logging
 
 router = APIRouter()
-
-EMAIL = os.getenv("MEGA_EMAIL")
-PASSWORD = os.getenv("MEGA_PASSWORD")
-
-mega = Mega()
-m = mega.login(EMAIL, PASSWORD)
-
+DATA_ROOT = Path(r"C:\Users\Pimprenelle\Documents\LymphTrackData")
 
 # ---------------------
 # UPLOAD PHOTO
 # ---------------------
 @router.post("/{id_operation}")
 def upload_photo(id_operation: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
-    op = db.query(Operation).filter(Operation.id_operation == id_operation).first()
-    if not op:
-        raise HTTPException(status_code=404, detail="Operation not found")
-
-    patient_id = op.patient_id
-
-    all_ops = (
-        db.query(Operation)
-        .filter(Operation.patient_id == patient_id)
-        .order_by(Operation.operation_date.asc())
-        .all()
-    )
-    visit_number = {o.id_operation: idx + 1 for idx, o in enumerate(all_ops)}[op.id_operation]
-    visit_str = f"{visit_number}-{op.name.replace(' ', '_')}_{op.operation_date.strftime('%d%m%Y')}"
-
-    patient_folder = m.find(f"lymphtrack-data/{patient_id}")
-    if not patient_folder:
-        raise HTTPException(status_code=404, detail="Patient folder not found in Mega")
-
-    subfolders = m.get_files_in_node(patient_folder[0])
-
-    visit_folder = None
-    for fid, meta in subfolders.items():
-        if meta["t"] == 1 and meta["a"]["n"] == visit_str:
-            visit_folder = fid
-            break
-    if not visit_folder:
-        raise HTTPException(status_code=404, detail=f"Visit folder {visit_str} not found in Mega")
-
-    visit_subfolders = m.get_files_in_node(visit_folder)
-    photos_folder = None
-    for fid, meta in visit_subfolders.items():
-        if meta["t"] == 1 and meta["a"]["n"] == "photos":
-            photos_folder = fid
-            break
-
-    if not photos_folder:
-        node = m.create_folder("photos", visit_folder)
-        if isinstance(node, dict) and "f" in node:
-            photos_folder = node["f"][0]["h"]
-        elif isinstance(node, dict) and "h" in node:
-            photos_folder = node["h"]
-        elif isinstance(node, dict) and "photos" in node: 
-            photos_folder = node["photos"]
-        elif isinstance(node, str):
-            photos_folder = node
-        else:
-            raise HTTPException(status_code=500, detail=f"Unexpected Mega response when creating photos folder: {node}")
-
     try:
-        safe_filename = re.sub(r'[^a-zA-Z0-9_.-]', '_', file.filename or "upload.jpg")
+        op = db.query(Operation).filter(Operation.id_operation == id_operation).first()
+        if not op:
+            raise HTTPException(status_code=404, detail="Operation not found")
 
-        tmpdir = tempfile.gettempdir()
-        local_path = os.path.join(tmpdir, safe_filename)
+        patient_id = op.patient_id
+        all_ops = (
+            db.query(Operation)
+            .filter(Operation.patient_id == patient_id)
+            .order_by(Operation.operation_date.asc())
+            .all()
+        )
 
-        with open(local_path, "wb") as buffer:
-            buffer.write(file.file.read())
+        visit_number = {o.id_operation: idx + 1 for idx, o in enumerate(all_ops)}[op.id_operation]
+        visit_str = f"{visit_number}-{op.name.replace(' ', '_')}_{op.operation_date.strftime('%d%m%Y')}"
 
-            uploaded = m.upload(local_path, photos_folder)
+        photos_dir = DATA_ROOT / patient_id / visit_str / "photos"
+        photos_dir.mkdir(parents=True, exist_ok=True)
 
-            # Extraire le handle correct
-            if isinstance(uploaded, dict):
-                if "f" in uploaded and len(uploaded["f"]) > 0:
-                    file_handle = uploaded["f"][0]["h"]
-                elif "h" in uploaded:
-                    file_handle = uploaded["h"]
-                else:
-                    raise HTTPException(status_code=500, detail=f"Unexpected Mega upload response: {uploaded}")
-            else:
-                file_handle = uploaded
+        safe_filename = re.sub(r'[^a-zA-Z0-9_.-]', '_', file.filename or "photo.jpg")
+        archive_path = photos_dir / safe_filename
 
-            # 🔧 Correction ici
-            try:
-                # ne pas modifier car on va avoir un nouveau cloud bientot donc j'attend le serveur de la machine virtuelle
-                # pour pouvoir faire quoi que ce soit avec mega.nz
-                # 
-                uploaded_file = m.find(file.filename)
-                if uploaded_file:
-                    link = m.get_link(uploaded_file[0])
-                else:
-                    link = m.get_link(file_handle)
+        try:
+            with open(archive_path, "wb") as out_file:
+                shutil.copyfileobj(file.file, out_file)
+        except Exception as e:
+            if archive_path.exists():
+                archive_path.unlink()
+            raise HTTPException(status_code=500, detail=f"Error saving photo: {e}")
 
-            except Exception as e:
-                print(f"[WARN] Could not get Mega link properly: {e}")
-                link = f"https://mega.nz/file/{file_handle}"
-
-
-
-        os.remove(local_path)
+        relative_url = str(archive_path.relative_to(DATA_ROOT)).replace("\\", "/")
 
         new_photo = Photo(
             id_operation=id_operation,
-            url=link,
+            url=relative_url,
             created_at=datetime.now(timezone.utc)
         )
         db.add(new_photo)
         db.commit()
         db.refresh(new_photo)
 
-        return {"status": "success", "photo": {"id": new_photo.id, "url": new_photo.url}}
+        return {
+            "status": "success",
+            "photo": {"id": new_photo.id, "url": new_photo.url}
+        }
 
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error uploading photo: {e}")
+        logging.error(f"[UPLOAD PHOTO] {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ---------------------
 # GET PHOTOS BY OPERATION
 # ---------------------
-
 @router.get("/{id_operation}")
 def get_photos(id_operation: int, db: Session = Depends(get_db)):
     photos = db.query(Photo).filter(Photo.id_operation == id_operation).all()
-    return photos
+    return [
+        {
+            "id": p.id,
+            "url": p.url,
+            "filename": os.path.basename(p.url),
+            "created_at": p.created_at
+        }
+        for p in photos
+    ]
+
+
+# ---------------------
+# DELETE PHOTO
+# ---------------------
+@router.post("/delete-photo")
+def delete_photo(payload: dict, db: Session = Depends(get_db)):
+    """
+    Supprime la photo du disque local et de la base.
+    Payload: {"url": "MV131/1-Visit_1_06112025/photos/photo.jpg"}
+    """
+    try:
+        url = payload.get("url")
+        if not url:
+            return {"status": "error", "message": "No photo url provided"}
+
+        photo = db.query(Photo).filter(Photo.url == url).first()
+        if not photo:
+            return {"status": "error", "message": f"No DB record found for {url}"}
+
+        abs_path = DATA_ROOT / Path(url)
+        deleted_files = []
+        if abs_path.exists():
+            try:
+                abs_path.unlink()
+                deleted_files.append(str(abs_path))
+            except Exception as e:
+                return {"status": "error", "message": f"Failed to delete file: {e}"}
+
+        db.delete(photo)
+        db.commit()
+
+        return {"status": "success", "deleted": deleted_files}
+
+    except Exception as e:
+        db.rollback()
+        logging.error(f"[DELETE PHOTO] {e}")
+        return {"status": "error", "message": str(e)}
