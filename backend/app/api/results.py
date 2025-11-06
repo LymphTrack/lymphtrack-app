@@ -232,6 +232,97 @@ def process_measurement_file(
 
 
 # ---------------------
+# CREATE RESULT
+# ---------------------
+@router.post("/process-results/{id_operation}/{position}")
+async def create_result(
+    id_operation: int,
+    position: int,
+    files: list[UploadFile] = File(...),
+    db: Session = Depends(get_db),
+):
+
+    try:
+        operation = (
+            db.query(Operation)
+            .filter(Operation.id_operation == id_operation)
+            .first()
+        )
+        if not operation:
+            raise HTTPException(status_code=404, detail="Operation not found")
+
+        if not files:
+            raise HTTPException(status_code=400, detail="No files provided")
+
+        patient_id = operation.patient_id
+        all_ops = (
+            db.query(Operation)
+            .filter(Operation.patient_id == patient_id)
+            .order_by(Operation.operation_date.asc())
+            .all()
+        )
+        visit_number = {op.id_operation: idx + 1 for idx, op in enumerate(all_ops)}[
+            id_operation
+        ]
+        visit_str = f"{visit_number}-{operation.name.replace(' ', '_')}_{operation.operation_date.strftime('%d%m%Y')}"
+
+        existing = (
+            db.query(Result)
+            .filter(Result.id_operation == id_operation, Result.position == position)
+            .order_by(Result.measurement_number.asc())
+            .all()
+        )
+        start_index = len(existing) + 1
+
+        saved_results = []
+        for idx, f in enumerate(files, start=start_index):
+            res = process_measurement_file(
+                file=f,
+                id_operation=id_operation,
+                position=position,
+                db=db,
+                visit_str=visit_str,
+                patient_id=patient_id,
+                measurement_number=idx,
+            )
+            if res:
+                saved_results.append(res)
+
+        db.commit()
+
+        if not saved_results:
+            return {"status": "error", "message": "No valid files were processed"}
+
+        payload = [
+            {
+                "id": r.id,
+                "id_operation": r.id_operation,
+                "position": r.position,
+                "measurement_number": r.measurement_number,
+                "min_return_loss_db": r.min_return_loss_db,
+                "min_frequency_hz": r.min_frequency_hz,
+                "bandwidth_hz": r.bandwidth_hz,
+                "file_path": r.file_path,
+                "uploaded_at": r.uploaded_at.isoformat() if r.uploaded_at else None,
+            }
+            for r in saved_results
+        ]
+
+        return {
+            "status": "success",
+            "message": f"Processed {len(saved_results)} file(s)",
+            "results": payload,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logging.error(f"[CREATE RESULT] {e}")
+        return {"status": "error", "message": str(e)}
+    
+
+# ---------------------
 # CREATE ALL RESULT
 # ---------------------
 
@@ -272,6 +363,7 @@ async def create_all_results(
 
         timed_files.sort(key=lambda x: x[0])
         sorted_files = [f for _, f in timed_files]
+
         grouped = {pos: sorted_files[(pos - 1) * 3: pos * 3] for pos in range(1, 7)}
 
         all_results = []
@@ -280,34 +372,29 @@ async def create_all_results(
 
         for pos, pos_files in grouped.items():
             for idx, f in enumerate(pos_files, start=1):
-                try:
-                    result = process_measurement_file(
-                        f,
-                        id_operation,
-                        pos,
-                        db,
-                        visit_str,
-                        patient_id,
-                        measurement_number=idx,
-                    )
-                    if result:
-                        all_results.append(result)
-                        counter_db += 1
-                        if counter_db % batch_size_db == 0:
-                            db.commit()
-                except Exception as e:
-                    logging.error(f"[PROCESS-ALL] Failed processing file {f.filename}: {e}")
-                    continue
+                result = process_measurement_file(
+                    f,
+                    id_operation,
+                    pos,
+                    db,
+                    visit_str,
+                    patient_id,
+                    measurement_number=idx,
+                )
+                if result:
+                    all_results.append(result)
+                    counter_db += 1
+                    if counter_db % batch_size_db == 0:
+                        db.commit()
 
         db.commit()
 
         if not all_results:
             return {"status": "error", "message": "No valid files were processed"}
 
-        positions_done = len(set(r.position for r in all_results))
         return {
             "status": "success",
-            "message": f"Processed {len(all_results)} files across {positions_done} positions",
+            "message": f"Processed {len(all_results)} files across 6 positions",
             "results": all_results,
         }
 
@@ -316,7 +403,6 @@ async def create_all_results(
         logging.error(f"[PROCESS-ALL] {e}")
         traceback.print_exc()
         return {"status": "error", "message": str(e)}
-
 
 # ---------------------
 # READ ALL RESULTS

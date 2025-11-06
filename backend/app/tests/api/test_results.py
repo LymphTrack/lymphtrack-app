@@ -7,7 +7,7 @@ BASE_DIR = Path(__file__).resolve().parent
 TEST_FILE = BASE_DIR.parents[2] / "VNA_test.xls" 
 TEST_OPERATION_ID = 1              
 TEST_PATIENT_ID = "MV001"            
-TEST_POSITION = 84446
+TEST_POSITION = 1
 
 
 # ---------------------
