@@ -36,7 +36,7 @@ export default function PositionScreen() {
       const [res, opRes, plotRes] = await Promise.all([
         fetch(`${API_URL}/results/${operation_id}/${position}`),
         fetch(`${API_URL}/operations/${operation_id}`),
-        fetch(`${API_URL}/results/plot-data/${operation_id}/${position}`),
+        fetch(`${API_URL}/results/plot-data-position/${operation_id}/${position}`),
       ]);
 
       if (!res.ok) throw new Error("Failed to fetch measurements");

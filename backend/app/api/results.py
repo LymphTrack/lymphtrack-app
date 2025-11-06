@@ -577,7 +577,7 @@ def delete_measurements(payload: dict, db: Session = Depends(get_db)):
 # PLOT DATA BY POSITION
 # ---------------------
 
-@router.get("/plot-data/{id_operation}/{position}")
+@router.get("/plot-data-position/{id_operation}/{position}")
 def get_plot_data(id_operation: int, position: int, db: Session = Depends(get_db)):
     try:
         operation = db.query(Operation).filter(Operation.id_operation == id_operation).first()
@@ -647,7 +647,7 @@ def get_plot_data(id_operation: int, position: int, db: Session = Depends(get_db
 # PLOT DATA BY VISIT
 # ---------------------
 
-@router.get("/plot-data/by-visit/{id_operation}")
+@router.get("/plot-data-visit/{id_operation}")
 def get_plot_data_by_visit(id_operation: int, db: Session = Depends(get_db)):
     try:
         operation = db.query(Operation).filter(Operation.id_operation == id_operation).first()

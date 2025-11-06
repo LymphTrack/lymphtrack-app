@@ -88,7 +88,7 @@ export default function PatientResultsScreen() {
 
   const loadGraphData = async () => {
     try {
-      const res = await fetch(`${API_URL}/results/plot-data/by-visit/${id_operation}`);
+      const res = await fetch(`${API_URL}/results/plot-data-visit/${id_operation}`);
       if (!res.ok) {
         console.warn("No visit graph found:", res.status);
         setGraphData([]);
