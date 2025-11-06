@@ -116,7 +116,11 @@ def merge_measurements_for_chart(measure_arrays: list[list[dict]]):
 def average_measurements(measure_arrays: list[list[dict]]):
     if not measure_arrays:
         return []
-    
+
+    if len(measure_arrays) == 1:
+        single = measure_arrays[0]
+        return [{"freq_hz": p["freq_hz"], "avg_loss_db": p["loss_db"]} for p in single]
+
     base_freqs = [p["freq_hz"] for p in measure_arrays[0]]
     combined = []
     for i, freq in enumerate(base_freqs):
@@ -130,11 +134,16 @@ def average_measurements(measure_arrays: list[list[dict]]):
     return combined
 
 
+
 def merge_positions_for_chart(position_curves: dict[int, list[dict]]):
     if not position_curves:
         return []
 
-    base_freqs = [p["freq_hz"] for p in next(iter(position_curves.values()))]
+    first_curve = next(iter(position_curves.values()))
+    if not first_curve:
+        return []
+
+    base_freqs = [p["freq_hz"] for p in first_curve]
     merged = []
 
     for i, freq in enumerate(base_freqs):
@@ -145,6 +154,7 @@ def merge_positions_for_chart(position_curves: dict[int, list[dict]]):
         merged.append(point)
 
     return merged
+
 
 
 def extract_time_from_filename(filename: str) -> int | None:
@@ -689,7 +699,6 @@ def get_plot_data_by_visit(id_operation: int, db: Session = Depends(get_db)):
             avg_curve = average_measurements(measure_arrays)
             position_curves[pos] = avg_curve
 
-        logging.info(f"[DEBUG PLOT VISIT] Position curves found: {list(position_curves.keys())}")
         if not position_curves:
             raise HTTPException(status_code=400, detail="No valid data found for this visit")
 
