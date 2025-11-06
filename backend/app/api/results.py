@@ -211,7 +211,7 @@ def process_measurement_file(
             logging.error(f"[SAVE FILE] Failed to save {file.filename}: {e}")
             return None
 
-        relative_path = str(archive_path.relative_to(DATA_ROOT))
+        relative_path = str(archive_path.relative_to(DATA_ROOT)).replace("\\", "/")
         result = Result(
             id_operation=int(id_operation),
             position=int(position),

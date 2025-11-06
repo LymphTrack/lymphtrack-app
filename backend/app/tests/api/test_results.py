@@ -1,140 +1,162 @@
 import requests
-import os
 from pathlib import Path
+from datetime import date
 
-API_URL = "http://localhost:8000/results"
+API_BASE = "http://localhost:8000"
+PATIENTS_URL = f"{API_BASE}/patients"
+OPERATIONS_URL = f"{API_BASE}/operations"
+RESULTS_URL = f"{API_BASE}/results"
+
 BASE_DIR = Path(__file__).resolve().parent
-TEST_FILE = BASE_DIR.parents[2] / "VNA_test.xls" 
-TEST_OPERATION_ID = 1              
-TEST_PATIENT_ID = "MV001"            
-TEST_POSITION = 1
+TEST_FILE = BASE_DIR.parents[2] / "VNA_test.xls"     
 
+def p(title):
+    print("\n" + "="*12, title, "="*12)
 
-# ---------------------
-# CREATE RESULT
-# ---------------------
-def test_create_result():
-    print("\n=== CREATE RESULT ===")
-    if not TEST_FILE.exists():
-        print(f"Test file not found: {TEST_FILE}")
-        return
-
-    files = [("files", (TEST_FILE.name, open(TEST_FILE, "rb"), "application/vnd.ms-excel"))]
-    r = requests.post(f"{API_URL}/process-results/{TEST_OPERATION_ID}/{TEST_POSITION}", files=files)
+def must_json(r):
     try:
-        print("Status:", r.status_code)
-        print("Response:", r.json())
+        return r.json()
     except Exception:
-        print("Raw:", r.status_code, r.text)
+        raise RuntimeError(f"Expected JSON, got: {r.status_code} {r.text[:200]}")
 
-
-# ---------------------
-# GET ALL RESULTS
-# ---------------------
-def test_get_all_results(limit=10):
-    print("\n=== GET ALL RESULTS ===")
-    r = requests.get(f"{API_URL}/")
-    if r.status_code == 200:
-        data = r.json()
-        print(f"Found {len(data)} results (showing {min(len(data), limit)})")
-        print(data[:limit])
-        return data
-    else:
-        print("Error:", r.status_code, r.text)
-        return []
-
-
-# ---------------------
-# GET RESULTS BY OPERATION
-# ---------------------
-def test_get_results_by_operation():
-    print("\n=== GET RESULTS BY OPERATION ===")
-    r = requests.get(f"{API_URL}/by_operation/{TEST_OPERATION_ID}")
+def create_patient():
+    p("CREATE PATIENT")
+    payload = {
+        "age": 42,
+        "gender": 1,
+        "bmi": 23.1,
+        "lymphedema_side": 1,
+        "notes": "E2E auto test"
+    }
+    r = requests.post(f"{PATIENTS_URL}/", json=payload)
     print("Status:", r.status_code)
-    try:
-        print("Response:", r.json())
-    except Exception:
-        print("Raw:", r.text)
+    data = must_json(r)
+    print("Response:", data)
+    if r.status_code != 200 or "patient_id" not in data:
+        raise RuntimeError("Failed to create patient")
+    return data["patient_id"]
 
-
-# ---------------------
-# GET RESULTS BY PATIENT
-# ---------------------
-def test_get_results_by_patient():
-    print("\n=== GET RESULTS BY PATIENT ===")
-    r = requests.get(f"{API_URL}/by_patient/{TEST_PATIENT_ID}")
+def create_operation(patient_id):
+    p("CREATE OPERATION")
+    payload = {
+        "patient_id": patient_id,
+        "name": "Visit_1",
+        "operation_date": date.today().isoformat(),  # YYYY-MM-DD
+        "notes": "E2E operation"
+    }
+    r = requests.post(f"{OPERATIONS_URL}/", json=payload)
     print("Status:", r.status_code)
-    try:
-        print("Response:", r.json())
-    except Exception:
-        print("Raw:", r.text)
+    data = must_json(r)
+    print("Response:", data)
+    if r.status_code != 200 or "operation" not in data or "id_operation" not in data["operation"]:
+        raise RuntimeError("Failed to create operation")
+    return data["operation"]["id_operation"]
 
+def upload_results(id_operation, position=1, files_paths=None):
+    p("UPLOAD RESULT(S)")
+    if not files_paths:
+        files_paths = [TEST_FILE]
+    for pth in files_paths:
+        if not Path(pth).exists():
+            raise FileNotFoundError(f"Test file not found: {pth}")
 
-# ---------------------
-# GET RESULTS BY OPERATION + POSITION
-# ---------------------
-def test_get_results_by_operation_position():
-    print("\n=== GET RESULTS BY OPERATION + POSITION ===")
-    r = requests.get(f"{API_URL}/{TEST_OPERATION_ID}/{TEST_POSITION}")
+    files = []
+    for pth in files_paths:
+        mime = "application/vnd.ms-excel" if str(pth).lower().endswith(".xls") else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        files.append(("files", (Path(pth).name, open(pth, "rb"), mime)))
+
+    r = requests.post(f"{RESULTS_URL}/process-results/{id_operation}/{position}", files=files)
     print("Status:", r.status_code)
-    try:
-        data = r.json()
-        print("Response:", data)
-        return data
-    except Exception:
-        print("Raw:", r.text)
-        return []
+    data = must_json(r)
+    print("Response:", data)
+    if r.status_code != 200 or data.get("status") != "success":
+        raise RuntimeError("Failed to process results")
+    return data["results"]  # liste de résultats (payload sérialisé)
 
-
-# ---------------------
-# PLOT DATA
-# ---------------------
-def test_get_plot_data():
-    print("\n=== GET PLOT DATA ===")
-    r = requests.get(f"{API_URL}/plot-data/{TEST_OPERATION_ID}/{TEST_POSITION}")
+def get_results_by_operation(id_operation):
+    p("GET RESULTS BY OPERATION")
+    r = requests.get(f"{RESULTS_URL}/by_operation/{id_operation}")
     print("Status:", r.status_code)
-    try:
-        print("Response:", r.json())
-    except Exception:
-        print("Raw:", r.text)
+    data = must_json(r)
+    print("Count:", len(data))
+    return data
 
+def get_results_by_patient(patient_id):
+    p("GET RESULTS BY PATIENT")
+    r = requests.get(f"{RESULTS_URL}/by_patient/{patient_id}")
+    print("Status:", r.status_code)
+    data = must_json(r)
+    print("Count:", len(data))
+    return data
 
-# ---------------------
-# DELETE MEASUREMENT
-# ---------------------
-def test_delete_measurement(file_path):
-    print("\n=== DELETE MEASUREMENT ===")
+def get_results_by_op_pos(id_operation, position):
+    p("GET RESULTS BY OP + POS")
+    r = requests.get(f"{RESULTS_URL}/{id_operation}/{position}")
+    print("Status:", r.status_code)
+    data = must_json(r)
+    print("Response:", data)
+    return data
+
+def get_plot_data(id_operation, position):
+    p("GET PLOT DATA")
+    r = requests.get(f"{RESULTS_URL}/plot-data/{id_operation}/{position}")
+    print("Status:", r.status_code)
+    data = must_json(r)
+    print("Points:", len(data))
+    return data
+
+def delete_measurement(file_path):
+    p("DELETE MEASUREMENT")
     payload = {"file_path": file_path}
-    r = requests.post(f"{API_URL}/delete-measurements", json=payload)
+    r = requests.post(f"{RESULTS_URL}/delete-measurements", json=payload)
     print("Status:", r.status_code)
-    try:
-        print("Response:", r.json())
-    except Exception:
-        print("Raw:", r.text)
+    data = must_json(r)
+    print("Response:", data)
+    return data
 
+def delete_operation(id_operation):
+    p("DELETE OPERATION")
+    r = requests.delete(f"{OPERATIONS_URL}/{id_operation}")
+    print("Status:", r.status_code)
+    print("Response:", must_json(r))
 
-# ---------------------
-# MAIN TEST SEQUENCE
-# ---------------------
+def delete_patient(patient_id):
+    p("DELETE PATIENT")
+    r = requests.delete(f"{PATIENTS_URL}/{patient_id}")
+    print("Status:", r.status_code)
+    print("Response:", must_json(r))
+
 if __name__ == "__main__":
-    print("=== TEST RESULTS API (LOCAL MODE) ===")
+    print("=== E2E FLOW: patient -> operation -> results -> cleanup ===")
+    patient_id = None
+    id_operation = None
 
-    # Create a result
-    test_create_result()
+    try:
+        patient_id = create_patient()
 
-    # List all results
-    #all_data = test_get_all_results()
+        id_operation = create_operation(patient_id)
 
-    # By operation
-    #test_get_results_by_operation()
+        results_payload = upload_results(id_operation, position=1, files_paths=[TEST_FILE])
 
-    # By patient
-    #test_get_results_by_patient()
+        _ = get_results_by_operation(id_operation)
+        _ = get_results_by_patient(patient_id)
+        op_pos_data = get_results_by_op_pos(id_operation, 1)
+        _ = get_plot_data(id_operation, 1)
 
-    # By operation + position
-    data = test_get_results_by_operation_position()
+        if op_pos_data:
+            fp = op_pos_data[-1]["file_path"].replace("\\", "/")
+            delete_measurement(fp)
 
-    # Plot data (graph API)
-    #test_get_plot_data()
+    finally:
+        if id_operation is not None:
+            try:
+                delete_operation(id_operation)
+            except Exception as e:
+                print("WARN: delete_operation failed:", e)
+        if patient_id is not None:
+            try:
+                delete_patient(patient_id)
+            except Exception as e:
+                print("WARN: delete_patient failed:", e)
 
-    # Delete the test file (if found)
+    print("\n=== E2E COMPLETED ===")
