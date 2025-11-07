@@ -315,11 +315,7 @@ export default function PatientDetailScreen() {
                       {Object.keys(graphData[0])
                         .filter((k) => k.startsWith("visit"))
                         .map((key, i) => {
-                          const label =
-                          visitNames[key]
-                            ?.split("_")[0]       // garde la partie avant le "_" → "1-Pre-Op"
-                            ?.replace(/^\d+-/, "") // enlève le "1-" au début → "Pre-Op"
-                            ?.trim() || `Visit ${i + 1}`;
+                          const label = visitNames[key] || `visit ${i+1}`
 
                         return (
                           <Line

@@ -754,15 +754,18 @@ def get_plot_data_by_patient(patient_id: str, position: int, db: Session = Depen
             raise HTTPException(status_code=404, detail=f"No operations found for patient {patient_id}")
 
         visit_curves = {}
+        visit_labels = [] 
 
         for op in all_ops:
+            visit_name = op.name.strip()
+            visit_labels.append(visit_name)
+
             visit_number = {o.id_operation: idx + 1 for idx, o in enumerate(all_ops)}[op.id_operation]
-            visit_name = op.name.replace(" ", "_")
             visit_str = f"{visit_number}-{visit_name}_{op.operation_date.strftime('%d%m%Y')}"
 
             visit_dir = DATA_ROOT / patient_id / visit_str / str(position)
             if not visit_dir.exists():
-                logging.warning(f"[PLOT PATIENT] Folder not found for position {position} in visit {visit_str}")
+                logging.warning(f"[PLOT PATIENT] Folder not found for position {position} in visit {visit_name}")
                 continue
 
             results = (
@@ -791,14 +794,14 @@ def get_plot_data_by_patient(patient_id: str, position: int, db: Session = Depen
 
             avg_curve = average_measurements(measure_arrays)
             if avg_curve:
-                visit_curves[visit_str] = avg_curve
+                visit_curves[visit_name] = avg_curve
 
         if not visit_curves:
             raise HTTPException(status_code=400, detail="No valid data found across visits for this position")
 
         graph_data = merge_visits_for_chart(visit_curves)
 
-        visit_names = {f"visit{idx + 1}": visit_str for idx, visit_str in enumerate(visit_curves.keys())}
+        visit_names = {f"visit{idx + 1}": name for idx, name in enumerate(visit_labels)}
 
         return {
             "status": "success",
