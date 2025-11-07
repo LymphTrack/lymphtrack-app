@@ -113,6 +113,27 @@ def merge_measurements_for_chart(measure_arrays: list[list[dict]]):
 
     return merged
 
+def merge_visits_for_chart(visit_curves: dict[str, list[dict]]):
+    if not visit_curves:
+        return []
+
+    first_curve = next(iter(visit_curves.values()))
+    if not first_curve:
+        return []
+
+    base_freqs = [p["freq_hz"] for p in first_curve]
+    merged = []
+
+    for i, freq in enumerate(base_freqs):
+        point = {"freq": freq / 1e9}  # GHz
+        for idx, (visit_str, curve) in enumerate(visit_curves.items(), start=1):
+            if i < len(curve):
+                point[f"visit{idx}"] = curve[i]["avg_loss_db"]
+        merged.append(point)
+
+    return merged
+
+
 def average_measurements(measure_arrays: list[list[dict]]):
     if not measure_arrays:
         return []
@@ -716,4 +737,77 @@ def get_plot_data_by_position(id_operation: int, position: int, db: Session = De
         raise HTTPException(status_code=500, detail=f"Internal error while building plot data: {e}")
 
 
+# ---------------------
+# PLOT DATA BY PATIENT (EVOLUTION OF A POSITION)
+# ---------------------
+@router.get("/plot-data-by-patient/{patient_id}/{position}")
+def get_plot_data_by_patient(patient_id: str, position: int, db: Session = Depends(get_db)):
+    try:
+        all_ops = (
+            db.query(Operation)
+            .filter(Operation.patient_id == patient_id)
+            .order_by(Operation.operation_date.asc())
+            .all()
+        )
 
+        if not all_ops:
+            raise HTTPException(status_code=404, detail=f"No operations found for patient {patient_id}")
+
+        visit_curves = {}
+
+        for op in all_ops:
+            visit_number = {o.id_operation: idx + 1 for idx, o in enumerate(all_ops)}[op.id_operation]
+            visit_name = op.name.replace(" ", "_")
+            visit_str = f"{visit_number}-{visit_name}_{op.operation_date.strftime('%d%m%Y')}"
+
+            visit_dir = DATA_ROOT / patient_id / visit_str / str(position)
+            if not visit_dir.exists():
+                logging.warning(f"[PLOT PATIENT] Folder not found for position {position} in visit {visit_str}")
+                continue
+
+            results = (
+                db.query(Result)
+                .filter(Result.id_operation == op.id_operation, Result.position == position)
+                .order_by(Result.measurement_number.asc())
+                .all()
+            )
+            if not results:
+                continue
+
+            measure_arrays = []
+            for r in results:
+                file_path = DATA_ROOT / r.file_path
+                if not file_path.exists():
+                    logging.warning(f"[PLOT PATIENT] Missing file: {file_path}")
+                    continue
+                data = read_measurement_file(file_path)
+                if data:
+                    measure_arrays.append(data)
+                else:
+                    logging.warning(f"[PLOT PATIENT] Invalid data: {file_path}")
+
+            if not measure_arrays:
+                continue
+
+            avg_curve = average_measurements(measure_arrays)
+            if avg_curve:
+                visit_curves[visit_str] = avg_curve
+
+        if not visit_curves:
+            raise HTTPException(status_code=400, detail="No valid data found across visits for this position")
+
+        graph_data = merge_visits_for_chart(visit_curves)
+
+        return {
+            "status": "success",
+            "patient_id": patient_id,
+            "position": position,
+            "n_visits": len(visit_curves),
+            "graph_data": graph_data,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"[PLOT PATIENT ERROR] {e}")
+        raise HTTPException(status_code=500, detail=f"Internal error while building patient plot: {e}")

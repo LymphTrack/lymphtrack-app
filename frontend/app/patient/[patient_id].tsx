@@ -9,6 +9,7 @@ import { showAlert, confirmAction } from "@/utils/alertUtils";
 import { commonStyles } from "@/constants/styles";
 import { COLORS } from "@/constants/colors";
 import { exportFolder } from "@/utils/exportUtils";
+import { LineChart, Line, XAxis, YAxis,Legend, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 interface Patient {
   patient_id: string;
@@ -33,6 +34,9 @@ export default function PatientDetailScreen() {
   const [operations, setOperations] = useState<Operation[]>([]);
   const [exporting, setExporting] = useState(false);
   const {width} = useWindowDimensions();
+  const [selectedPosition, setSelectedPosition] = useState<number | null>(null);
+  const [graphData, setGraphData] = useState<any[]>([]);
+  const [loadingGraph, setLoadingGraph] = useState(false);
 
   const fetchPatient = async () => {
     try {
@@ -72,6 +76,31 @@ export default function PatientDetailScreen() {
       showAlert("Error", "Failed to load patient operations.");
     }
   };
+
+  const loadGraphData = async (pos: number) => {
+    try {
+      setLoadingGraph(true);
+      const res = await fetch(`${API_URL}/results/plot-data-by-patient/${patient_id}/${pos}`);
+      if (!res.ok) {
+        console.warn("No graph found for position:", pos, res.status);
+        setGraphData([]);
+        return;
+      }
+
+      const data = await res.json();
+      if (data?.graph_data) {
+        setGraphData(data.graph_data);
+      } else {
+        setGraphData([]);
+      }
+    } catch (err) {
+      console.error("Error loading patient position graph:", err);
+      setGraphData([]);
+    } finally {
+      setLoadingGraph(false);
+    }
+  };
+
 
   const handleExport = async () => {
     setExporting(true);
@@ -194,12 +223,124 @@ export default function PatientDetailScreen() {
             <Text style={commonStyles.buttonText}>Add Follow-up</Text>
           </TouchableOpacity> 
         
-          <Text style={[commonStyles.sectionTitle, {marginTop : 0}]}>Outcomes</Text>
-          <View style={[commonStyles.card, {marginBottom: 40, justifyContent: "center", alignItems: "center"}]}>
-            <Text style={commonStyles.title}>🏗️ Under construction</Text>
-            <Text style={commonStyles.subtitle}>To be implemented ...</Text>
+          <Text style={[commonStyles.sectionTitle, { marginBottom: 15 }]}>
+            Outcomes
+          </Text>
+
+          <Text style={[commonStyles.subtitle, { textAlign: "center",marginBottom: 5 }]}>
+            Select a position to visualize its evolution
+          </Text>
+
+          <View style={styles.positionContainer}>
+            {Array.from({ length: 6 }).map((_, index) => {
+              const pos = index + 1;
+              const isSelected = selectedPosition === pos;
+              return (
+                <TouchableOpacity
+                  key={pos}
+                  style={[
+                    styles.positionBtn,
+                    isSelected && { backgroundColor: COLORS.primary },
+                  ]}
+                  onPress={() => {
+                    const newPos = isSelected ? null : pos;
+                    setSelectedPosition(newPos);
+                    if (newPos) {
+                      loadGraphData(newPos);
+                    } else {
+                      setGraphData([]);
+                    }
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.positionText,
+                      isSelected && { color: COLORS.textButton },
+                    ]}
+                  >
+                    {pos}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
+
+          {selectedPosition && (
+            <View style={[commonStyles.card, { marginBottom: 40 }]}>
+              <Text style={[commonStyles.sectionTitle, { fontSize: 16, marginTop: 0 }]}>
+                Evolution of Position {selectedPosition} across visits
+              </Text>
+
+              {loadingGraph ? (
+                <View style={styles.graphPlaceholder}>
+                  <Text style={styles.placeholderText}>Loading graph...</Text>
+                </View>
+              ) : graphData.length === 0 ? (
+                <View style={styles.graphPlaceholder}>
+                  <Text style={styles.placeholderText}>No data available</Text>
+                </View>
+              ) : (
+                <View style={{ height: 400 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={graphData} margin={{ top: 40, right: 20, left: 20, bottom: 20 }}>
+                      <CartesianGrid stroke={COLORS.grayLight} />
+                      <XAxis
+                        dataKey="freq"
+                        tickFormatter={(value) => value.toFixed(3)}
+                        label={{
+                          value: "Frequency (GHz)",
+                          position: "top",
+                          fill: COLORS.subtitle,
+                          fontSize: 16,
+                          fontWeight: "500",
+                          dy: 50,
+                        }}
+                      />
+                      <YAxis
+                        label={{
+                          value: "Return Loss (dB)",
+                          angle: -90,
+                          position: "insideLeft",
+                          fill: COLORS.subtitle,
+                          fontSize: 16,
+                          fontWeight: "500",
+                          dy: 50,
+                        }}
+                      />
+                      <Tooltip />
+
+                      {Object.keys(graphData[0])
+                        .filter((k) => k.startsWith("visit"))
+                        .map((key, i) => (
+                          <Line
+                            key={key}
+                            type="monotone"
+                            dataKey={key}
+                            stroke={COLORS[`visit${i + 1}`] || COLORS.primary}
+                            strokeWidth={2}
+                            dot={false}
+                            name={`Visit ${i + 1}`}
+                          />
+                        ))}
+
+                      <Legend
+                        verticalAlign="bottom"
+                        align="center"
+                        wrapperStyle={{
+                          paddingTop: 40,
+                          fontSize: 15,
+                          color: COLORS.subtitle,
+                        }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </View>
+              )}
+            </View>
+          )}
+
         </View>
+
       </ScrollView>
     </View>
   );
@@ -249,5 +390,51 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.subtitle,
     paddingVertical:2,
+  },
+  positionContainer: {
+    flexDirection: "row",
+    justifyContent: "center",
+    flexWrap: "wrap",
+    gap: 15,
+    marginTop: 10,
+    marginBottom : 40,
+  },
+  positionBtn: {
+    width: 35,
+    height: 35,
+    borderRadius: 22,
+    backgroundColor: COLORS.grayMedium,
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  positionText: {
+    color: COLORS.textButton,
+    fontSize: 16,
+    fontWeight: "600",
+    marginBottom : 2,
+  },
+
+  graphPlaceholder: {
+    width: "90%",
+    height: 250,
+    backgroundColor: COLORS.grayLight,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  placeholderText: {
+    color: COLORS.subtitle,
+    fontSize: 14,
+    fontStyle: "italic",
   },
 });

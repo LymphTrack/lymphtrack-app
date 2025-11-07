@@ -336,7 +336,7 @@ export default function PatientResultsScreen() {
             <Text style={[commonStyles.sectionTitle, {marginTop: 0}]}>Outcomes</Text>
 
               {results.length === 0 ? (
-                <View style={[commonStyles.card, { marginBottom: 10, maxWidth: 800 }]}>
+                <View style={[commonStyles.card, { marginBottom: 10, maxWidth: 800,  width:"100%", alignSelf:"center" }]}>
                   <Text style={commonStyles.subtitle}>No measurements yet.</Text>
                 </View>
               ) : (

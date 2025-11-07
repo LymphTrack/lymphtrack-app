@@ -34,7 +34,7 @@ export default function PositionScreen() {
     setLoading(true);
     try {
       const [res, opRes, plotRes] = await Promise.all([
-        fetch(`${API_URL}/results/by-visit-and-position${operation_id}/${position}`),
+        fetch(`${API_URL}/results/by-visit-and-position/${operation_id}/${position}`),
         fetch(`${API_URL}/operations/${operation_id}`),
         fetch(`${API_URL}/results/plot-data-by-position/${operation_id}/${position}`),
       ]);
@@ -169,7 +169,7 @@ export default function PositionScreen() {
             <Text style={commonStyles.sectionTitle}>Outcomes</Text>
 
             {measurements.length === 0 ? (
-              <View style={[commonStyles.card, { marginBottom: 10, maxWidth:800 }]}>
+              <View style={[commonStyles.card, { marginBottom: 10, maxWidth:800 , width:"100%", alignSelf:"center"}]}>
                 <Text style={commonStyles.subtitle}>No measurements yet.</Text>
               </View>
             ) : (
