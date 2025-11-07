@@ -37,6 +37,7 @@ export default function PatientDetailScreen() {
   const [selectedPosition, setSelectedPosition] = useState<number | null>(null);
   const [graphData, setGraphData] = useState<any[]>([]);
   const [loadingGraph, setLoadingGraph] = useState(false);
+  const [visitNames, setVisitNames] = useState<Record<string, string>>({});
 
   const fetchPatient = async () => {
     try {
@@ -90,8 +91,10 @@ export default function PatientDetailScreen() {
       const data = await res.json();
       if (data?.graph_data) {
         setGraphData(data.graph_data);
+        setVisitNames(data.visits || {});
       } else {
         setGraphData([]);
+        setVisitNames({});
       }
     } catch (err) {
       console.error("Error loading patient position graph:", err);
@@ -311,17 +314,24 @@ export default function PatientDetailScreen() {
 
                       {Object.keys(graphData[0])
                         .filter((k) => k.startsWith("visit"))
-                        .map((key, i) => (
+                        .map((key, i) => {
+                          const label =
+                          visitNames[key]
+                            ?.split("_")[0]       // garde la partie avant le "_" → "1-Pre-Op"
+                            ?.replace(/^\d+-/, "") // enlève le "1-" au début → "Pre-Op"
+                            ?.trim() || `Visit ${i + 1}`;
+
+                        return (
                           <Line
                             key={key}
                             type="monotone"
                             dataKey={key}
-                            stroke={COLORS[`visit${i + 1}`] || COLORS.primary}
+                            stroke={COLORS[`color${i + 1}`] || COLORS.primary}
                             strokeWidth={2}
                             dot={false}
-                            name={`Visit ${i + 1}`}
+                            name={label}
                           />
-                        ))}
+                        )})}
 
                       <Legend
                         verticalAlign="bottom"

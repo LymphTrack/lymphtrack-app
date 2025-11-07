@@ -798,12 +798,15 @@ def get_plot_data_by_patient(patient_id: str, position: int, db: Session = Depen
 
         graph_data = merge_visits_for_chart(visit_curves)
 
+        visit_names = {f"visit{idx + 1}": visit_str for idx, visit_str in enumerate(visit_curves.keys())}
+
         return {
             "status": "success",
             "patient_id": patient_id,
             "position": position,
             "n_visits": len(visit_curves),
             "graph_data": graph_data,
+            "visits": visit_names, 
         }
 
     except HTTPException:
