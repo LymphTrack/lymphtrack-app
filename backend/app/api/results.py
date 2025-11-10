@@ -19,168 +19,78 @@ DATA_ROOT = Path(r"C:\Users\Pimprenelle\Documents\LymphTrackData")
 # Utility functions
 # ---------------------
 
-# ---------------------
-# Robust header inference + reader (path version)
-# ---------------------
-import re
-import pandas as pd
-import numpy as np
-import logging
-
-def infer_header_and_data(raw_df: pd.DataFrame, key_cols, max_header_row: int = 20):
-    """
-    Parcourt les N premières lignes pour trouver une ligne d'en-tête
-    qui contient toutes les clés attendues (avec normalisation).
-    """
-    def norm_cols(series):
-        return (
-            series.astype(str)
-            .str.strip()
-            .str.lower()
-            .str.replace(r"\s+", "", regex=True)
-            .str.replace(r"[^a-z0-9_]+", "", regex=True)
-        )
-
+def infer_header_and_data(raw_df, key_cols, max_header_row=10):
     for idx in range(min(max_header_row, len(raw_df))):
-        header = norm_cols(raw_df.iloc[idx])
-        if all(any(k in c for c in header) for k in key_cols):
-            df = raw_df.iloc[idx + 1:].copy()
-            df.columns = header
+        header = raw_df.iloc[idx].astype(str)
+        cols = header.str.lower().str.replace(r"\s+", "", regex=True)
+        if all(any(k in c for c in cols) for k in key_cols):
+            df = raw_df.iloc[idx+1:].copy()
+            df.columns = cols
             return df
     return None
 
 
 def read_measurement_file(file_path: str):
-    """
-    Lecture robuste d'un fichier mesure (xlsx/csv) sur disque.
-    Renvoie une liste de points: [{"freq_hz": float, "loss_db": float}, ...]
-    """
     file_path = str(file_path)
     suffix = file_path.split(".")[-1].lower()
 
-    # Synonymes/regex tolérants
-    freq_candidates = ("freq", "frequency", "frequence", "frecuencia")
-    rl_candidates = ("s11", "returnloss", "rl", "logmag", "s11db", "s11logmag", "s11logmagdb")
-
-    def normalize_cols(df: pd.DataFrame) -> pd.DataFrame:
-        df = df.copy()
-        df.columns = (
-            df.columns.astype(str)
-            .str.strip()
-            .str.lower()
-            .str.replace(r"\s+", "", regex=True)
-            .str.replace(r"[^a-z0-9_]+", "", regex=True)
-        )
-        return df
-
-    def find_col(cols, keys):
-        for k in keys:
-            matches = [c for c in cols if k in c]
-            if matches:
-                return matches[0]
-        return None
-
-    # 1) Lecture tolérante
-    df = None
     try:
         if suffix == "csv":
-            # tentative 1 : header sur la première ligne
             try:
                 tmp = pd.read_csv(file_path, header=0, sep=None, engine="python")
-                tmp = normalize_cols(tmp)
-                df = tmp
-            except Exception:
-                pass
-            # tentative 2 : sans header → scan
-            if df is None:
-                try:
+                cols = tmp.columns.astype(str).str.strip().str.lower().str.replace(r"\s+", "", regex=True)
+                if any("freq" in c for c in cols) and any("s11" in c or "returnloss" in c for c in cols):
+                    df = tmp.copy()
+                    df.columns = cols
+                else:
                     raw = pd.read_csv(file_path, header=None, sep=None, engine="python")
                     df = infer_header_and_data(raw, key_cols=["freq", "returnloss"])
-                    if df is not None:
-                        df = normalize_cols(df)
-                except Exception:
-                    pass
-            if df is None:
+            except Exception:
                 logging.warning(f"[PLOT READ] CSV read failed for {file_path}")
                 return []
         else:
-            # Excel: privilégier header=0, puis scan
-            read_excel_kwargs = dict(header=0, engine=None)  # engine auto (openpyxl si xlsx)
             try:
-                tmp = pd.read_excel(file_path, **read_excel_kwargs)
-                tmp = normalize_cols(tmp)
-                df = tmp
-            except Exception:
-                pass
-            if df is None:
-                try:
+                tmp = pd.read_excel(file_path, header=0)
+                cols = tmp.columns.astype(str).str.strip().str.lower().str.replace(r"\s+", "", regex=True)
+                if any("freq" in c for c in cols) and any("s11" in c or "returnloss" in c for c in cols):
+                    df = tmp.copy()
+                    df.columns = cols
+                else:
                     raw = pd.read_excel(file_path, header=None)
                     df = infer_header_and_data(raw, key_cols=["freq", "returnloss"])
-                    if df is not None:
-                        df = normalize_cols(df)
-                except Exception:
-                    pass
-            if df is None:
+            except Exception:
                 logging.warning(f"[PLOT READ] Excel read failed for {file_path}")
                 return []
     except Exception as e:
         logging.warning(f"[PLOT READ] {file_path}: unexpected read error {e}")
         return []
 
-    # 2) Identification des colonnes (avec synonymes)
-    freq_col = find_col(df.columns, freq_candidates)
-    rl_col = find_col(df.columns, rl_candidates)
-
-    if not freq_col or not rl_col:
-        logging.warning(f"[PLOT READ] {file_path}: missing freq or return loss cols | cols={list(df.columns)}")
+    if df is None:
+        logging.warning(f"[PLOT READ] {file_path}: could not infer header")
         return []
 
-    # 3) Nettoyage des valeurs + virgule décimale
-    #    (on force string → remplace "," → numeric)
-    try:
-        vals = df[[freq_col, rl_col]].astype(str).applymap(lambda x: x.replace(",", "."))
-        vals = vals.apply(pd.to_numeric, errors="coerce").dropna()
-    except Exception as e:
-        logging.warning(f"[PLOT READ] {file_path}: coercion error {e}")
+    df.columns = df.columns.astype(str).str.strip().str.lower().str.replace(r"\s+", "", regex=True)
+    freq_cols = [c for c in df.columns if "freq" in c]
+    rl_cols = [c for c in df.columns if "s11" in c or "returnloss" in c]
+    if not freq_cols or not rl_cols:
+        logging.warning(f"[PLOT READ] {file_path}: missing freq or return loss cols")
         return []
 
-    if vals.empty:
+    freq_col, rl_col = freq_cols[0], rl_cols[0]
+
+    df_vals = df[[freq_col, rl_col]].astype(str).map(lambda x: x.replace(",", "."))
+    df_sub = df_vals.apply(pd.to_numeric, errors="coerce").dropna()
+
+    if df_sub.empty:
         logging.warning(f"[PLOT READ] {file_path}: no numeric data after coercion")
         return []
 
-    # 4) Détection d'unité fréquence (Hz / MHz / GHz)
-    #    Heuristique: on regarde l'ordre de grandeur
-    f_max = float(vals[freq_col].max())
-    if f_max < 1e3:          # ex: 2.45 → GHz
-        scale = 1e9
-    elif f_max < 1e6:        # ex: 2450 → MHz
-        scale = 1e6
-    elif f_max < 1e9:        # ex: 2.45e6 → Hz (MHz)
-        # souvent des MHz/Khz ; on affine un peu:
-        # si f_max ~ qq millions → MHz
-        scale = 1e0  # déjà en Hz si > 1e6 (laisse tel quel)
-    else:
-        scale = 1.0  # déjà Hz
+    data_points = [
+        {"freq_hz": float(row[freq_col]), "loss_db": float(row[rl_col])}
+        for _, row in df_sub.iterrows()
+    ]
 
-    # Cas mixtes (ex: 2.4e9 directement) → f_max >= 1e9 → pas d'échelle
-
-    # 5) Construction des points
-    out = []
-    for _, row in vals.iterrows():
-        try:
-            f_hz = float(row[freq_col]) * (scale if scale != 1.0 else 1.0)
-            loss = float(row[rl_col])
-            # parfois certaines colonnes "logmag" sont positives → ok, on ne force pas le signe
-            out.append({"freq_hz": f_hz, "loss_db": loss})
-        except Exception:
-            continue
-
-    if not out:
-        logging.warning(f"[PLOT READ] {file_path}: no valid rows after parsing")
-        return []
-
-    return out
-
+    return data_points
 
 
 def merge_measurements_for_chart(measure_arrays: list[list[dict]]):
