@@ -37,9 +37,12 @@ export const COLORS = {
   darkGreen : "#006400",
 
   color1: "#E53935",
-  color2: "#2563EB",
+  color2: "#1800ad",
   color3: "#4CAF50",
-  color4: "#f69300",
-  color5: "#8A2BE2",
-  color6: "#FFB300",
+  color4: "#ff751f",
+  color5: "#ff66c4",
+  color6: "#ffde59",
+  color7: "#a808d5",
+  color8: "#c1ff72",
+  color9 :"#9dfbff",
 };

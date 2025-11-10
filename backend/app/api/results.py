@@ -801,7 +801,7 @@ def get_plot_data_by_patient(patient_id: str, position: int, db: Session = Depen
 
         graph_data = merge_visits_for_chart(visit_curves)
 
-        visit_names = {f"visit{idx + 1}": name for idx, name in enumerate(visit_name)}
+        visit_names = {f"visit{idx + 1}": name for idx, name in enumerate(visit_labels)}
 
         return {
             "status": "success",

@@ -1,4 +1,4 @@
-import { Platform, View, Text, Image, ScrollView, StyleSheet, TouchableOpacity, useWindowDimensions } from "react-native";
+import { Platform, View, Text, Image, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator, useWindowDimensions } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { ArrowLeft,Calendar,Download, Notebook, Plus} from "lucide-react-native";
 import { API_URL } from "@/constants/api";
@@ -23,14 +23,17 @@ export default function PatientResultsScreen() {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
-  const [graphData, setGraphData] = useState<any[]>([]);
   const router = useRouter();
   const {width} = useWindowDimensions();
+  const [graphData, setGraphData] = useState<any[]>([]);
+  const [loadingGraphData, setLoadingGraphData] = useState(true);
   
   useFocusEffect(
       useCallback(() => {
         if (id_operation) {
-          loadAllData();
+          loadOperationAndResults();
+          loadGraphData();
+          loadPhotos();
         }
       }, [id_operation])
   );
@@ -57,11 +60,10 @@ export default function PatientResultsScreen() {
     }
   };
 
-  const loadAllData = async () => {
+  const loadOperationAndResults = async () => {
     setLoading(true);
-
     try {
-      const [opRes, resultsRes,] = await Promise.all([
+      const [opRes, resultsRes] = await Promise.all([
         fetch(`${API_URL}/operations/${id_operation}`),
         fetch(`${API_URL}/results/by_operation/${id_operation}`),
       ]);
@@ -74,10 +76,6 @@ export default function PatientResultsScreen() {
 
       setOperation(opData);
       setResults(resultsData);
-
-      await loadGraphData();
-      await loadPhotos();
-
     } catch (e) {
       console.error("Error loading patient data:", e);
       showAlert("Error", "Unable to load operation data. Please try again later.");
@@ -87,22 +85,17 @@ export default function PatientResultsScreen() {
   };
 
   const loadGraphData = async () => {
+    setLoadingGraphData(true);
     try {
       const res = await fetch(`${API_URL}/results/plot-data-by-visit/${id_operation}`);
-      if (!res.ok) {
-        console.warn("No visit graph found:", res.status);
-        setGraphData([]);
-        return;
-      }
+      if (!res.ok) throw new Error("Failed to fetch graph data");
       const data = await res.json();
-      if (data?.graph_data) {
-        setGraphData(data.graph_data);
-      } else {
-        setGraphData([]);
-      }
+      setGraphData(data?.graph_data ?? []);
     } catch (e) {
       console.error("Error loading graph data:", e);
       setGraphData([]);
+    } finally {
+      setLoadingGraphData(false);
     }
   };
 
@@ -335,7 +328,13 @@ export default function PatientResultsScreen() {
           <View style={commonStyles.form}>
             <Text style={[commonStyles.sectionTitle, {marginTop: 0}]}>Outcomes</Text>
 
-              {results.length === 0 ? (
+          {loadingGraphData ? (
+            <View style={[commonStyles.card, { alignItems: "center", justifyContent: "center", height: 300 }]}>
+              <ActivityIndicator size="large" color={COLORS.primary} />
+              <Text style={[commonStyles.subtitle, { marginTop: 15 }]}>Loading graph...</Text>
+            </View>
+
+          ) : results.length === 0 ? (
                 <View style={[commonStyles.card, { marginBottom: 10, maxWidth: 800,  width:"100%", alignSelf:"center" }]}>
                   <Text style={commonStyles.subtitle}>No measurements yet.</Text>
                 </View>

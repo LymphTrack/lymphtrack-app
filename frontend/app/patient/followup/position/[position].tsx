@@ -23,33 +23,31 @@ export default function PositionScreen() {
   const [createMeasurement, setCreateMeasurement] = useState(false);
   const [patient_id, setPatientId] = useState<string | number | null>(null);
   const [graphData, setGraphData] = useState<any[]>([]);
+  const [loadingGraphData, setLoadingGraphData] = useState(true);
 
   useEffect(() => {
     if (operation_id && position) {
       loadMeasurements();
+      loadGraphData();
     }
   }, [operation_id, position]);
 
   const loadMeasurements = async () => {
     setLoading(true);
     try {
-      const [res, opRes, plotRes] = await Promise.all([
+      const [res, opRes] = await Promise.all([
         fetch(`${API_URL}/results/by-visit-and-position/${operation_id}/${position}`),
         fetch(`${API_URL}/operations/${operation_id}`),
-        fetch(`${API_URL}/results/plot-data-by-position/${operation_id}/${position}`),
       ]);
 
       if (!res.ok) throw new Error("Failed to fetch measurements");
       if (!opRes.ok) throw new Error("Failed to fetch operation");
-      if (!plotRes.ok) throw new Error("Failed to fetch graph data");
 
       const data = await res.json();
       const opData = await opRes.json();
-      const plotData = await plotRes.json();
 
       setMeasurements(data);
       setPatientId(opData?.patient_id ?? null);
-      setGraphData(plotData.graph_data ?? []);
     } catch (err) {
       console.error("Error loading measurements:", err);
       showAlert("Error", "Unable to load measurements data.");
@@ -58,6 +56,20 @@ export default function PositionScreen() {
     }
   };
 
+  const loadGraphData = async () => {
+    setLoadingGraphData(true);
+    try {
+      const plotRes = await fetch(`${API_URL}/results/plot-data-by-position/${operation_id}/${position}`);
+      if (!plotRes.ok) throw new Error("Failed to fetch graph data");
+      const plotData = await plotRes.json();
+      setGraphData(plotData.graph_data ?? []);
+    } catch (err) {
+      console.error("Error loading graph data:", err);
+      setGraphData([]);
+    } finally {
+      setLoadingGraphData(false);
+    }
+  };
 
   const importAndUploadPosition = async () => {
     setCreateMeasurement(true);
@@ -168,7 +180,13 @@ export default function PositionScreen() {
           <View style={commonStyles.form}>
             <Text style={commonStyles.sectionTitle}>Outcomes</Text>
 
-            {measurements.length === 0 ? (
+            {loadingGraphData ? (
+            <View style={[commonStyles.card, { alignItems: "center", maxWidth:800 , width:"100%", justifyContent: "center", height: 300 }]}>
+              <ActivityIndicator size="large" color={COLORS.primary} />
+              <Text style={[commonStyles.subtitle, { marginTop: 15 }]}>Loading graph...</Text>
+            </View>
+
+            ): measurements.length === 0 ? (
               <View style={[commonStyles.card, { marginBottom: 10, maxWidth:800 , width:"100%", alignSelf:"center"}]}>
                 <Text style={commonStyles.subtitle}>No measurements yet.</Text>
               </View>

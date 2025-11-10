@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { View, Text, StyleSheet,TouchableOpacity, ScrollView, useWindowDimensions } from "react-native";
+import { View, Text, StyleSheet,TouchableOpacity, ScrollView, useWindowDimensions, ActivityIndicator } from "react-native";
 import { ArrowLeft, MapPin,Notebook, Download } from "lucide-react-native";
 import { useState, useCallback } from "react";
 import { useFocusEffect } from "@react-navigation/native";
@@ -43,7 +43,6 @@ export default function PatientDetailScreen() {
     try {
       const res = await fetch(`${API_URL}/patients/${patient_id}`);
       if (!res.ok) throw new Error("Failed to fetch patient");
-
       const data = await res.json();
       setPatient(data);
     } catch (error) {
@@ -225,14 +224,13 @@ export default function PatientDetailScreen() {
           >
             <Text style={commonStyles.buttonText}>Add Follow-up</Text>
           </TouchableOpacity> 
-        
-          <Text style={[commonStyles.sectionTitle, { marginBottom: 15 }]}>
-            Outcomes
-          </Text>
-
-          <Text style={[commonStyles.subtitle, { textAlign: "center",marginBottom: 5 }]}>
-            Select a position to visualize its evolution
-          </Text>
+        </View>
+          
+          <View style={commonStyles.form}>
+            <Text style={[commonStyles.sectionTitle, {marginTop: 0}]}>Outcomes</Text>
+            <Text style={[commonStyles.subtitle, { textAlign: "center", marginBottom: 10 }]}>
+              Select a position to visualize its evolution
+            </Text>
 
           <View style={styles.positionContainer}>
             {Array.from({ length: 6 }).map((_, index) => {
@@ -269,21 +267,24 @@ export default function PatientDetailScreen() {
           </View>
 
           {selectedPosition && (
-            <View style={[commonStyles.card, { marginBottom: 40 }]}>
+            <View style={[commonStyles.card, { marginBottom: 40, maxWidth:1120,  width:"100%", alignSelf:"center" }]}>
               <Text style={[commonStyles.sectionTitle, { fontSize: 16, marginTop: 0 }]}>
                 Evolution of Position {selectedPosition} across visits
               </Text>
 
               {loadingGraph ? (
-                <View style={styles.graphPlaceholder}>
-                  <Text style={styles.placeholderText}>Loading graph...</Text>
+                <View style={[{ alignItems: "center", justifyContent: "center", height: 300 }]}>
+                  <ActivityIndicator size="large" color={COLORS.primary} />
+                  <Text style={[commonStyles.subtitle, { marginTop: 15 }]}>Loading graph...</Text>
                 </View>
+
               ) : graphData.length === 0 ? (
-                <View style={styles.graphPlaceholder}>
-                  <Text style={styles.placeholderText}>No data available</Text>
+                <View style={[commonStyles.card, { marginBottom: 10, maxWidth:1120,  width:"100%", alignSelf:"center" }]}>
+                  <Text style={commonStyles.subtitle}>No data available.</Text>
                 </View>
+
               ) : (
-                <View style={{ height: 400 }}>
+                <View style={{ height: 500 }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={graphData} margin={{ top: 40, right: 20, left: 20, bottom: 20 }}>
                       <CartesianGrid stroke={COLORS.grayLight} />
@@ -423,24 +424,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
     marginBottom : 2,
-  },
-
-  graphPlaceholder: {
-    width: "90%",
-    height: 250,
-    backgroundColor: COLORS.grayLight,
-    borderRadius: 12,
-    justifyContent: "center",
-    alignItems: "center",
-    shadowColor: COLORS.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  placeholderText: {
-    color: COLORS.subtitle,
-    fontSize: 14,
-    fontStyle: "italic",
   },
 });
