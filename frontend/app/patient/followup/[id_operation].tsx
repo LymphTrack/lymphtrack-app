@@ -329,7 +329,7 @@ export default function PatientResultsScreen() {
             <Text style={[commonStyles.sectionTitle, {marginTop: 0}]}>Outcomes</Text>
 
           {loadingGraphData ? (
-            <View style={[commonStyles.card, { alignItems: "center", justifyContent: "center", height: 300 }]}>
+            <View style={[commonStyles.card, { alignItems: "center", justifyContent: "center", height: 300 , maxWidth: 1120, alignSelf:"center"}]}>
               <ActivityIndicator size="large" color={COLORS.primary} />
               <Text style={[commonStyles.subtitle, { marginTop: 15 }]}>Loading graph...</Text>
             </View>
