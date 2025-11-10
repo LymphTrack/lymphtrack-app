@@ -761,7 +761,7 @@ def get_plot_data_by_patient(patient_id: str, position: int, db: Session = Depen
             visit_labels.append(visit_name)
 
             visit_number = {o.id_operation: idx + 1 for idx, o in enumerate(all_ops)}[op.id_operation]
-            visit_str = f"{visit_number}-{visit_name}_{op.operation_date.strftime('%d%m%Y')}"
+            visit_str = f"{visit_number}-{visit_name.replace(' ', '_')}_{op.operation_date.strftime('%d%m%Y')}"
 
             visit_dir = DATA_ROOT / patient_id / visit_str / str(position)
             if not visit_dir.exists():
