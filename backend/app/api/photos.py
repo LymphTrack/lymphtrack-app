@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from app.db.models import Photo, Operation
 from app.db.database import get_db
@@ -70,17 +71,34 @@ def upload_photo(id_operation: int, file: UploadFile = File(...), db: Session = 
 # ---------------------
 # GET PHOTOS BY OPERATION
 # ---------------------
-@router.get("/{id_operation}")
-def get_photos(id_operation: int, db: Session = Depends(get_db)):
-    photos = db.query(Photo).filter(Photo.id_operation == id_operation).all()
+def get_photos(id_operation: int, request: Request, db: Session = Depends(get_db)):
+    op = db.query(Operation).filter(Operation.id_operation == id_operation).first()
+    if not op:
+        raise HTTPException(status_code=404, detail="Operation not found")
+
+    patient_folder = DATA_ROOT / op.patient_id
+    op_folder = next(patient_folder.glob(f"*{op.operation_date.strftime('%d%m%Y')}"), None)
+
+    if not op_folder or not op_folder.exists():
+        raise HTTPException(status_code=404, detail="Operation folder not found")
+
+    photos_dir = op_folder / "photos"
+    if not photos_dir.exists():
+        return []
+
+    allowed_exts = {".jpg", ".jpeg", ".png", ".heic"}
+    files = [f for f in photos_dir.iterdir() if f.is_file() and f.suffix.lower() in allowed_exts]
+
+    base_url = str(request.base_url).rstrip("/")
+    relative_base = photos_dir.relative_to(DATA_ROOT)
+    public_root = f"{base_url}/data/{relative_base}".replace("\\", "/")
+
     return [
         {
-            "id": p.id,
-            "url": p.url,
-            "filename": os.path.basename(p.url),
-            "created_at": p.created_at
+            "filename": f.name,
+            "url": f"{public_root}/{f.name}"
         }
-        for p in photos
+        for f in sorted(files)
     ]
 
 

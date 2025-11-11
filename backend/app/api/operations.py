@@ -58,16 +58,31 @@ def create_operation(op_data: dict = Body(...), db: Session = Depends(get_db)):
     )
 
     visit_map = {}
+
     for i, op in enumerate(all_ops, start=1):
         visit_str = f"{i}-{op.name.replace(' ', '_')}_{op.operation_date.strftime('%d%m%Y')}"
         visit_map[op.id_operation] = (i, visit_str)
-        op_folder = patient_folder / visit_str
+        expected_folder = patient_folder / visit_str
 
-        op_folder.mkdir(parents=True, exist_ok=True)
+        # Trouver un dossier existant avec la même date (peu importe l'ancien index)
+        old_pattern = f"_{op.operation_date.strftime('%d%m%Y')}"
+        existing_folder = None
+        for folder in patient_folder.iterdir():
+            if folder.is_dir() and folder.name.endswith(old_pattern):
+                existing_folder = folder
+                break
 
+        # Si un dossier existe mais que le nom ne correspond plus → on le renomme
+        if existing_folder and existing_folder.name != visit_str:
+            existing_folder.rename(expected_folder)
+
+        # Sinon on le crée s’il n’existe pas
+        expected_folder.mkdir(parents=True, exist_ok=True)
+
+        # Créer les sous-dossiers 1 à 6 si manquants
         for pos in range(1, 7):
-            position_folder = op_folder / str(pos)
-            position_folder.mkdir(exist_ok=True)
+            (expected_folder / str(pos)).mkdir(exist_ok=True)
+
 
     db.commit()
     db.refresh(temp_op)
