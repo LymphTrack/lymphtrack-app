@@ -6,6 +6,7 @@ from app.db.database import get_db
 from datetime import datetime, timezone
 from pathlib import Path
 import os, re, shutil, logging
+import mimetypes
 
 router = APIRouter()
 DATA_ROOT = Path(r"C:\Users\Pimprenelle\Documents\LymphTrackData")
@@ -71,35 +72,65 @@ def upload_photo(id_operation: int, file: UploadFile = File(...), db: Session = 
 # ---------------------
 # GET PHOTOS BY OPERATION
 # ---------------------
-def get_photos(id_operation: int, request: Request, db: Session = Depends(get_db)):
+@router.get("/photos/{id_operation}")
+def get_photos(id_operation: int, db: Session = Depends(get_db)):
     op = db.query(Operation).filter(Operation.id_operation == id_operation).first()
     if not op:
         raise HTTPException(status_code=404, detail="Operation not found")
 
-    patient_folder = DATA_ROOT / op.patient_id
-    op_folder = next(patient_folder.glob(f"*{op.operation_date.strftime('%d%m%Y')}"), None)
+    patient_id = op.patient_id
+    all_ops = (
+        db.query(Operation)
+        .filter(Operation.patient_id == patient_id)
+        .order_by(Operation.operation_date.asc())
+        .all()
+    )
+    visit_number = {o.id_operation: idx + 1 for idx, o in enumerate(all_ops)}[op.id_operation]
+    visit_str = f"{visit_number}-{op.name.replace(' ', '_')}_{op.operation_date.strftime('%d%m%Y')}"
+    photos_dir = DATA_ROOT / patient_id / visit_str / "photos"
 
-    if not op_folder or not op_folder.exists():
-        raise HTTPException(status_code=404, detail="Operation folder not found")
-
-    photos_dir = op_folder / "photos"
     if not photos_dir.exists():
-        return []
+        return {"status": "success", "photos": []}
 
-    allowed_exts = {".jpg", ".jpeg", ".png", ".heic"}
-    files = [f for f in photos_dir.iterdir() if f.is_file() and f.suffix.lower() in allowed_exts]
+    image_extensions = (".jpg", ".jpeg", ".png", ".webp", ".gif")
+    photos = []
+    for f in photos_dir.iterdir():
+        if f.is_file() and f.suffix.lower() in image_extensions:
+            photos.append({
+                "filename": f.name,
+                "url": f"/photos/{id_operation}/{f.name}",
+            })
 
-    base_url = str(request.base_url).rstrip("/")
-    relative_base = photos_dir.relative_to(DATA_ROOT)
-    public_root = f"{base_url}/data/{relative_base}".replace("\\", "/")
+    return {"status": "success", "photos": photos}
 
-    return [
-        {
-            "filename": f.name,
-            "url": f"{public_root}/{f.name}"
-        }
-        for f in sorted(files)
-    ]
+
+
+
+@router.get("/photos/{id_operation}/{filename}")
+def get_photo_file(id_operation: int, filename: str, db: Session = Depends(get_db)):
+    op = db.query(Operation).filter(Operation.id_operation == id_operation).first()
+    if not op:
+        raise HTTPException(status_code=404, detail="Operation not found")
+
+    patient_id = op.patient_id
+    all_ops = (
+        db.query(Operation)
+        .filter(Operation.patient_id == patient_id)
+        .order_by(Operation.operation_date.asc())
+        .all()
+    )
+    visit_number = {o.id_operation: idx + 1 for idx, o in enumerate(all_ops)}[op.id_operation]
+    visit_str = f"{visit_number}-{op.name.replace(' ', '_')}_{op.operation_date.strftime('%d%m%Y')}"
+    photo_path = DATA_ROOT / patient_id / visit_str / "photos" / filename
+
+    if not photo_path.exists():
+        raise HTTPException(status_code=404, detail="Photo not found")
+
+    media_type, _ = mimetypes.guess_type(photo_path.name)
+    if media_type is None:
+        media_type = "application/octet-stream" 
+
+    return FileResponse(photo_path, media_type=media_type)
 
 
 # ---------------------

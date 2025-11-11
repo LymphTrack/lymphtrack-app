@@ -20,7 +20,7 @@ export default function PatientResultsScreen() {
   const { id_operation } = useLocalSearchParams<{ id_operation: string }>();
   const [operation, setOperation] = useState<any | null>(null);
   const [results, setResults] = useState<any[]>([]);
-  const [photos, setPhotos] = useState<Array<{id:number; url:string; created_at?:string}>>([]);
+  const [photos, setPhotos] = useState<Array<{filename:string; url:string; created_at?:string}>>([]);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
@@ -110,7 +110,16 @@ export default function PatientResultsScreen() {
       const res = await fetch(`${API_URL}/photos/${id_operation}`);
       if (!res.ok) throw new Error("Failed to fetch photos");
       const data = await res.json();
-      setPhotos(Array.isArray(data) ? data : []);
+
+      if (data && Array.isArray(data.photos)) {
+        const formatted = data.photos.map((p) => ({
+          ...p,
+          url: `${API_URL}${p.url.startsWith("/") ? p.url : `/${p.url}`}`,
+        }));
+        setPhotos(formatted);
+      } else {
+        setPhotos([]);
+      }
     } catch (e) {
       console.error("Error loading photos:", e);
       showAlert("Error", "Unable to load operation photos.");
@@ -306,21 +315,15 @@ export default function PatientResultsScreen() {
 
                 <View style={styles.photoGrid}>
                   {photos.map((p) => (
-                    <View key={p.id} style={styles.photoItem}>
-                      <Image
-                        source={{ uri: p.url }}
-                        style={styles.photoImage}
-                        onError={(e) => {
-                          console.log("Image failed to load:", p.url, e.nativeEvent);
-                        }}
-                      />
-                      <TouchableOpacity
-                        style={styles.deletePhotoButton}
-                        onPress={() => deletePhoto(p.id, setPhotos)}
-                      >
-                        <Text style={styles.deletePhotoButtonText}>×</Text>
-                      </TouchableOpacity>
-                    </View>
+                  <View key={p.filename} style={styles.photoItem}>
+                    <Image source={{ uri: p.url }} style={styles.photoImage} />
+                    <TouchableOpacity
+                      style={styles.deletePhotoButton}
+                      onPress={() => deletePhoto(1, setPhotos)}
+                    >
+                      <Text style={styles.deletePhotoButtonText}>×</Text>
+                    </TouchableOpacity>
+                  </View>
                   ))}
                 </View>
               </View>
@@ -353,7 +356,7 @@ export default function PatientResultsScreen() {
               style={[
                 commonStyles.card,
                 {
-                  marginBottom: 10,
+                  marginBottom: 40,
                   maxWidth: 800,
                   width: "100%",
                   alignSelf: "center",
