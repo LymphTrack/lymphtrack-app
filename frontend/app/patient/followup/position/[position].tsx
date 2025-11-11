@@ -1,6 +1,6 @@
 import { View, Text, ScrollView, StyleSheet, useWindowDimensions, TouchableOpacity, ActivityIndicator } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Trash, ArrowLeft, Download, Plus } from "lucide-react-native";
 import { API_URL } from "@/constants/api";
 import { exportFolder } from "@/utils/exportUtils";
@@ -10,7 +10,8 @@ import { commonStyles } from "@/constants/styles";
 import { COLORS } from "@/constants/colors";
 import { importAndUploadFiles } from "@/utils/uploadUtils";
 import { deleteItem } from "@/utils/deleteUtils";
-import { LineChart, Line, XAxis, YAxis,Legend, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { exportGraph } from "@/utils/exportGraphUtils";
+import { GraphView, MultiPositionGraphs } from "@/components/graphView";
 
 export default function PositionScreen() {
   const { position, operation_id } = useLocalSearchParams<{ position: string; operation_id: string }>();
@@ -24,6 +25,7 @@ export default function PositionScreen() {
   const [patient_id, setPatientId] = useState<string | number | null>(null);
   const [graphData, setGraphData] = useState<any[]>([]);
   const [loadingGraphData, setLoadingGraphData] = useState(true);
+  const graphRef = useRef(null);
 
   useEffect(() => {
     if (operation_id && position) {
@@ -177,84 +179,84 @@ export default function PositionScreen() {
             </View>
           )}
         </View>
-          <View style={commonStyles.form}>
-            <Text style={commonStyles.sectionTitle}>Outcomes</Text>
+        <View style={commonStyles.form}>
+          <Text style={commonStyles.sectionTitle}>Outcomes</Text>
 
-            {loadingGraphData ? (
-            <View style={[commonStyles.card, { alignItems: "center", maxWidth:800 , width:"100%", justifyContent: "center", height: 300 }]}>
+          {loadingGraphData ? (
+            <View
+              style={[
+                {
+                  alignItems: "center",
+                  justifyContent: "center",
+                  height: 300,
+                  maxWidth: 800,
+                  width: "100%",
+                  alignSelf: "center",
+                },
+              ]}
+            >
               <ActivityIndicator size="large" color={COLORS.primary} />
-              <Text style={[commonStyles.subtitle, { marginTop: 15 }]}>Loading graph...</Text>
+              <Text style={[commonStyles.subtitle, { marginTop: 15 }]}>
+                Loading graph...
+              </Text>
             </View>
+          ) : measurements.length === 0 ? (
+            <View
+              style={[
+                commonStyles.card,
+                {
+                  marginBottom: 10,
+                  maxWidth: 800,
+                  width: "100%",
+                  alignSelf: "center",
+                },
+              ]}
+            >
+              <Text style={commonStyles.subtitle}>No measurements yet.</Text>
+            </View>
+          ) : (
+            <>
+            <GraphView
+              graphData={graphData}
+              lines={measurements.map((_, i) => `loss${i + 1}`)}
+              labels={Object.fromEntries(
+                measurements.map((m, i) => [
+                  `loss${i + 1}`,
+                  `Measurement ${m.measurement_number ?? i + 1}`,
+                ])
+              )}
+              title="Comparison graph of measurements"
+              exportRef={graphRef}
+            />
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "center",
+              alignSelf: "center",
+              marginBottom: 40,
+              maxWidth: 500,
+              gap: 20,
+            }}
+          >
+            <TouchableOpacity
+              style={[commonStyles.button, { width: 150 }]}
+              onPress={() => exportGraph(graphData, `graph_position_${position}`, "csv")}
+            >
+              <Text style={commonStyles.buttonText}>Export CSV</Text>
+            </TouchableOpacity>
 
-            ): measurements.length === 0 ? (
-              <View style={[commonStyles.card, { marginBottom: 10, maxWidth:800 , width:"100%", alignSelf:"center"}]}>
-                <Text style={commonStyles.subtitle}>No measurements yet.</Text>
-              </View>
-            ) : (
-              <View style={{ marginBottom: 40, maxWidth:1120, width:"100%", alignSelf:"center"}}>
-                <View style={[commonStyles.card,]}>
-                  <Text style={[commonStyles.sectionTitle, { fontSize: 16, marginTop:0 }]}>
-                    Comparison graph of measurements
-                  </Text>
-
-                  <View style={{ height: 500}}>
-                    <ResponsiveContainer width="100%" height="100%" >
-                      <LineChart data={graphData} margin={{ top: 40, right: 20, left: 20, bottom: 20 }}>
-                        <CartesianGrid stroke={COLORS.grayLight} />
-                        <XAxis 
-                          dataKey="freq" 
-                          tickFormatter={(value) => value.toFixed(3)}
-                          label={{ 
-                            value: "Frequency (GHz)", 
-                            position: "top" ,
-                            fill : COLORS.subtitle,
-                            fontSize : 16,
-                            fontWeight : "500",
-                            dy:50,
-                          }} 
-                        />
-                        <YAxis 
-                          label={{ 
-                            value: "Return Loss (dB)", 
-                            angle: -90, 
-                            position: "insideLeft",
-                            fill : COLORS.subtitle,
-                            fontSize : 16,
-                            fontWeight : "500",
-                            dy : 50,
-                          }} 
-                        />
-                        <Tooltip />
-                        
-                        {measurements.map((m, i) => (
-                          <Line
-                            key={i}
-                            type="monotone"
-                            dataKey={`loss${i + 1}`}
-                            stroke={COLORS[`color${(i % 6) + 1}`]} 
-                            strokeWidth={2}
-                            dot={false}
-                            name={`Measurement ${m.measurement_number ?? i + 1}`}
-                          />
-                        ))}
-
-                        <Legend
-                          verticalAlign="bottom"
-                          align="center"
-                          wrapperStyle={{
-                            paddingTop: 40,
-                            fontSize: 15,
-                            color: COLORS.subtitle,
-                          }}
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </View>   
-                </View>
-              </View>
-            )}
+            <TouchableOpacity
+              style={[commonStyles.button, { width: 150 }]}
+              onPress={() =>
+                exportGraph(graphData, `graph_position_${position}`, "png", graphRef)
+              }
+            >
+              <Text style={commonStyles.buttonText}>Export PNG</Text>
+            </TouchableOpacity>
           </View>
-        
+          </>
+          )}
+        </View>
       </ScrollView>
     </View> 
   );

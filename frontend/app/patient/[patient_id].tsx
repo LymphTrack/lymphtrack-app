@@ -5,11 +5,13 @@ import { useState, useCallback } from "react";
 import { useFocusEffect } from "@react-navigation/native";
 import { API_URL } from "@/constants/api";
 import { LoadingScreen } from "@/components/loadingScreen";
-import { showAlert, confirmAction } from "@/utils/alertUtils";
+import { showAlert} from "@/utils/alertUtils";
 import { commonStyles } from "@/constants/styles";
 import { COLORS } from "@/constants/colors";
 import { exportFolder } from "@/utils/exportUtils";
-import { LineChart, Line, XAxis, YAxis,Legend, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { useRef } from "react";
+import { exportGraph } from "@/utils/exportGraphUtils";
+import { GraphView, MultiPositionGraphs } from "@/components/graphView";
 
 interface Patient {
   patient_id: string;
@@ -38,6 +40,11 @@ export default function PatientDetailScreen() {
   const [graphData, setGraphData] = useState<any[]>([]);
   const [loadingGraph, setLoadingGraph] = useState(false);
   const [visitNames, setVisitNames] = useState<Record<string, string>>({});
+  const graphRef = useRef<HTMLDivElement | null>(null);
+  const [showAll, setShowAll] = useState(false);
+  const [loadingAll, setLoadingAll] = useState(false);
+  const allGraphsRef = useRef<HTMLDivElement | null>(null);
+  const [allGraphData, setAllGraphData] = useState<Record<number, any[]>>({});
 
   const fetchPatient = async () => {
     try {
@@ -103,6 +110,39 @@ export default function PatientDetailScreen() {
     }
   };
 
+  const loadAllGraphs = async () => {
+    try {
+      setLoadingAll(true);
+      const positions = [1, 2, 3, 4, 5, 6];
+
+      const responses = await Promise.all(
+        positions.map(async (pos) => {
+          const res = await fetch(`${API_URL}/results/plot-data-by-patient/${patient_id}/${pos}`);
+          if (!res.ok) return { pos, data: [] };
+          const json = await res.json();
+          return { pos, data: json?.graph_data ?? [], visits: json?.visits ?? {} };
+        })
+      );
+
+      const map: Record<number, any[]> = {};
+      let visitsFromFirst: Record<string, string> | null = null;
+
+      responses.forEach(({ pos, data, visits }) => {
+        map[pos] = data;
+        if (!visitsFromFirst && visits && Object.keys(visits).length > 0) {
+          visitsFromFirst = visits;
+        }
+      });
+
+      setAllGraphData(map);
+      if (visitsFromFirst) setVisitNames(visitsFromFirst);
+    } catch (e) {
+      console.error("Error loading all positions graphs:", e);
+      showAlert("Error", "Unable to load all positions graphs.");
+    } finally {
+      setLoadingAll(false);
+    }
+  };
 
   const handleExport = async () => {
     setExporting(true);
@@ -226,13 +266,40 @@ export default function PatientDetailScreen() {
           </TouchableOpacity> 
         </View>
           
-          <View style={commonStyles.form}>
-            <Text style={[commonStyles.sectionTitle, {marginTop: 0}]}>Outcomes</Text>
-            <Text style={[commonStyles.subtitle, { textAlign: "center", marginBottom: 10 }]}>
-              Select a position to visualize its evolution
-            </Text>
+        <View style={commonStyles.form}>
+          <Text style={[commonStyles.sectionTitle, { marginTop: 0 }]}>Outcomes</Text>
+          <Text style={[commonStyles.subtitle, { textAlign: "center", marginBottom: 10 }]}>
+            Select a position to visualize its evolution
+          </Text>
 
           <View style={styles.positionContainer}>
+            <TouchableOpacity
+              key={"all"}
+              style={[
+                styles.positionBtn,
+                showAll && { backgroundColor: COLORS.primary },
+              ]}
+              onPress={async () => {
+                const next = !showAll;
+                setShowAll(next);
+                if (next) {
+                  setSelectedPosition(null);
+                  await loadAllGraphs();
+                } else {
+                  setAllGraphData({});
+                }
+              }}
+            >
+              <Text
+                style={[
+                  styles.positionText,
+                  showAll && { color: COLORS.textButton },
+                ]}
+              >
+                All
+              </Text>
+            </TouchableOpacity>
+
             {Array.from({ length: 6 }).map((_, index) => {
               const pos = index + 1;
               const isSelected = selectedPosition === pos;
@@ -244,13 +311,11 @@ export default function PatientDetailScreen() {
                     isSelected && { backgroundColor: COLORS.primary },
                   ]}
                   onPress={() => {
+                    if (showAll) setShowAll(false);
                     const newPos = isSelected ? null : pos;
                     setSelectedPosition(newPos);
-                    if (newPos) {
-                      loadGraphData(newPos);
-                    } else {
-                      setGraphData([]);
-                    }
+                    if (newPos) loadGraphData(newPos);
+                    else setGraphData([]);
                   }}
                 >
                   <Text
@@ -266,86 +331,144 @@ export default function PatientDetailScreen() {
             })}
           </View>
 
-          {selectedPosition && (
-            <View style={[commonStyles.card, { marginBottom: 40, maxWidth:1120,  width:"100%", alignSelf:"center" }]}>
-              <Text style={[commonStyles.sectionTitle, { fontSize: 16, marginTop: 0 }]}>
-                Evolution of Position {selectedPosition} across visits
-              </Text>
-
-              {loadingGraph ? (
-                <View style={[{ alignItems: "center", justifyContent: "center", height: 300 }]}>
+          {showAll && (
+            <>
+              {loadingAll ? (
+                <View
+                  style={[
+                    { alignItems: "center", justifyContent: "center", height: 300 },
+                  ]}
+                >
                   <ActivityIndicator size="large" color={COLORS.primary} />
-                  <Text style={[commonStyles.subtitle, { marginTop: 15 }]}>Loading graph...</Text>
+                  <Text style={[commonStyles.subtitle, { marginTop: 15 }]}>
+                    Loading all positions...
+                  </Text>
                 </View>
-
-              ) : graphData.length === 0 ? (
-                <View style={[commonStyles.card, { marginBottom: 10, maxWidth:1120,  width:"100%", alignSelf:"center" }]}>
-                  <Text style={commonStyles.subtitle}>No data available.</Text>
-                </View>
-
               ) : (
-                <View style={{ height: 500 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={graphData} margin={{ top: 40, right: 20, left: 20, bottom: 20 }}>
-                      <CartesianGrid stroke={COLORS.grayLight} />
-                      <XAxis
-                        dataKey="freq"
-                        tickFormatter={(value) => value.toFixed(3)}
-                        label={{
-                          value: "Frequency (GHz)",
-                          position: "top",
-                          fill: COLORS.subtitle,
-                          fontSize: 16,
-                          fontWeight: "500",
-                          dy: 50,
-                        }}
+                <>
+                  <View
+                    style={[
+                      commonStyles.card,
+                      { marginBottom: 30, maxWidth: 1120, width: "100%", alignSelf: "center" },
+                    ]}
+                  >
+                    <div ref={allGraphsRef} style={{ width: "100%" }}>
+                      <MultiPositionGraphs
+                        allGraphData={allGraphData}
+                        visitNames={visitNames}
                       />
-                      <YAxis
-                        label={{
-                          value: "Return Loss (dB)",
-                          angle: -90,
-                          position: "insideLeft",
-                          fill: COLORS.subtitle,
-                          fontSize: 16,
-                          fontWeight: "500",
-                          dy: 50,
+                    </div>
+                    </View>
+
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        justifyContent: "center",
+                        alignSelf: "center",
+                        marginBottom: 40,
+                        maxWidth: 500,
+                        gap: 20,
+                      }}
+                    >
+                      <TouchableOpacity
+                        style={[commonStyles.button, { width: 150 }]}
+                        onPress={() => {
+                          const allData = Object.entries(allGraphData).flatMap(
+                            ([pos, data]) =>
+                              (data as any[]).map((row) => ({ position: pos, ...row }))
+                          );
+                          if (allData.length === 0) {
+                            showAlert("Error", "No graph data to export.");
+                            return;
+                          }
+                          exportGraph(allData, `patient_${patient_id}_all_positions`, "csv");
                         }}
-                      />
-                      <Tooltip />
+                      >
+                        <Text style={commonStyles.buttonText}>Export CSV (All)</Text>
+                      </TouchableOpacity>
 
-                      {Object.keys(graphData[0])
-                        .filter((k) => k.startsWith("visit"))
-                        .map((key, i) => {
-                          const label = visitNames[key] || `visit ${i+1}`
-
-                        return (
-                          <Line
-                            key={key}
-                            type="monotone"
-                            dataKey={key}
-                            stroke={COLORS[`color${i + 1}`] || COLORS.primary}
-                            strokeWidth={2}
-                            dot={false}
-                            name={label}
-                          />
-                        )})}
-
-                      <Legend
-                        verticalAlign="bottom"
-                        align="center"
-                        wrapperStyle={{
-                          paddingTop: 40,
-                          fontSize: 15,
-                          color: COLORS.subtitle,
-                        }}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </View>
+                      <TouchableOpacity
+                        style={[commonStyles.button, { width: 150 }]}
+                        onPress={() =>
+                          exportGraph([], `patient_${patient_id}_all_positions`, "png", allGraphsRef)
+                        }
+                      >
+                        <Text style={commonStyles.buttonText}>Export PNG (All)</Text>
+                      </TouchableOpacity>
+                    
+                  </View>
+                </>                
               )}
-            </View>
+            </>
           )}
 
+          {!showAll && selectedPosition && (
+            <>
+              {loadingGraph ? (
+                <View
+                  style={{
+                    alignItems: "center",
+                    justifyContent: "center",
+                    height: 300,
+                  }}
+                >
+                  <ActivityIndicator size="large" color={COLORS.primary} />
+                  <Text style={[commonStyles.subtitle, { marginTop: 15 }]}>
+                    Loading graph...
+                  </Text>
+                </View>
+              ) : (
+                <>
+                  <GraphView
+                    graphData={graphData}
+                    lines={Object.keys(visitNames)}
+                    labels={visitNames}
+                    title={`Evolution of Position ${selectedPosition} across visits`}
+                    exportRef={graphRef}
+                  />
+
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      justifyContent: "center",
+                      marginTop: 5,
+                      alignSelf: "center",
+                      marginBottom: 40,
+                      maxWidth: 500,
+                      gap: 20,
+                    }}
+                  >
+                    <TouchableOpacity
+                      style={[commonStyles.button, { width: 150 }]}
+                      onPress={() =>
+                        exportGraph(
+                          graphData,
+                          `patient_${patient_id}_pos_${selectedPosition}`,
+                          "csv"
+                        )
+                      }
+                    >
+                      <Text style={commonStyles.buttonText}>Export CSV</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[commonStyles.button, { width: 150 }]}
+                      onPress={() =>
+                        exportGraph(
+                          graphData,
+                          `patient_${patient_id}_pos_${selectedPosition}`,
+                          "png",
+                          graphRef
+                        )
+                      }
+                    >
+                      <Text style={commonStyles.buttonText}>Export PNG</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
+            </>
+          )}
         </View>
 
       </ScrollView>

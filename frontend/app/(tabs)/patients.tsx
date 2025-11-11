@@ -217,7 +217,7 @@ export default function PatientsScreen() {
           renderItem={renderPatientItem}
           keyExtractor={(item) => item.patient_id}
           showsVerticalScrollIndicator={true}
-          contentContainerStyle={[commonStyles.form, width >=700 && {width : 700, alignSelf: "center"}]}
+          contentContainerStyle={[commonStyles.form,{marginBottom: 40}, width >=700 && {width : 700, alignSelf: "center"}]}
           ListHeaderComponent={
             <>
               <View
