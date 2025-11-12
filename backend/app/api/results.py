@@ -747,16 +747,16 @@ def get_plot_data_by_patient(patient_id: str, position: int, db: Session = Depen
             raise HTTPException(status_code=404, detail=f"No operations found for patient {patient_id}")
 
         visit_curves = {}
-        visit_labels = [] 
+        visit_labels = []
 
         for op in all_ops:
             visit_name = op.name.strip()
-            visit_labels.append(visit_name)
+            visit_number = {o.id_operation: idx + 1 for idx, o in enumerate(all_ops)}[op.id_operation]
+            visit_str = f"{visit_number}-{visit_name.replace(' ', '_')}_{op.operation_date.strftime('%d%m%Y')}"
 
             try:
                 visit_dir = get_visit_path(db, op.id_operation, position)
             except HTTPException:
-                logging.warning(f"[PLOT PATIENT] Folder not found for position {position} in visit {visit_name}")
                 continue
 
             results = (
@@ -769,30 +769,28 @@ def get_plot_data_by_patient(patient_id: str, position: int, db: Session = Depen
                 continue
 
             files = sorted([f for f in visit_dir.glob("*") if f.is_file()])
-            if not files:
-                logging.warning(f"[PLOT PATIENT] No files found for {visit_dir}")
-                continue
-
-            measure_arrays = []
-            for f in files:
-                data = read_measurement_file(f)
-                if data:
-                    measure_arrays.append(data)
-                else:
-                    logging.warning(f"[PLOT PATIENT] Invalid data: {f}")
+            measure_arrays = [read_measurement_file(f) for f in files if f.is_file()]
+            measure_arrays = [m for m in measure_arrays if m]
 
             if not measure_arrays:
                 continue
 
             avg_curve = average_measurements(measure_arrays)
             if avg_curve:
-                visit_curves[visit_name] = avg_curve
+                visit_curves[visit_number] = {
+                    "name": visit_name,
+                    "curve": avg_curve
+                }
+                visit_labels.append(visit_name)
 
-        if not visit_curves:
-            raise HTTPException(status_code=400, detail="No valid data found across visits for this position")
+        visit_curves = dict(sorted(visit_curves.items(), key=lambda x: x[0]))
 
-        graph_data = merge_visits_for_chart(visit_curves)
-        visit_names = {f"visit{idx + 1}": name for idx, name in enumerate(visit_labels)}
+        merged = {}
+        for idx, (num, v) in enumerate(visit_curves.items(), start=1):
+            merged[f"visit{idx}"] = v["curve"]
+
+        graph_data = merge_visits_for_chart(merged)
+        visit_names = {f"visit{idx}": v["name"] for idx, v in enumerate(visit_curves.values(), start=1)}
 
         return {
             "status": "success",
