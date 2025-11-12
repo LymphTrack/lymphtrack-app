@@ -14,13 +14,13 @@ import { exportFolder } from "@/utils/exportUtils";
 import { deleteItem } from "@/utils/deleteUtils";
 import { useRef } from "react";
 import { exportGraph } from "@/utils/exportGraphUtils";
-import { GraphView, MultiPositionGraphs } from "@/components/graphView";
+import { GraphView} from "@/components/graphView";
 
 export default function PatientResultsScreen() {
   const { id_operation } = useLocalSearchParams<{ id_operation: string }>();
   const [operation, setOperation] = useState<any | null>(null);
   const [results, setResults] = useState<any[]>([]);
-  const [photos, setPhotos] = useState<Array<{filename:string; url:string; created_at?:string}>>([]);
+  const [photos, setPhotos] = useState<Array<{filename:string; image_base64:string; created_at?:string}>>([]);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
@@ -112,11 +112,7 @@ export default function PatientResultsScreen() {
       const data = await res.json();
 
       if (data && Array.isArray(data.photos)) {
-        const formatted = data.photos.map((p) => ({
-          ...p,
-          url: `${API_URL}${p.url.startsWith("/") ? p.url : `/${p.url}`}`,
-        }));
-        setPhotos(formatted);
+        setPhotos(data.photos);
       } else {
         setPhotos([]);
       }
@@ -192,12 +188,9 @@ export default function PatientResultsScreen() {
     setExporting(false);
   };
 
-  const deletePhoto = async (
-    photoId: number,
-    setPhotos: React.Dispatch<React.SetStateAction<any[]>>
-  ) => {
-    await deleteItem(`${API_URL}/photos/${photoId}`, "photo", () =>
-      setPhotos((prev) => prev.filter((p) => p.id !== photoId))
+  const deletePhoto = async (filename: string, setPhotos: React.Dispatch<React.SetStateAction<any[]>>) => {
+    await deleteItem(`${API_URL}/photos/${id_operation}/${filename}`, "photo", () =>
+      setPhotos((prev) => prev.filter((p) => p.filename !== filename))
     );
   };
 
@@ -315,15 +308,19 @@ export default function PatientResultsScreen() {
 
                 <View style={styles.photoGrid}>
                   {photos.map((p) => (
-                  <View key={p.filename} style={styles.photoItem}>
-                    <Image source={{ uri: p.url }} style={styles.photoImage} />
-                    <TouchableOpacity
-                      style={styles.deletePhotoButton}
-                      onPress={() => deletePhoto(1, setPhotos)}
-                    >
-                      <Text style={styles.deletePhotoButtonText}>×</Text>
-                    </TouchableOpacity>
-                  </View>
+                    <View key={p.filename} style={styles.photoItem}>
+                      <Image
+                        source={{ uri: p.image_base64 }}
+                        style={styles.photoImage}
+                        onError={(e) => console.log("Image failed to load:", p.filename, e.nativeEvent)}
+                      />
+                      <TouchableOpacity
+                        style={styles.deletePhotoButton}
+                        onPress={() => deletePhoto(p.filename, setPhotos)}
+                      >
+                        <Text style={styles.deletePhotoButtonText}>×</Text>
+                      </TouchableOpacity>
+                    </View>
                   ))}
                 </View>
               </View>

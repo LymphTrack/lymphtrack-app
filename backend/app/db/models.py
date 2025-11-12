@@ -99,6 +99,6 @@ class Photo(Base):
     __tablename__ = "photos"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    id_operation = Column(Integer, ForeignKey("operations.id_operation"), nullable=False)
-    url = Column(String, nullable=False)             
+    id_operation = Column(Integer, ForeignKey("operations.id_operation"), nullable=False)        
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    filename = Column(String, nullable=False)
