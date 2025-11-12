@@ -17,6 +17,7 @@ app.add_middleware(
         "http://130.238.147.150:8000",
         "https://lymphtrack.loca.lt",
         "https://lymphtrack-app.vercel.app",
+        "http://localhost:8000"
         "*",    
     ],
     allow_credentials=True,

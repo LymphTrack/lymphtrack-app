@@ -22,7 +22,7 @@
     "@shopify/react-native-skia": "2.2.12",
     "@supabase/supabase-js": "^2.56.0",
     "@types/file-saver": "^2.0.7",
-    "expo": "^54.0.22",
+    "expo": "^54.0.23",
     "expo-blur": "~15.0.7",
     "expo-camera": "~17.0.9",
     "expo-constants": "~18.0.10",
