@@ -88,7 +88,7 @@ export default function CreateFollowUp() {
           } as any);
         }
 
-        const photoRes = await fetch(`${API_URL}/photos/${opId}`, {
+        const photoRes = await fetch(`${API_URL}/photos/upload/${opId}`, {
           method: "POST",
           body: formData,
         });

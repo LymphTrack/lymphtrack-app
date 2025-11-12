@@ -30,7 +30,6 @@ export default function PositionScreen() {
   useEffect(() => {
     if (operation_id && position) {
       loadMeasurements();
-      loadGraphData();
     }
   }, [operation_id, position]);
 
@@ -50,6 +49,13 @@ export default function PositionScreen() {
 
       setMeasurements(data);
       setPatientId(opData?.patient_id ?? null);
+
+      if (data.length > 0) {
+        await loadGraphData();
+      } else {
+        setGraphData([]);
+        setLoadingGraphData(false);
+      }
     } catch (err) {
       console.error("Error loading measurements:", err);
       showAlert("Error", "Unable to load measurements data.");

@@ -631,7 +631,13 @@ def get_plot_data_by_visit(id_operation: int, db: Session = Depends(get_db)):
 
         results_all = db.query(Result).filter(Result.id_operation == id_operation).all()
         if not results_all:
-            raise HTTPException(status_code=404, detail="No measurements found for this visit")
+            return {
+                "status": "success",
+                "operation_id": id_operation,
+                "visit": None,
+                "n_positions": 0,
+                "graph_data": [],
+            }
 
         position_curves = {}
 

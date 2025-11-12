@@ -34,7 +34,6 @@ export default function PatientResultsScreen() {
       useCallback(() => {
         if (id_operation) {
           loadOperationAndResults();
-          loadGraphData();
           loadPhotos();
         }
       }, [id_operation])
@@ -78,6 +77,13 @@ export default function PatientResultsScreen() {
 
       setOperation(opData);
       setResults(resultsData);
+
+      if (resultsData.length > 0) {
+        await loadGraphData();
+      } else {
+        setLoadingGraphData(false);
+        setGraphData([]); 
+      }
     } catch (e) {
       console.error("Error loading patient data:", e);
       showAlert("Error", "Unable to load operation data. Please try again later.");
@@ -107,7 +113,7 @@ export default function PatientResultsScreen() {
 
   const loadPhotos = async () => {
     try {
-      const res = await fetch(`${API_URL}/photos/${id_operation}`);
+      const res = await fetch(`${API_URL}/photos/photos/${id_operation}`);
       if (!res.ok) throw new Error("Failed to fetch photos");
       const data = await res.json();
 
@@ -153,21 +159,18 @@ export default function PatientResultsScreen() {
 
       setUploadingPhoto(true);
 
-      const res = await fetch(`${API_URL}/upload/photos/${id_operation}`, {
+      const res = await fetch(`${API_URL}/photos/upload/${id_operation}`, {
         method: "POST",
         body: formData,
-        headers: { Accept: "application/json" },
       });
 
-      const text = await res.text();
-      if (!res.ok) throw new Error(text || "Failed to upload photo");
-
-      const data = JSON.parse(text);
-      if (data?.photo?.url) {
-        setPhotos((prev) => [...prev, data.photo]);
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || "Failed to upload photo");
       }
 
       showAlert("Success", "Photo uploaded successfully!");
+      await loadPhotos();
     } catch (err: any) {
       console.error("Upload error:", err);
       showAlert("Error", err.message || "Unexpected error during photo upload.");
@@ -189,7 +192,7 @@ export default function PatientResultsScreen() {
   };
 
   const deletePhoto = async (filename: string, setPhotos: React.Dispatch<React.SetStateAction<any[]>>) => {
-    await deleteItem(`${API_URL}/photos/${id_operation}/${filename}`, "photo", () =>
+    await deleteItem(`${API_URL}/photos/photos/${id_operation}/${filename}`, "photo", () =>
       setPhotos((prev) => prev.filter((p) => p.filename !== filename))
     );
   };
@@ -480,7 +483,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 4,
     right: 4,
-    backgroundColor: COLORS.butonBackground,
+    backgroundColor: COLORS.primary,
     borderRadius: 12,
     width: 22,
     height: 22,
