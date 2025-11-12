@@ -60,6 +60,65 @@ def upload_photo(id_operation: int, file: UploadFile = File(...), db: Session = 
 
 
 # ---------------------
+# UPLOAD MULTIPLE PHOTOS
+# ---------------------
+@router.post("/upload-multiple/{id_operation}")
+def upload_multiple_photos(id_operation: int, files: list[UploadFile] = File(...), db: Session = Depends(get_db)):
+    op = db.query(Operation).filter(Operation.id_operation == id_operation).first()
+    if not op:
+        raise HTTPException(status_code=404, detail="Operation not found")
+
+    if not files:
+        raise HTTPException(status_code=400, detail="No files provided")
+
+    patient_id = op.patient_id
+    all_ops = (
+        db.query(Operation)
+        .filter(Operation.patient_id == patient_id)
+        .order_by(Operation.operation_date.asc())
+        .all()
+    )
+
+    visit_number = {o.id_operation: idx + 1 for idx, o in enumerate(all_ops)}[op.id_operation]
+    visit_str = f"{visit_number}-{op.name.replace(' ', '_')}_{op.operation_date.strftime('%d%m%Y')}"
+    photos_dir = DATA_ROOT / patient_id / visit_str / "photos"
+    photos_dir.mkdir(parents=True, exist_ok=True)
+
+    saved_photos = []
+    for file in files:
+        safe_filename = re.sub(r'[^a-zA-Z0-9_.-]', '_', file.filename or "photo.jpg")
+        save_path = photos_dir / safe_filename
+
+        try:
+            with open(save_path, "wb") as out_file:
+                shutil.copyfileobj(file.file, out_file)
+        except Exception as e:
+            if save_path.exists():
+                save_path.unlink()
+            logging.error(f"Failed to save {file.filename}: {e}")
+            continue
+
+        new_photo = Photo(
+            id_operation=id_operation,
+            filename=safe_filename,
+            created_at=datetime.now(timezone.utc)
+        )
+        db.add(new_photo)
+        saved_photos.append(new_photo)
+
+    db.commit()
+
+    return {
+        "status": "success",
+        "message": f"{len(saved_photos)} photo(s) uploaded successfully",
+        "photos": [
+            {"id": p.id, "filename": p.filename, "created_at": p.created_at.isoformat()}
+            for p in saved_photos
+        ]
+    }
+
+
+# ---------------------
 # GET ALL PHOTOS BY OPERATION
 # ---------------------
 @router.get("/photos/{id_operation}")

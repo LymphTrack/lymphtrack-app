@@ -118,24 +118,27 @@ export default function PatientDetailScreen() {
       const responses = await Promise.all(
         positions.map(async (pos) => {
           const res = await fetch(`${API_URL}/results/plot-data-by-patient/${patient_id}/${pos}`);
-          if (!res.ok) return { pos, data: [] };
+          if (!res.ok) return { pos, data: [] as any[] };
           const json = await res.json();
-          return { pos, data: json?.graph_data ?? [], visits: json?.visits ?? {} };
+          return { pos, data: (json?.graph_data ?? []) as any[] };
         })
       );
 
       const map: Record<number, any[]> = {};
-      let visitsFromFirst: Record<string, string> | null = null;
-
-      responses.forEach(({ pos, data, visits }) => {
+      responses.forEach(({ pos, data }) => {
         map[pos] = data;
-        if (!visitsFromFirst && visits && Object.keys(visits).length > 0) {
-          visitsFromFirst = visits;
-        }
       });
-
       setAllGraphData(map);
-      if (visitsFromFirst) setVisitNames(visitsFromFirst);
+
+      if (operations && operations.length > 0) {
+        const sortedOps = [...operations].sort(
+          (a, b) => new Date(a.operation_date).getTime() - new Date(b.operation_date).getTime()
+        );
+        const allVisitNames = Object.fromEntries(
+          sortedOps.map((op, i) => [`visit${i + 1}`, op.name])
+        );
+        setVisitNames(allVisitNames);
+      }
     } catch (e) {
       console.error("Error loading all positions graphs:", e);
       showAlert("Error", "Unable to load all positions graphs.");
