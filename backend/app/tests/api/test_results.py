@@ -71,7 +71,7 @@ def upload_results(id_operation, position=1, files_paths=None):
     print("Response:", data)
     if r.status_code != 200 or data.get("status") != "success":
         raise RuntimeError("Failed to process results")
-    return data["results"]  # liste de résultats (payload sérialisé)
+    return data["results"]
 
 def get_results_by_operation(id_operation):
     p("GET RESULTS BY OPERATION")
@@ -91,7 +91,7 @@ def get_results_by_patient(patient_id):
 
 def get_results_by_op_pos(id_operation, position):
     p("GET RESULTS BY OP + POS")
-    r = requests.get(f"{RESULTS_URL}/{id_operation}/{position}")
+    r = requests.get(f"{RESULTS_URL}/by-visit-and-position/{id_operation}/{position}")
     print("Status:", r.status_code)
     data = must_json(r)
     print("Response:", data)
@@ -99,15 +99,19 @@ def get_results_by_op_pos(id_operation, position):
 
 def get_plot_data(id_operation, position):
     p("GET PLOT DATA")
-    r = requests.get(f"{RESULTS_URL}/plot-data/{id_operation}/{position}")
+    r = requests.get(f"{RESULTS_URL}/plot-data-by-position/{id_operation}/{position}")
     print("Status:", r.status_code)
     data = must_json(r)
     print("Points:", len(data))
     return data
 
-def delete_measurement(file_path):
+def delete_measurement(id_operation, position, measurement_number):
     p("DELETE MEASUREMENT")
-    payload = {"file_path": file_path}
+    payload = {
+        "id_operation": id_operation,
+        "position": position,
+        "measurement_number": measurement_number
+    }
     r = requests.post(f"{RESULTS_URL}/delete-measurements", json=payload)
     print("Status:", r.status_code)
     data = must_json(r)
@@ -143,9 +147,15 @@ if __name__ == "__main__":
         op_pos_data = get_results_by_op_pos(id_operation, 1)
         _ = get_plot_data(id_operation, 1)
 
-        if op_pos_data:
-            fp = op_pos_data[-1]["file_path"].replace("\\", "/")
-            delete_measurement(fp)
+        if isinstance(op_pos_data, list) and op_pos_data:
+            last = op_pos_data[-1]
+            delete_measurement(
+                id_operation=id_operation,
+                position=1,
+                measurement_number=last["measurement_number"]
+            )
+        else:
+            print("WARN: No measurement data found for deletion (empty or invalid response).")
 
     finally:
         if id_operation is not None:

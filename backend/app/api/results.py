@@ -19,6 +19,36 @@ DATA_ROOT = Path(r"C:\Users\Pimprenelle\Documents\LymphTrackData")
 # Utility functions
 # ---------------------
 
+def get_visit_path(db: Session, id_operation: int, position: int | None = None) -> Path:
+    operation = db.query(Operation).filter(Operation.id_operation == id_operation).first()
+    if not operation:
+        raise HTTPException(status_code=404, detail=f"Operation {id_operation} not found")
+
+    patient_id = operation.patient_id
+    all_ops = (
+        db.query(Operation)
+        .filter(Operation.patient_id == patient_id)
+        .order_by(Operation.operation_date.asc())
+        .all()
+    )
+
+    if not all_ops:
+        raise HTTPException(status_code=404, detail=f"No operations found for patient {patient_id}")
+
+    visit_number = {op.id_operation: idx + 1 for idx, op in enumerate(all_ops)}[id_operation]
+    visit_name = operation.name.replace(" ", "_")
+    visit_str = f"{visit_number}-{visit_name}_{operation.operation_date.strftime('%d%m%Y')}"
+
+    visit_dir = DATA_ROOT / patient_id / visit_str
+    if position is not None:
+        visit_dir = visit_dir / str(position)
+
+    if not visit_dir.exists():
+        raise HTTPException(status_code=404, detail=f"Visit folder not found: {visit_dir}")
+
+    return visit_dir
+
+
 def infer_header_and_data(raw_df, key_cols, max_header_row=10):
     for idx in range(min(max_header_row, len(raw_df))):
         header = raw_df.iloc[idx].astype(str)
@@ -274,7 +304,6 @@ def process_measurement_file(
             logging.error(f"[SAVE FILE] Failed to save {file.filename}: {e}")
             return None
 
-        relative_path = str(archive_path.relative_to(DATA_ROOT)).replace("\\", "/")
         result = Result(
             id_operation=int(id_operation),
             position=int(position),
@@ -282,7 +311,6 @@ def process_measurement_file(
             min_return_loss_db=float(min_rl),
             min_frequency_hz=int(min_freq),
             bandwidth_hz=float(bw) if not pd.isna(bw) else None,
-            file_path=relative_path,
             uploaded_at=datetime.now(timezone.utc),
         )
         db.add(result)
@@ -292,7 +320,6 @@ def process_measurement_file(
         logging.error(f"[PROCESS FILE] {file.filename}: {e}")
         traceback.print_exc()
         return None
-
 
 # ---------------------
 # CREATE RESULT
@@ -304,13 +331,8 @@ async def create_result(
     files: list[UploadFile] = File(...),
     db: Session = Depends(get_db),
 ):
-
     try:
-        operation = (
-            db.query(Operation)
-            .filter(Operation.id_operation == id_operation)
-            .first()
-        )
+        operation = db.query(Operation).filter(Operation.id_operation == id_operation).first()
         if not operation:
             raise HTTPException(status_code=404, detail="Operation not found")
 
@@ -324,9 +346,8 @@ async def create_result(
             .order_by(Operation.operation_date.asc())
             .all()
         )
-        visit_number = {op.id_operation: idx + 1 for idx, op in enumerate(all_ops)}[
-            id_operation
-        ]
+
+        visit_number = {op.id_operation: idx + 1 for idx, op in enumerate(all_ops)}[id_operation]
         visit_str = f"{visit_number}-{operation.name.replace(' ', '_')}_{operation.operation_date.strftime('%d%m%Y')}"
 
         existing = (
@@ -365,7 +386,6 @@ async def create_result(
                 "min_return_loss_db": r.min_return_loss_db,
                 "min_frequency_hz": r.min_frequency_hz,
                 "bandwidth_hz": r.bandwidth_hz,
-                "file_path": r.file_path,
                 "uploaded_at": r.uploaded_at.isoformat() if r.uploaded_at else None,
             }
             for r in saved_results
@@ -388,7 +408,6 @@ async def create_result(
 # ---------------------
 # CREATE ALL RESULT
 # ---------------------
-
 @router.post("/process-all/{id_operation}")
 async def create_all_results(
     id_operation: int,
@@ -510,7 +529,7 @@ def get_results_by_patient(patient_id: str, db: Session = Depends(get_db)):
 # READ RESULT BY VISIT AND POSITION
 # -----------------------------------
 @router.get("/by-visit-and-position/{id_operation}/{position}")
-def get_results(id_operation: int, position: int, db: Session = Depends(get_db)):
+def get_results_by_visit_and_position(id_operation: int, position: int, db: Session = Depends(get_db)):
     results = (
         db.query(Result)
         .filter(Result.id_operation == id_operation, Result.position == position)
@@ -518,54 +537,61 @@ def get_results(id_operation: int, position: int, db: Session = Depends(get_db))
         .all()
     )
 
-    return [
-        {
+    visit_dir = get_visit_path(db, id_operation, position)
+    file_list = sorted([f.name for f in visit_dir.glob("*") if f.is_file()])
+
+    payload = []
+    for idx, r in enumerate(results):
+        file_name = file_list[idx] if idx < len(file_list) else None
+        payload.append({
             "id": r.id,
             "measurement_number": r.measurement_number,
-            "file_path": r.file_path,
-            "file_name": r.file_path.split("/")[-1] if r.file_path else None,
+            "file_name": file_name,
             "min_return_loss_db": r.min_return_loss_db,
             "min_frequency_hz": r.min_frequency_hz,
             "bandwidth_hz": r.bandwidth_hz,
-        }
-        for r in results
-    ]
+        })
+
+    return payload
 
 
 # ---------------------
 # DELETE RESULT
 # ---------------------
-
 @router.post("/delete-measurements")
 def delete_measurements(payload: dict, db: Session = Depends(get_db)):
     try:
-        file_path = payload.get("file_path")
-        if not file_path:
-            return {"status": "error", "message": "No file_path provided"}
+        id_operation = payload.get("id_operation")
+        position = payload.get("position")
+        measurement_number = payload.get("measurement_number")
 
-        parts = Path(file_path).parts
-        if len(parts) < 4:
-            return {"status": "error", "message": f"Invalid file_path format: {file_path}"}
+        if not all([id_operation, position, measurement_number]):
+            return {"status": "error", "message": "Missing required parameters (id_operation, position, measurement_number)"}
 
-        patient_id, visit_str, position, file_name = parts[-4:]
+        position_dir = get_visit_path(db, id_operation, position)
+        files = sorted([f for f in position_dir.glob("*") if f.is_file()])
 
-        result = db.query(Result).filter(Result.file_path == file_path).first()
+        if measurement_number > len(files):
+            return {"status": "error", "message": f"No file found for measurement_number {measurement_number}"}
+
+        file_to_delete = files[measurement_number - 1]
+
+        try:
+            file_to_delete.unlink()
+        except Exception as e:
+            return {"status": "error", "message": f"Failed to delete file: {e}"}
+
+        result = (
+            db.query(Result)
+            .filter(
+                Result.id_operation == id_operation,
+                Result.position == position,
+                Result.measurement_number == measurement_number,
+            )
+            .first()
+        )
         if not result:
-            return {"status": "error", "message": f"No DB record found for {file_path}"}
-
-        id_operation = result.id_operation
-        measurement_number = result.measurement_number
-
-        abs_path = DATA_ROOT / file_path
-        deleted_files = []
-        if abs_path.exists():
-            try:
-                abs_path.unlink()
-                deleted_files.append(str(abs_path))
-            except Exception as e:
-                return {"status": "error", "message": f"Failed to delete file: {e}"}
-        else:
-            return {"status": "error", "message": f"File not found: {abs_path}"}
+            return {"status": "error", "message": f"No DB record found for measurement {measurement_number}"}
 
         db.delete(result)
         db.commit()
@@ -580,18 +606,18 @@ def delete_measurements(payload: dict, db: Session = Depends(get_db)):
 
         for r in results_to_update:
             r.measurement_number -= 1
-
         db.commit()
 
         return {
             "status": "success",
-            "deleted": deleted_files,
+            "deleted_file": str(file_to_delete),
             "reindexed": [r.id for r in results_to_update],
         }
 
     except Exception as e:
         db.rollback()
         return {"status": "error", "message": str(e)}
+
 
 # ---------------------
 # PLOT DATA BY VISIT
@@ -602,22 +628,6 @@ def get_plot_data_by_visit(id_operation: int, db: Session = Depends(get_db)):
         operation = db.query(Operation).filter(Operation.id_operation == id_operation).first()
         if not operation:
             raise HTTPException(status_code=404, detail=f"Operation {id_operation} not found")
-
-        patient_id = operation.patient_id
-        all_ops = (
-            db.query(Operation)
-            .filter(Operation.patient_id == patient_id)
-            .order_by(Operation.operation_date.asc())
-            .all()
-        )
-
-        visit_number = {op.id_operation: idx + 1 for idx, op in enumerate(all_ops)}[operation.id_operation]
-        visit_name = operation.name.replace(" ", "_")
-        visit_str = f"{visit_number}-{visit_name}_{operation.operation_date.strftime('%d%m%Y')}"
-
-        visit_dir = DATA_ROOT / patient_id / visit_str
-        if not visit_dir.exists():
-            raise HTTPException(status_code=404, detail=f"Visit folder not found: {visit_str}")
 
         results_all = db.query(Result).filter(Result.id_operation == id_operation).all()
         if not results_all:
@@ -630,17 +640,16 @@ def get_plot_data_by_visit(id_operation: int, db: Session = Depends(get_db)):
             if not pos_results:
                 continue
 
+            position_dir = get_visit_path(db, id_operation, pos)
+            files = sorted([f for f in position_dir.glob("*") if f.is_file()])
+
             measure_arrays = []
-            for r in pos_results:
-                file_path = DATA_ROOT / r.file_path
-                if not file_path.exists():
-                    logging.warning(f"[PLOT VISIT] Missing file: {file_path}")
-                    continue
-                data = read_measurement_file(file_path)
+            for f in files:
+                data = read_measurement_file(f)
                 if data:
                     measure_arrays.append(data)
                 else:
-                    logging.warning(f"[PLOT VISIT] Invalid data: {file_path}")
+                    logging.warning(f"[PLOT VISIT] Invalid data: {f}")
 
             if not measure_arrays:
                 continue
@@ -652,11 +661,12 @@ def get_plot_data_by_visit(id_operation: int, db: Session = Depends(get_db)):
             raise HTTPException(status_code=400, detail="No valid data found for this visit")
 
         graph_data = merge_positions_for_chart(position_curves)
+        visit_dir = get_visit_path(db, id_operation)
 
         return {
             "status": "success",
             "operation_id": id_operation,
-            "visit": visit_str,
+            "visit": visit_dir.name,
             "n_positions": len(position_curves),
             "graph_data": graph_data,
         }
@@ -668,33 +678,12 @@ def get_plot_data_by_visit(id_operation: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Internal error while building visit plot: {e}")
 
 
-
 # ---------------------
 # PLOT DATA BY POSITION
 # ---------------------
 @router.get("/plot-data-by-position/{id_operation}/{position}")
 def get_plot_data_by_position(id_operation: int, position: int, db: Session = Depends(get_db)):
     try:
-        operation = db.query(Operation).filter(Operation.id_operation == id_operation).first()
-        if not operation:
-            raise HTTPException(status_code=404, detail=f"Operation {id_operation} not found")
-
-        patient_id = operation.patient_id
-        all_ops = (
-            db.query(Operation)
-            .filter(Operation.patient_id == patient_id)
-            .order_by(Operation.operation_date.asc())
-            .all()
-        )
-
-        visit_number = {op.id_operation: idx + 1 for idx, op in enumerate(all_ops)}[operation.id_operation]
-        visit_name = operation.name.replace(" ", "_")
-        visit_str = f"{visit_number}-{visit_name}_{operation.operation_date.strftime('%d%m%Y')}"
-
-        position_folder = DATA_ROOT / patient_id / visit_str / str(position)
-        if not position_folder.exists():
-            raise HTTPException(status_code=404, detail=f"Position folder {position} not found in {visit_str}")
-
         results = (
             db.query(Result)
             .filter(Result.id_operation == id_operation, Result.position == position)
@@ -704,18 +693,16 @@ def get_plot_data_by_position(id_operation: int, position: int, db: Session = De
         if not results:
             raise HTTPException(status_code=404, detail="No measurements found for this position")
 
-        measure_arrays = []
-        for r in results:
-            file_path = DATA_ROOT / r.file_path
-            if not file_path.exists():
-                logging.warning(f"[PLOT DATA] Missing file: {file_path}")
-                continue
+        position_dir = get_visit_path(db, id_operation, position)
+        files = sorted([f for f in position_dir.glob("*") if f.is_file()])
 
-            data = read_measurement_file(file_path)
+        measure_arrays = []
+        for f in files:
+            data = read_measurement_file(f)
             if data:
                 measure_arrays.append(data)
             else:
-                logging.warning(f"[PLOT DATA] Invalid data: {file_path}")
+                logging.warning(f"[PLOT DATA] Invalid data: {f}")
 
         if not measure_arrays:
             raise HTTPException(status_code=400, detail="No valid measurement data found locally")
@@ -760,11 +747,9 @@ def get_plot_data_by_patient(patient_id: str, position: int, db: Session = Depen
             visit_name = op.name.strip()
             visit_labels.append(visit_name)
 
-            visit_number = {o.id_operation: idx + 1 for idx, o in enumerate(all_ops)}[op.id_operation]
-            visit_str = f"{visit_number}-{visit_name.replace(' ', '_')}_{op.operation_date.strftime('%d%m%Y')}"
-
-            visit_dir = DATA_ROOT / patient_id / visit_str / str(position)
-            if not visit_dir.exists():
+            try:
+                visit_dir = get_visit_path(db, op.id_operation, position)
+            except HTTPException:
                 logging.warning(f"[PLOT PATIENT] Folder not found for position {position} in visit {visit_name}")
                 continue
 
@@ -777,17 +762,18 @@ def get_plot_data_by_patient(patient_id: str, position: int, db: Session = Depen
             if not results:
                 continue
 
+            files = sorted([f for f in visit_dir.glob("*") if f.is_file()])
+            if not files:
+                logging.warning(f"[PLOT PATIENT] No files found for {visit_dir}")
+                continue
+
             measure_arrays = []
-            for r in results:
-                file_path = DATA_ROOT / r.file_path
-                if not file_path.exists():
-                    logging.warning(f"[PLOT PATIENT] Missing file: {file_path}")
-                    continue
-                data = read_measurement_file(file_path)
+            for f in files:
+                data = read_measurement_file(f)
                 if data:
                     measure_arrays.append(data)
                 else:
-                    logging.warning(f"[PLOT PATIENT] Invalid data: {file_path}")
+                    logging.warning(f"[PLOT PATIENT] Invalid data: {f}")
 
             if not measure_arrays:
                 continue
@@ -800,7 +786,6 @@ def get_plot_data_by_patient(patient_id: str, position: int, db: Session = Depen
             raise HTTPException(status_code=400, detail="No valid data found across visits for this position")
 
         graph_data = merge_visits_for_chart(visit_curves)
-
         visit_names = {f"visit{idx + 1}": name for idx, name in enumerate(visit_labels)}
 
         return {

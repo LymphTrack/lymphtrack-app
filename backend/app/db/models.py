@@ -88,7 +88,6 @@ class Result(Base):
     min_return_loss_db = Column(Float)
     min_frequency_hz = Column(Float)
     bandwidth_hz = Column(Float)
-    file_path = Column(String)
     uploaded_at = Column(DateTime, default=datetime.utcnow)
 
 
