@@ -702,7 +702,12 @@ def get_plot_data_by_position(id_operation: int, position: int, db: Session = De
             raise HTTPException(status_code=404, detail="No measurements found for this position")
 
         position_dir = get_visit_path(db, id_operation, position)
-        files = sorted([f for f in position_dir.glob("*") if f.is_file()])
+        
+        valid_exts = {".xls", ".xlsx", ".csv"}
+        files = sorted([
+            f for f in position_dir.glob("*")
+            if f.is_file() and f.suffix.lower() in valid_exts
+        ])
 
         measure_arrays = []
         for f in files:
@@ -770,7 +775,12 @@ def get_plot_data_by_patient(patient_id: str, position: int, db: Session = Depen
             if not results:
                 continue
 
-            files = sorted([f for f in visit_dir.glob("*") if f.is_file()])
+            valid_exts = {".xls", ".xlsx", ".csv"}
+            files = sorted([
+                f for f in visit_dir.glob("*")
+                if f.is_file() and f.suffix.lower() in valid_exts
+            ])
+            
             measure_arrays = [read_measurement_file(f) for f in files if f.is_file()]
             measure_arrays = [m for m in measure_arrays if m]
 
