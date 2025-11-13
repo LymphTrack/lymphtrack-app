@@ -45,6 +45,7 @@ export default function PatientDetailScreen() {
   const [loadingAll, setLoadingAll] = useState(false);
   const allGraphsRef = useRef<HTMLDivElement | null>(null);
   const [allGraphData, setAllGraphData] = useState<Record<number, any[]>>({});
+  const [visitColors, setVisitColors] = useState<Record<string, string>>({});
 
   const fetchPatient = async () => {
     try {
@@ -78,6 +79,13 @@ export default function PatientDetailScreen() {
       );
 
       setOperations(uniqueOps);
+
+      const colorMap: Record<string, string> = {};
+      uniqueOps.forEach((op, i) => {
+        colorMap[op.name] = COLORS[`color${i + 1}` as keyof typeof COLORS];
+      });
+      setVisitColors(colorMap);
+
     } catch (error) {
       console.error("Error fetching operations:", error);
       showAlert("Error", "Failed to load patient operations.");
@@ -118,9 +126,25 @@ export default function PatientDetailScreen() {
       const responses = await Promise.all(
         positions.map(async (pos) => {
           const res = await fetch(`${API_URL}/results/plot-data-by-patient/${patient_id}/${pos}`);
-          if (!res.ok) return { pos, data: [] as any[] };
+          if (!res.ok)
+            return { pos, data: [] as any[], visits: {} as Record<string, string> };
+
           const json = await res.json();
-          return { pos, data: (json?.graph_data ?? []) as any[] };
+          const graphData = json.graph_data ?? [];
+          const visits = json.visits;
+
+          const renamedData = graphData.map((row: Record<string, any>) => {
+            const newRow: Record<string, any> = { freq: row.freq };
+            Object.entries(row).forEach(([key, value]) => {
+              if (key === "freq") return;
+
+              const realName = visits[key] || key;
+              newRow[realName] = value;
+            });
+            return newRow;
+          });
+
+          return { pos, data: renamedData };
         })
       );
 
@@ -128,17 +152,8 @@ export default function PatientDetailScreen() {
       responses.forEach(({ pos, data }) => {
         map[pos] = data;
       });
+      
       setAllGraphData(map);
-
-      if (operations && operations.length > 0) {
-        const sortedOps = [...operations].sort(
-          (a, b) => new Date(a.operation_date).getTime() - new Date(b.operation_date).getTime()
-        );
-        const allVisitNames = Object.fromEntries(
-          sortedOps.map((op, i) => [`visit${i + 1}`, op.name])
-        );
-        setVisitNames(allVisitNames);
-      }
     } catch (e) {
       console.error("Error loading all positions graphs:", e);
       showAlert("Error", "Unable to load all positions graphs.");
@@ -359,6 +374,7 @@ export default function PatientDetailScreen() {
                       <MultiPositionGraphs
                         allGraphData={allGraphData}
                         visitNames={visitNames}
+                        visitColors={visitColors}
                       />
                     </div>
                     </View>
@@ -426,6 +442,7 @@ export default function PatientDetailScreen() {
                     graphData={graphData}
                     lines={Object.keys(visitNames)}
                     labels={visitNames}
+                    colors={visitColors}
                     title={`Evolution of Position ${selectedPosition} across visits`}
                     exportRef={graphRef}
                   />

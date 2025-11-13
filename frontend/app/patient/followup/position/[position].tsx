@@ -231,6 +231,13 @@ export default function PositionScreen() {
                   `Measurement ${m.measurement_number ?? i + 1}`,
                 ])
               )}
+              colors={Object.fromEntries(
+                measurements.map((_, i) => [
+                  `loss${i + 1}`,
+                  COLORS[`color${i + 1}` as keyof typeof COLORS],
+                ])
+              )}
+
               title="Comparison graph of measurements"
               exportRef={graphRef}
             />

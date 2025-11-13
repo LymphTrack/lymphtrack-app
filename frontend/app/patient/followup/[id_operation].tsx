@@ -24,6 +24,7 @@ export default function PatientResultsScreen() {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
+  const [exportingPhotos, setExportingPhotos] = useState(false);
   const router = useRouter();
   const {width} = useWindowDimensions();
   const [graphData, setGraphData] = useState<any[]>([]);
@@ -197,9 +198,16 @@ export default function PatientResultsScreen() {
     );
   };
 
+  const exportPhotos = async () => {
+    const url = `${API_URL}/photos/export/${id_operation}`;
+    await exportFolder(url, `${operation.patient_id}_${operation.name}_photos.zip`, setExportingPhotos);
+  };
+
+
   if (loading) return <LoadingScreen text="" />;
   if (uploadingPhoto) return <LoadingScreen text="Uploading photo..." />;
   if (exporting) return <LoadingScreen text="Exporting FollowUp..." />;
+  if (exportingPhotos) return <LoadingScreen text="Exporting photo(s)..." />;
 
   if (!operation) {
     return (
@@ -326,6 +334,17 @@ export default function PatientResultsScreen() {
                     </View>
                   ))}
                 </View>
+
+                <View style={{ alignItems: "center", marginTop: 20 }}>
+                  <TouchableOpacity
+                    style={[commonStyles.button, { width: 200 }]}
+                    onPress={exportPhotos}
+                  >
+                    <Download size={18} color={COLORS.textButton} style={{ marginRight: 8 }} />
+                    <Text style={commonStyles.buttonText}>Export all photos</Text>
+                  </TouchableOpacity>
+                </View>
+
               </View>
             </View>
           )}
@@ -374,6 +393,12 @@ export default function PatientResultsScreen() {
                 .filter((key) => graphData.some((d) => d[key] !== undefined))}
               labels={Object.fromEntries(
                 Array.from({ length: 6 }).map((_, i) => [`pos${i + 1}`, `Position ${i + 1}`])
+              )}
+              colors={Object.fromEntries(
+                Array.from({ length: 6 }).map((_, i) => [
+                  `pos${i + 1}`,
+                  COLORS[`color${i + 1}` as keyof typeof COLORS],
+                ])
               )}
               title="Comparison graph of measurements"
               exportRef={graphRef}

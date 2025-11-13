@@ -11,7 +11,8 @@ PHOTOS_URL = f"{API_BASE}/photos"
 # CONFIGURATION
 # ---------------------
 BASE_DIR = Path(__file__).resolve().parent
-TEST_PHOTO = BASE_DIR.parents[2] / "test.jpg"  # Exemple : backend/test.jpg
+TEST_PHOTO = BASE_DIR.parents[2] / "test.jpg"
+TEST_PHOTO_2 = BASE_DIR.parents[2] / "test2.jpg"
 
 def p(title):
     print("\n" + "=" * 12, title, "=" * 12)
@@ -32,7 +33,7 @@ def create_patient():
         "gender": 1,
         "bmi": 22.5,
         "lymphedema_side": 1,
-        "notes": "E2E photo auto test"
+        "notes": "E2E photo test full"
     }
     r = requests.post(f"{PATIENTS_URL}/", json=payload)
     data = must_json(r)
@@ -51,7 +52,7 @@ def create_operation(patient_id):
         "patient_id": patient_id,
         "name": "Photo_Test",
         "operation_date": date.today().isoformat(),
-        "notes": "Photo E2E upload test"
+        "notes": "E2E photo test"
     }
     r = requests.post(f"{OPERATIONS_URL}/", json=payload)
     data = must_json(r)
@@ -62,10 +63,10 @@ def create_operation(patient_id):
     return data["operation"]["id_operation"]
 
 # ---------------------
-# UPLOAD PHOTO
+# UPLOAD PHOTO (SINGLE)
 # ---------------------
 def upload_photo(id_operation, file_path):
-    p("UPLOAD PHOTO")
+    p("UPLOAD SINGLE PHOTO")
     if not Path(file_path).exists():
         raise FileNotFoundError(f"File not found: {file_path}")
 
@@ -76,16 +77,14 @@ def upload_photo(id_operation, file_path):
         print("Status:", r.status_code)
         print("Response:", data)
         if data.get("status") != "success":
-            raise RuntimeError("Upload failed")
+            raise RuntimeError("Upload single photo failed")
         return data["photo"]
-    
 
 # ---------------------
 # UPLOAD MULTIPLE PHOTOS
 # ---------------------
 def upload_multiple_photos(id_operation, files_paths):
     p("UPLOAD MULTIPLE PHOTOS")
-
     valid_files = [Path(pth) for pth in files_paths if Path(pth).exists()]
     if not valid_files:
         raise FileNotFoundError("No valid photo files found")
@@ -95,18 +94,17 @@ def upload_multiple_photos(id_operation, files_paths):
         mime = "image/jpeg" if pth.suffix.lower() in [".jpg", ".jpeg"] else "image/png"
         files.append(("files", (pth.name, open(pth, "rb"), mime)))
 
-    r = requests.post(f"{PHOTOS_URL}/upload-multiple/{id_operation}", files=files)
-    data = must_json(r)
-    print("Status:", r.status_code)
-    print("Response:", data)
-
-    for _, f in files:
-        f[1].close()  # important: ferme les fichiers
-
-    if data.get("status") != "success":
-        raise RuntimeError("Upload multiple photos failed")
-    return data["photos"]
-
+    try:
+        r = requests.post(f"{PHOTOS_URL}/upload-multiple/{id_operation}", files=files)
+        data = must_json(r)
+        print("Status:", r.status_code)
+        print("Response:", data)
+        if data.get("status") != "success":
+            raise RuntimeError("Upload multiple photos failed")
+        return data["photos"]
+    finally:
+        for _, f in files:
+            f[1].close()  # Toujours fermer les fichiers, même en cas d'erreur
 
 # ---------------------
 # GET PHOTOS BY OPERATION
@@ -123,7 +121,7 @@ def get_photos(id_operation):
 # DELETE PHOTO
 # ---------------------
 def delete_photo(id_operation, filename):
-    p("DELETE PHOTO")
+    p(f"DELETE PHOTO: {filename}")
     r = requests.delete(f"{PHOTOS_URL}/photos/{id_operation}/{filename}")
     data = must_json(r)
     print("Status:", r.status_code)
@@ -134,20 +132,26 @@ def delete_photo(id_operation, filename):
 # CLEANUP HELPERS
 # ---------------------
 def delete_operation(id_operation):
-    p("DELETE OPERATION")
-    r = requests.delete(f"{OPERATIONS_URL}/{id_operation}")
-    print("Status:", r.status_code, "Response:", must_json(r))
+    try:
+        p("DELETE OPERATION")
+        r = requests.delete(f"{OPERATIONS_URL}/{id_operation}")
+        print("Status:", r.status_code, "Response:", must_json(r))
+    except Exception as e:
+        print(f"WARN: failed to delete operation ({id_operation}): {e}")
 
 def delete_patient(patient_id):
-    p("DELETE PATIENT")
-    r = requests.delete(f"{PATIENTS_URL}/{patient_id}")
-    print("Status:", r.status_code, "Response:", must_json(r))
+    try:
+        p("DELETE PATIENT")
+        r = requests.delete(f"{PATIENTS_URL}/{patient_id}")
+        print("Status:", r.status_code, "Response:", must_json(r))
+    except Exception as e:
+        print(f"WARN: failed to delete patient ({patient_id}): {e}")
 
 # ---------------------
-# MAIN E2E FLOW
+# MAIN FULL TEST FLOW
 # ---------------------
 if __name__ == "__main__":
-    print("=== E2E PHOTO MULTI-UPLOAD START ===")
+    print("=== E2E PHOTO FULL TEST START ===")
     patient_id = None
     id_operation = None
 
@@ -155,21 +159,26 @@ if __name__ == "__main__":
         patient_id = create_patient()
         id_operation = create_operation(patient_id)
 
-        multi_photos = upload_multiple_photos(id_operation, [
-            TEST_PHOTO,
-            BASE_DIR.parents[2] / "test2.jpg"
-        ])
+        # Upload simple
+        upload_photo(id_operation, TEST_PHOTO)
 
-        print("Uploaded photos:", [p["filename"] for p in multi_photos])
+        # Upload multiple
+        upload_multiple_photos(id_operation, [TEST_PHOTO, TEST_PHOTO_2])
 
+        # Vérifie les photos
         photos = get_photos(id_operation)
-        print("Photos found:", [p["filename"] for p in photos])
+        print("Photos currently stored:", [p["filename"] for p in photos])
 
+        # Supprime toutes les photos
+        for photo_item in photos:
+            delete_photo(id_operation, photo_item["filename"])
+
+    except Exception as e:
+        print("\n❌ ERROR DURING TEST:", e)
     finally:
         if id_operation:
             delete_operation(id_operation)
         if patient_id:
             delete_patient(patient_id)
 
-    print("\n=== E2E PHOTO MULTI-UPLOAD COMPLETED ===")
-
+    print("\n=== E2E PHOTO FULL TEST COMPLETED ===")

@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 import os, re, shutil, logging
 import base64
+import tempfile, zipfile
 
 router = APIRouter()
 DATA_ROOT = Path(r"C:\Users\Pimprenelle\Documents\LymphTrackData")
@@ -204,3 +205,41 @@ def delete_photo(id_operation: int, filename: str, db: Session = Depends(get_db)
         db.rollback()
         logging.error(f"[DELETE PHOTO] {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ---------------------
+# EXPORT ALL PHOTOS (ZIP)
+# ---------------------
+@router.get("/export/{id_operation}")
+def export_all_photos(id_operation: int, db: Session = Depends(get_db)):
+    op = db.query(Operation).filter(Operation.id_operation == id_operation).first()
+    if not op:
+        raise HTTPException(status_code=404, detail="Operation not found")
+
+    patient_id = op.patient_id
+    all_ops = (
+        db.query(Operation)
+        .filter(Operation.patient_id == patient_id)
+        .order_by(Operation.operation_date.asc())
+        .all()
+    )
+    visit_number = {o.id_operation: idx + 1 for idx, o in enumerate(all_ops)}[op.id_operation]
+    visit_str = f"{visit_number}-{op.name.replace(' ', '_')}_{op.operation_date.strftime('%d%m%Y')}"
+
+    photos_dir = DATA_ROOT / patient_id / visit_str / "photos"
+    if not photos_dir.exists() or not any(photos_dir.iterdir()):
+        raise HTTPException(status_code=404, detail="No photos found for this operation")
+
+    tmp_zip = tempfile.NamedTemporaryFile(delete=False, suffix=".zip")
+    with zipfile.ZipFile(tmp_zip, "w", zipfile.ZIP_DEFLATED) as zipf:
+        for f in photos_dir.iterdir():
+            if f.is_file():
+                zipf.write(f, arcname=f.name)
+
+    tmp_zip.close()
+
+    return FileResponse(
+        path=tmp_zip.name,
+        filename=f"{patient_id}_{visit_str}_photos.zip",
+        media_type="application/zip"
+    )

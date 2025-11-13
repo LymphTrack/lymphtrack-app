@@ -11,6 +11,7 @@ interface GraphProps {
   title?: string;
   exportRef?: React.RefObject<HTMLDivElement>;
   showLegend?: boolean;
+  colors?: Record<string, string>;
 }
 
 export const GraphView = ({
@@ -21,6 +22,7 @@ export const GraphView = ({
   title,
   exportRef,
   showLegend = true,
+  colors,
 }: GraphProps) => {
   if (!graphData || graphData.length === 0) {
     return (
@@ -65,17 +67,25 @@ export const GraphView = ({
                 />
                 <Tooltip />
 
-                {lines.map((key, i) => (
-                <Line
-                    key={key}
-                    type="monotone"
-                    dataKey={key}
-                    stroke={COLORS[`color${(i % 6) + 1}`] || COLORS.primary}
-                    strokeWidth={2}
-                    dot={false}
-                    name={labels[key] || key}
-                />
-                ))}
+                {lines.map((key) => {
+                    const labelName = labels[key] || key;
+                    const strokeColor =
+                        (colors && colors[labelName]) ||          
+                        (colors && colors[key]) ||                 
+                        COLORS.primary;                            
+
+                    return (
+                        <Line
+                        key={key}
+                        type="monotone"
+                        dataKey={key}
+                        stroke={strokeColor}
+                        strokeWidth={2}
+                        dot={false}
+                        name={labelName}
+                        />
+                    );
+                })}
 
                 {showLegend && (
                 <Legend
@@ -96,129 +106,152 @@ export const GraphView = ({
 export const MultiPositionGraphs = ({
   allGraphData,
   visitNames,
+  visitColors,
 }: {
   allGraphData: Record<number, any[]>;
   visitNames: Record<string, string>;
+  visitColors?: Record<string, string>;
 }) => {
-  const orderedKeys = Object.keys(visitNames);
+  // Liste de toutes les visites connues (pour la légende)
+  const allVisitNames = visitColors ? Object.keys(visitColors) : Object.values(visitNames);
+
+  console.log("🎨 visitColors =", visitColors);
+console.log("🔑 Example keys for pos1:", allGraphData[1]?.[0] ? Object.keys(allGraphData[1][0]) : []);
 
   return (
     <View style={{ marginBottom: 40, maxWidth: 1120, width: "100%", alignSelf: "center" }}>
-            <Text
+      <Text
+        style={[
+          commonStyles.sectionTitle,
+          { fontSize: 16, marginTop: 0, marginBottom: 12 },
+        ]}
+      >
+        All positions (1 to 6) across visits
+      </Text>
+
+      {/* -------- LÉGENDE -------- */}
+      <View
+        style={{
+          marginBottom: 10,
+          flexDirection: "row",
+          flexWrap: "wrap",
+          gap: 12,
+        }}
+      >
+        {allVisitNames.map((name) => {
+          const color =
+            (visitColors && visitColors[name]) || COLORS.primary;
+
+          return (
+            <View
+              key={name}
+              style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
+            >
+              <View
+                style={{
+                  width: 16,
+                  height: 16,
+                  borderRadius: 3,
+                  backgroundColor: color,
+                }}
+              />
+              <Text style={{ color: COLORS.subtitle, fontSize: 14 }}>{name}</Text>
+            </View>
+          );
+        })}
+      </View>
+
+      {/* -------- GRAPHES -------- */}
+      <View
+        style={{
+          flexDirection: "row",
+          flexWrap: "wrap",
+          justifyContent: "space-between",
+          rowGap: 16,
+        }}
+      >
+        {[1, 2, 3, 4, 5, 6].map((pos) => {
+          const data = allGraphData[pos] || [];
+
+          // 🔹 Récupère les vraies colonnes de données (exclut freq)
+          const seriesKeys =
+            data.length > 0
+              ? Object.keys(data[0]).filter((k) => k !== "freq")
+              : [];
+
+          return (
+            <View
+              key={pos}
+              style={{
+                width: "48%",
+                backgroundColor: "white",
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: COLORS.grayLight,
+                padding: 10,
+              }}
+            >
+              <Text
                 style={[
-                commonStyles.sectionTitle,
-                { fontSize: 16, marginTop: 0, marginBottom: 12 },
+                  commonStyles.subtitle,
+                  { marginBottom: 8, fontWeight: "600" },
                 ]}
-            >
-                All positions (1 to 6) across visits
-            </Text>
+              >
+                Position {pos}
+              </Text>
 
-            <View
-                style={{
-                marginBottom: 10,
-                flexDirection: "row",
-                flexWrap: "wrap",
-                gap: 12,
-                }}
-            >
-                {orderedKeys.map((key, i) => (
+              {data.length === 0 ? (
                 <View
-                    key={key}
-                    style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
+                  style={{
+                    height: 240,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
                 >
-                    <View
-                    style={{
-                        width: 16,
-                        height: 16,
-                        borderRadius: 3,
-                        backgroundColor:
-                        COLORS[`color${(i % 6) + 1}`] || COLORS.primary,
-                    }}
-                    />
-                    <Text style={{ color: COLORS.subtitle, fontSize: 14 }}>
-                    {visitNames[key] || `Visit ${i + 1}`}
-                    </Text>
+                  <Text style={commonStyles.subtitle}>No data.</Text>
                 </View>
-                ))}
-            </View>
-
-            <View
-                style={{
-                flexDirection: "row",
-                flexWrap: "wrap",
-                justifyContent: "space-between",
-                rowGap: 16,
-                }}
-            >
-                {[1, 2, 3, 4, 5, 6].map((pos) => {
-                const data = allGraphData[pos] || [];
-
-                return (
-                    <View
-                    key={pos}
-                    style={{
-                        width: "48%",
-                        backgroundColor: "white",
-                        borderRadius: 12,
-                        borderWidth: 1,
-                        borderColor: COLORS.grayLight,
-                        padding: 10,
-                    }}
+              ) : (
+                <div style={{ height: 240, width: "100%" }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart
+                      data={data}
+                      margin={{ top: 16, right: 10, left: 10, bottom: 10 }}
                     >
-                    <Text
-                        style={[commonStyles.subtitle, { marginBottom: 8, fontWeight: "600" }]}
-                    >
-                        Position {pos}
-                    </Text>
+                      <CartesianGrid stroke={COLORS.grayLight} />
+                      <XAxis
+                        dataKey="freq"
+                        tickFormatter={(v) => Number(v).toFixed(2)}
+                      />
+                      <YAxis />
+                      <Tooltip />
 
-                    {data.length === 0 ? (
-                        <View
-                        style={{
-                            height: 240,
-                            alignItems: "center",
-                            justifyContent: "center",
-                        }}
-                        >
-                        <Text style={commonStyles.subtitle}>No data.</Text>
-                        </View>
-                    ) : (
-                        <div style={{ height: 240, width: "100%" }}>
-                        <ResponsiveContainer width="100%" height="100%">
-                            <LineChart
-                            data={data}
-                            margin={{ top: 16, right: 10, left: 10, bottom: 10 }}
-                            >
-                            <CartesianGrid stroke={COLORS.grayLight} />
-                            <XAxis
-                                dataKey="freq"
-                                tickFormatter={(v) => Number(v).toFixed(2)}
-                            />
-                            <YAxis />
-                            <Tooltip />
-                            {orderedKeys
-                                .filter((k) => k in data[0])
-                                .map((key, i) => (
-                                <Line
-                                    key={key}
-                                    type="monotone"
-                                    dataKey={key}
-                                    stroke={
-                                    COLORS[`color${(i % 6) + 1}`] || COLORS.primary
-                                    }
-                                    strokeWidth={1.8}
-                                    dot={false}
-                                    name={visitNames[key] || `Visit ${i + 1}`}
-                                />
-                                ))}
-                            </LineChart>
-                        </ResponsiveContainer>
-                        </div>
-                    )}
-                    </View>
-                );
-                })}
+                      {seriesKeys.map((key) => {
+                        // 🎯 On prend directement le nom réel
+                        const labelName = key;
+                        const strokeColor =
+                          (visitColors && visitColors[labelName]) ||
+                          COLORS.primary;
+
+                        return (
+                          <Line
+                            key={`${pos}-${key}`}
+                            type="monotone"
+                            dataKey={key}
+                            stroke={strokeColor}
+                            strokeWidth={1.8}
+                            dot={false}
+                            name={labelName}
+                          />
+                        );
+                      })}
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
             </View>
+          );
+        })}
+      </View>
     </View>
   );
 };
-
