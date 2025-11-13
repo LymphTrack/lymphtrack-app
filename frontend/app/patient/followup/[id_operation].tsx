@@ -334,17 +334,16 @@ export default function PatientResultsScreen() {
                     </View>
                   ))}
                 </View>
-
-                <View style={{ alignItems: "center", marginTop: 20 }}>
+              </View>
+              
+              <View style={{ alignItems: "center", marginTop: 20 }}>
                   <TouchableOpacity
-                    style={[commonStyles.button, { width: 200 }]}
+                    style={[commonStyles.button, { width: 200, flexDirection:"row", gap:10, justifyContent:"center"}]}
                     onPress={exportPhotos}
                   >
-                    <Download size={18} color={COLORS.textButton} style={{ marginRight: 8 }} />
+                    <Download size={18} color={COLORS.butonText} />
                     <Text style={commonStyles.buttonText}>Export all photos</Text>
                   </TouchableOpacity>
-                </View>
-
               </View>
             </View>
           )}
