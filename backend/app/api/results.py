@@ -647,7 +647,9 @@ def get_plot_data_by_visit(id_operation: int, db: Session = Depends(get_db)):
                 continue
 
             position_dir = get_visit_path(db, id_operation, pos)
-            files = sorted([f for f in position_dir.glob("*") if f.is_file()])
+            
+            valid_exts = {".xls", ".xlsx", ".csv"}
+            files = sorted([f for f in position_dir.glob("*") if f.is_file() and f.suffix.lower() in valid_exts])
 
             measure_arrays = []
             for f in files:
