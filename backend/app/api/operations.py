@@ -127,6 +127,16 @@ def get_operations_by_patient(patient_id: str, db: Session = Depends(get_db)):
 def get_operations(db: Session = Depends(get_db)):
     return db.query(Operation).all()
 
+
+# ---------------------
+# GET ALL UNIQUE NAME OPERATIONS
+# ---------------------
+@router.get("/unique-names")
+def get_unique_names(db: Session = Depends(get_db)):
+    names = db.query(Operation.name).distinct().all()
+    return [n[0] for n in names if n[0]]
+
+
 # ---------------------
 # UPDATE OPERATION
 # ---------------------
