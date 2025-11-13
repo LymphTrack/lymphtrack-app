@@ -131,7 +131,7 @@ def get_operations(db: Session = Depends(get_db)):
 # ---------------------
 # GET ALL UNIQUE NAME OPERATIONS
 # ---------------------
-@router.get("/unique-names")
+@router.get("/utils/unique-names")
 def get_unique_names(db: Session = Depends(get_db)):
     names = db.query(Operation.name).distinct().all()
     return [n[0] for n in names if n[0]]

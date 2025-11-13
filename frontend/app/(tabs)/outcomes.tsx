@@ -74,7 +74,7 @@ export default function OutcomesScreen() {
 
   const loadVisits = async () => {
     try {
-      const res = await fetch(`${API_URL}/operations/unique-names`);
+      const res = await fetch(`${API_URL}/operations/utils/unique-names`);
       if (!res.ok) throw new Error("Failed to load operation names");
 
       const data: string[] = await res.json();
