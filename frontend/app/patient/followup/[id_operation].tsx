@@ -30,6 +30,8 @@ export default function PatientResultsScreen() {
   const [graphData, setGraphData] = useState<any[]>([]);
   const [loadingGraphData, setLoadingGraphData] = useState(true);
   const graphRef = useRef<HTMLDivElement | null>(null);
+  const [patient_id, setPatientId] = useState<string | number | null>(null);
+  const [op_name, setOpName] = useState<string | null>(null);
   
   useFocusEffect(
       useCallback(() => {
@@ -78,6 +80,8 @@ export default function PatientResultsScreen() {
 
       setOperation(opData);
       setResults(resultsData);
+      setPatientId(opData?.patient_id ?? null);
+      setOpName(opData?.name ?? null)
 
       if (resultsData.length > 0) {
         setLoading(false);
@@ -416,7 +420,7 @@ export default function PatientResultsScreen() {
             >
               <TouchableOpacity
                 style={[commonStyles.button, { width: 150 }]}
-                onPress={() => exportGraph(graphData, `visit_${id_operation}`, "csv")}
+                onPress={() => exportGraph(graphData, `${patient_id}_${op_name}`, "csv")}
               >
                 <Text style={commonStyles.buttonText}>Export CSV</Text>
               </TouchableOpacity>
@@ -424,7 +428,7 @@ export default function PatientResultsScreen() {
               <TouchableOpacity
                 style={[commonStyles.button, { width: 150 }]}
                 onPress={() =>
-                  exportGraph(graphData, `visit_${id_operation}`, "png", graphRef)
+                  exportGraph(graphData, `${patient_id}_${op_name}`, "png", graphRef)
                 }
               >
                 <Text style={commonStyles.buttonText}>Export PNG</Text>

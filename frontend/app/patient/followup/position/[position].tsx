@@ -23,6 +23,7 @@ export default function PositionScreen() {
   const [deleting, setDeleting] = useState(false);
   const [createMeasurement, setCreateMeasurement] = useState(false);
   const [patient_id, setPatientId] = useState<string | number | null>(null);
+  const [op_name, setOpName] = useState<string | null>(null);
   const [graphData, setGraphData] = useState<any[]>([]);
   const [loadingGraphData, setLoadingGraphData] = useState(true);
   const graphRef = useRef(null);
@@ -49,6 +50,7 @@ export default function PositionScreen() {
 
       setMeasurements(data);
       setPatientId(opData?.patient_id ?? null);
+      setOpName(opData?.name ?? null)
 
       if (data.length > 0) {
         setLoading(false);
@@ -254,7 +256,7 @@ export default function PositionScreen() {
           >
             <TouchableOpacity
               style={[commonStyles.button, { width: 150 }]}
-              onPress={() => exportGraph(graphData, `graph_position_${position}`, "csv")}
+              onPress={() => exportGraph(graphData, `${patient_id}_${op_name}_position_${position}`, "csv")}
             >
               <Text style={commonStyles.buttonText}>Export CSV</Text>
             </TouchableOpacity>
@@ -262,7 +264,7 @@ export default function PositionScreen() {
             <TouchableOpacity
               style={[commonStyles.button, { width: 150 }]}
               onPress={() =>
-                exportGraph(graphData, `graph_position_${position}`, "png", graphRef)
+                exportGraph(graphData, `${patient_id}_${op_name}_position_${position}`, "png", graphRef)
               }
             >
               <Text style={commonStyles.buttonText}>Export PNG</Text>

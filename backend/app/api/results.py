@@ -147,21 +147,28 @@ def merge_visits_for_chart(visit_curves: dict[str, list[dict]]):
     if not visit_curves:
         return []
 
-    first_curve = next(iter(visit_curves.values()))
-    if not first_curve:
-        return []
-
-    base_freqs = [p["freq_hz"] for p in first_curve]
+    # Créer une grille de fréquences commune (en GHz)
+    all_freqs = sorted(set(
+        round(p["freq_hz"] / 1e9, 6)
+        for curve in visit_curves.values()
+        for p in curve
+    ))
     merged = []
 
-    for i, freq in enumerate(base_freqs):
-        point = {"freq": freq / 1e9}  # GHz
+    # Interpoler les pertes pour chaque visite
+    for f in all_freqs:
+        point = {"freq": f}
         for idx, (visit_str, curve) in enumerate(visit_curves.items(), start=1):
-            if i < len(curve):
-                point[f"visit{idx}"] = curve[i]["avg_loss_db"]
+            freqs = np.array([p["freq_hz"] / 1e9 for p in curve])
+            losses = np.array([p["avg_loss_db"] for p in curve])
+            # Interpolation linéaire
+            if len(freqs) > 1:
+                interp_loss = np.interp(f, freqs, losses)
+                point[f"visit{idx}"] = float(interp_loss)
         merged.append(point)
 
     return merged
+
 
 
 def average_measurements(measure_arrays: list[list[dict]]):
