@@ -80,6 +80,7 @@ export default function PatientResultsScreen() {
       setResults(resultsData);
 
       if (resultsData.length > 0) {
+        setLoading(false);
         await loadGraphData();
       } else {
         setLoadingGraphData(false);

@@ -11,7 +11,7 @@ import { COLORS } from "@/constants/colors";
 import { importAndUploadFiles } from "@/utils/uploadUtils";
 import { deleteItem } from "@/utils/deleteUtils";
 import { exportGraph } from "@/utils/exportGraphUtils";
-import { GraphView, MultiPositionGraphs } from "@/components/graphView";
+import { GraphView } from "@/components/graphView";
 
 export default function PositionScreen() {
   const { position, operation_id } = useLocalSearchParams<{ position: string; operation_id: string }>();
@@ -51,6 +51,7 @@ export default function PositionScreen() {
       setPatientId(opData?.patient_id ?? null);
 
       if (data.length > 0) {
+        setLoading(false);
         await loadGraphData();
       } else {
         setGraphData([]);
