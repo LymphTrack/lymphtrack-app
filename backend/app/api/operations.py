@@ -133,9 +133,21 @@ def get_operations(db: Session = Depends(get_db)):
 # ---------------------
 @router.get("/utils/unique-names")
 def get_unique_names(db: Session = Depends(get_db)):
-    names = db.query(Operation.name).distinct().all()
-    return [n[0] for n in names if n[0]]
+    print("📌 [unique-names] Route called")
 
+    try:
+        print("📌 [unique-names] Querying DB...")
+        names = db.query(Operation.name).distinct().all()
+        print(f"📌 [unique-names] Raw DB result: {names}")
+
+        clean = [n[0] for n in names if n[0]]
+        print(f"📌 [unique-names] Cleaned result: {clean}")
+
+        return clean
+
+    except Exception as e:
+        print("❌ [unique-names] ERROR", str(e))
+        raise HTTPException(status_code=500, detail="Internal error while fetching unique names")
 
 # ---------------------
 # UPDATE OPERATION

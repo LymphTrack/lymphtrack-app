@@ -67,6 +67,7 @@ export default function OutcomesScreen() {
 
   const loadVisits = async () => {
     try {
+      setLoading(true);
       const res = await fetch(`${API_URL}/operations/utils/unique-names`);
       if (!res.ok) throw new Error("Failed to load operation names");
 
@@ -85,8 +86,10 @@ export default function OutcomesScreen() {
       unique.sort(sortVisits);
 
       setVisitOptions(unique);
+      setLoading(false);
     } catch (err) {
       console.error("Error loading visits:", err);
+      setLoading(false);
     }
   };
 
@@ -108,7 +111,7 @@ export default function OutcomesScreen() {
 
       <ScrollView showsVerticalScrollIndicator={false}>
         <View style={[commonStyles.form, width >= 700 && { width: 700, alignSelf: "center" }]}>
-          <View style={styles.filterRow}>
+          <View style={[styles.filterRow, {marginTop : 20, flexDirection:"row", gap : 10, width : "50%"}]}>
               <DropDownPicker
                 open={openPosition}
                 value={positionFilter}
@@ -118,10 +121,26 @@ export default function OutcomesScreen() {
                 placeholder="Select position"
                 style={commonStyles.input}
                 listMode="MODAL"
+                modalContentContainerStyle={{
+                        backgroundColor: COLORS.background,
+                        paddingVertical: 50,
+                        paddingHorizontal: "10%",
+                      }}
+                      modalTitle="Select position"
+                      modalTitleStyle={{
+                        fontSize: 20,
+                        fontWeight: "bold",
+                        color: COLORS.text,
+                        textAlign: "center",
+                        marginBottom: 10,
+                      }}
+                      listItemContainerStyle={{
+                        borderBottomWidth: 1,
+                        paddingVertical: 10,
+                        borderBottomColor: COLORS.grayLight,
+                      }}
               />
-            </View>
 
-            <View style={styles.filterRow}>
               <DropDownPicker
                 open={openVisit}
                 value={visitFilter}
@@ -134,16 +153,32 @@ export default function OutcomesScreen() {
                 modalProps={{
                   animationType: "slide",
                 }}
-                modalContentContainerStyle={{
-                  flex: 1,
-                }}
                 scrollViewProps={{
                   nestedScrollEnabled: true,
                 }}
+                modalContentContainerStyle={{
+                        backgroundColor: COLORS.background,
+                        paddingVertical: 50,
+                        paddingHorizontal: "10%",
+                        flex: 1,
+                      }}
+                      modalTitle="Select visit"
+                      modalTitleStyle={{
+                        fontSize: 20,
+                        fontWeight: "bold",
+                        color: COLORS.text,
+                        textAlign: "center",
+                        marginBottom: 10,
+                      }}
+                      listItemContainerStyle={{
+                        borderBottomWidth: 1,
+                        paddingVertical: 10,
+                        borderBottomColor: COLORS.grayLight,
+                      }}                
               />
             </View>
 
-            <View style={styles.filterRow}>
+            <View style={[styles.filterRow, {flexDirection:"row", gap : 10, width : "50%"}]}>
                 <DropDownPicker
                   open={openGender}
                   value={genderFilter}
@@ -153,19 +188,52 @@ export default function OutcomesScreen() {
                   placeholder="Select gender"
                   style={commonStyles.input}
                   listMode="MODAL"
+                  modalContentContainerStyle={{
+                        backgroundColor: COLORS.background,
+                        paddingVertical: 50,
+                        paddingHorizontal: "10%",
+                      }}
+                      modalTitle="Select gender"
+                      modalTitleStyle={{
+                        fontSize: 20,
+                        fontWeight: "bold",
+                        color: COLORS.text,
+                        textAlign: "center",
+                        marginBottom: 10,
+                      }}
+                      listItemContainerStyle={{
+                        borderBottomWidth: 1,
+                        paddingVertical: 10,
+                        borderBottomColor: COLORS.grayLight,
+                      }}
                 />
-            </View>
-            <View style={styles.filterRow}>
                 <DropDownPicker
-                  open={openSide}
-                  value={sideFilter}
-                  items={sideOptions}
-                  setOpen={setOpenSide}
-                  setValue={setSideFilter}
-                  placeholder="Side"
-                  style={commonStyles.input}
-                  listMode="MODAL"
-                />
+                      open={openSide}
+                      value={sideFilter}
+                      items={sideOptions}
+                      setOpen={setOpenSide}
+                      setValue={setSideFilter}
+                      style={[commonStyles.input]}
+                      listMode='MODAL'
+                      modalContentContainerStyle={{
+                        backgroundColor: COLORS.background,
+                        paddingVertical: 50,
+                        paddingHorizontal: "10%",
+                      }}
+                      modalTitle="Select side"
+                      modalTitleStyle={{
+                        fontSize: 20,
+                        fontWeight: "bold",
+                        color: COLORS.text,
+                        textAlign: "center",
+                        marginBottom: 10,
+                      }}
+                      listItemContainerStyle={{
+                        borderBottomWidth: 1,
+                        paddingVertical: 10,
+                        borderBottomColor: COLORS.grayLight,
+                      }}
+                    />
             </View>
         </View>
       </ScrollView>
@@ -175,6 +243,6 @@ export default function OutcomesScreen() {
 
 const styles = StyleSheet.create({
   filterRow: {
-    marginBottom: 15,
+    marginBottom: -5,
   },
 });
