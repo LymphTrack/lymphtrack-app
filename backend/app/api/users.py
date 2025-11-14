@@ -112,11 +112,21 @@ def get_user(user_id: str, db: Session = Depends(get_db)):
 # ---------------------
 # READ ALL USERS
 # ---------------------
-
 @router.get("/")
 def get_users(db: Session = Depends(get_db)):
-    return db.query(User).all()
-
+    users = db.query(User).all()
+    return [
+        {
+            "id": str(u.id),
+            "email": u.email,
+            "name": u.name,
+            "role": u.role,
+            "institution": u.institution,
+            "user_type": u.user_type,
+            "created_at": u.created_at.isoformat() if u.created_at else None,
+        }
+        for u in users
+    ]
 
 # ---------------------
 # UPDATE USER

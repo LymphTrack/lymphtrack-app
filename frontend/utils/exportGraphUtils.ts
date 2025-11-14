@@ -1,10 +1,12 @@
 import { Platform } from "react-native";
-import * as FileSaver from "file-saver";
 import { showAlert } from "@/utils/alertUtils";
 
 let FileSystem: any = null;
 let Sharing: any = null;
 let captureRef: any = null;
+
+let FileSaver: any = null;
+let html2canvas: any = null;
 
 if (Platform.OS !== "web") {
   FileSystem = require("expo-file-system");
@@ -12,8 +14,8 @@ if (Platform.OS !== "web") {
   captureRef = require("react-native-view-shot").captureRef;
 }
 
-let html2canvas: any = null;
 if (Platform.OS === "web") {
+  FileSaver = require("file-saver");
   html2canvas = require("html2canvas");
 }
 
@@ -38,17 +40,15 @@ export const exportGraph = async (
       const csvContent = csvRows.join("\n");
 
       if (Platform.OS === "web") {
-        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-        FileSaver.saveAs(blob, `${filename}.csv`);
-      } else {
-        const fileUri = FileSystem.documentDirectory + `${filename}.csv`;
-        await FileSystem.writeAsStringAsync(fileUri, csvContent);
-        if (await Sharing.isAvailableAsync()) {
-          await Sharing.shareAsync(fileUri);
-        } else {
-          showAlert("Error", "Sharing is not available on this device.");
+        try {
+          const saveAs = FileSaver.saveAs || FileSaver.default;
+          saveAs(Blob, filename);
+        } catch (error) {
+          console.error("[EXPORT GRAPH ERROR] Web saveAs failed:", error);
+          showAlert("Error", "Error exporting file on web.");
         }
       }
+
       return;
     }
 

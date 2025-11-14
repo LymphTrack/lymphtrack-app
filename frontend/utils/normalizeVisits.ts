@@ -1,23 +1,5 @@
-const PRE_OP_LIST = [
-  "pre op",
-  "preop",
-  "pre_op",
-  "pre-op",
-  "pre op1",
-  "preop1",
-];
-
-const POST_OP_LIST = [
-  "post op",
-  "postop",
-  "post_op",
-  "post-op",
-  "post op1",
-  "postop1",
-];
-
-export function normalizeVisit(raw: string): string {
-  if (!raw) return "";
+export function normalizeVisit(raw: string) {
+  if (!raw) return { value: "", label: "" };
 
   let v = raw
     .trim()
@@ -29,50 +11,62 @@ export function normalizeVisit(raw: string): string {
   const opNumberMatch = v.match(/(?:op|operation)?\s*(\d+)/);
   const opNumber = opNumberMatch ? parseInt(opNumberMatch[1]) : 1;
 
-  const hasPre = v.includes("pre");
-  const hasPost = v.includes("post");
+  const isPre = v.includes("pre");
+  const isPost = v.includes("post");
 
-  const dayMatch = v.match(/(\d+)\s*day/);
-  const monthMatch = v.match(/(\d+)\s*month/);
-  const weekMatch = v.match(/(\d+)\s*week/);
-  const yearMatch = v.match(/(\d+)\s*year/);
+  const day = v.match(/(\d+)\s*days?/);
+  const month = v.match(/(\d+)\s*months?/);
+  const week = v.match(/(\d+)\s*weeks?/);
+  const year = v.match(/(\d+)\s*years?/);
 
-  if (hasPre && !dayMatch && !monthMatch && !weekMatch && !yearMatch) {
-    return opNumber > 1 ? `pre_op_${opNumber}` : "pre_op";
+  // ---- PRE-OP ----
+  if (isPre && !day && !month && !week && !year) {
+    const value = opNumber > 1 ? `pre_op_${opNumber}` : "pre_op";
+    const label = opNumber > 1 ? `Pre-Op (${opNumber})` : "Pre-Op";
+    return { value, label };
   }
 
-  if (hasPost && !dayMatch && !monthMatch && !weekMatch && !yearMatch) {
-    return opNumber > 1 ? `post_op_${opNumber}` : "post_op";
+  // ---- POST-OP ----
+  if (isPost && !day && !month && !week && !year) {
+    const value = opNumber > 1 ? `post_op_${opNumber}` : "post_op";
+    const label = opNumber > 1 ? `Post-Op (${opNumber})` : "Post-Op";
+    return { value, label };
   }
 
-  if (dayMatch) {
-    const n = parseInt(dayMatch[1]);
-    return opNumber > 1 ? `${n}d_after_op${opNumber}` : `${n}d`;
+  // ---- DAYS ----
+  if (day) {
+    const n = parseInt(day[1]);
+    const value = opNumber > 1 ? `${n}d_after_op${opNumber}` : `${n}d`;
+    const label = `${n} day${n > 1 ? "s" : ""}`;
+    return { value, label };
   }
 
-  if (weekMatch) {
-    const n = parseInt(weekMatch[1]);
-    return opNumber > 1 ? `${n}w_after_op${opNumber}` : `${n}w`;
+  // ---- WEEKS ----
+  if (week) {
+    const n = parseInt(week[1]);
+    const value = opNumber > 1 ? `${n}w_after_op${opNumber}` : `${n}w`;
+    const label = `${n} week${n > 1 ? "s" : ""}`;
+    return { value, label };
   }
 
-  if (monthMatch) {
-    const n = parseInt(monthMatch[1]);
-    if (hasPost || hasPre) {
-      return opNumber > 1 ? `${n}m_after_op${opNumber}` : `${n}m`;
-    }
-    return `${n}m`;
+  // ---- MONTHS ----
+  if (month) {
+    const n = parseInt(month[1]);
+    const value = opNumber > 1 ? `${n}m_after_op${opNumber}` : `${n}m`;
+    const label = `${n} month${n > 1 ? "s" : ""}`;
+    return { value, label };
   }
 
-  if (yearMatch) {
-    const n = parseInt(yearMatch[1]);
-    if (hasPost || hasPre) {
-      return opNumber > 1 ? `${n}y_after_op${opNumber}` : `${n}y`;
-    }
-    return `${n}y`;
+  // ---- YEARS ----
+  if (year) {
+    const n = parseInt(year[1]);
+    const value = opNumber > 1 ? `${n}y_after_op${opNumber}` : `${n}y`;
+    const label = `${n} year${n > 1 ? "s" : ""}`;
+    return { value, label };
   }
 
-  if (PRE_OP_LIST.includes(v)) return "pre_op";
-  if (POST_OP_LIST.includes(v)) return "post_op";
-
-  return v.replace(/\s+/g, "_");
+  return {
+    value: v.replace(/\s+/g, "_"),
+    label: v.replace(/\s+/g, " ").toUpperCase(),
+  };
 }
