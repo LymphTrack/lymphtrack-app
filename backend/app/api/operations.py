@@ -8,10 +8,233 @@ import shutil
 from app.db import models
 import zipfile
 from pydantic import BaseModel
+import re
 
 router = APIRouter()
 
 DATA_ROOT = Path(r"C:\Users\Pimprenelle\Documents\LymphTrackData")
+
+def format_op_suffix(opN: int) -> str:
+    j = opN % 10
+    k = opN % 100
+    suffix = "th"
+
+    if k not in (11, 12, 13):
+        if j == 1:
+            suffix = "st"
+        elif j == 2:
+            suffix = "nd"
+        elif j == 3:
+            suffix = "rd"
+
+    return f"{opN}{suffix} op"
+
+
+def format_pre_op_suffix(opN: int) -> str:
+    j = opN % 10
+    k = opN % 100
+    suffix = "th"
+
+    if k not in (11, 12, 13):
+        if j == 1:
+            suffix = "st"
+        elif j == 2:
+            suffix = "nd"
+        elif j == 3:
+            suffix = "rd"
+
+    return f"{opN}{suffix} pre-op"
+
+
+def format_post_op_suffix(opN: int) -> str:
+    j = opN % 10
+    k = opN % 100
+    suffix = "th"
+
+    if k not in (11, 12, 13):
+        if j == 1:
+            suffix = "st"
+        elif j == 2:
+            suffix = "nd"
+        elif j == 3:
+            suffix = "rd"
+
+    return f"{opN}{suffix} post-op"
+
+
+def normalize_visit(raw: str):
+    if not raw:
+        return None
+
+    v = raw.strip().lower()
+    v = re.sub(r"[^a-z0-9]", " ", v)
+    v = re.sub(r"\s+", " ", v).strip()
+
+    keywords = ["pre", "post", "day", "week", "month", "year", "op", "operation"]
+    if not any(k in v for k in keywords):
+        return None
+
+    # ---------- DAYS ----------
+    if "day" in v:
+        m = re.search(r"(\d+)\s*day[s]?", v)
+        if not m:
+            return None
+        n = int(m.group(1))
+
+        op_match = (
+            re.search(r"op\s*(\d+)", v) or
+            re.search(r"(\d+)\s*op", v) or
+            re.search(r"post\s*op\s*(\d+)", v) or
+            re.search(r"pre\s*op\s*(\d+)", v) or
+            re.search(r"postop\s*(\d+)", v) or
+            re.search(r"preop\s*(\d+)", v) or
+            re.search(r"day[s]?\s*(\d+)", v) or
+            re.search(r"(\d+)$", v)
+        )
+
+        opN = int(op_match.group(1)) if op_match else None
+
+        label = f"{n} day{'s' if n > 1 else ''}"
+        if opN and opN > 1:
+            label += f" ({format_op_suffix(opN)})"
+
+        return {"value": label, "label": label}
+
+    # ---------- WEEKS ----------
+    if "week" in v:
+        m = re.search(r"(\d+)\s*week[s]?", v)
+        if not m:
+            return None
+        n = int(m.group(1))
+
+        op_match = (
+            re.search(r"op\s*(\d+)", v) or
+            re.search(r"(\d+)\s*op", v) or
+            re.search(r"post\s*op\s*(\d+)", v) or
+            re.search(r"pre\s*op\s*(\d+)", v) or
+            re.search(r"postop\s*(\d+)", v) or
+            re.search(r"preop\s*(\d+)", v) or
+            re.search(r"week[s]?\s*(\d+)", v) or
+            re.search(r"(\d+)$", v)
+        )
+
+        opN = int(op_match.group(1)) if op_match else None
+
+        label = f"{n} week{'s' if n > 1 else ''}"
+        if opN and opN > 1:
+            label += f" ({format_op_suffix(opN)})"
+
+        return {"value": label, "label": label}
+
+    # ---------- MONTHS / YEARS ----------
+    if "month" in v:
+        m = re.search(r"(\d+)\s*month[s]?", v)
+        if not m:
+            return None
+
+        n = int(m.group(1))
+
+        op_match = (
+            re.search(r"op\s*(\d+)", v) or
+            re.search(r"(\d+)\s*op", v) or
+            re.search(r"post\s*op\s*(\d+)", v) or
+            re.search(r"pre\s*op\s*(\d+)", v) or
+            re.search(r"postop\s*(\d+)", v) or
+            re.search(r"preop\s*(\d+)", v) or
+            re.search(r"month[s]?\s*(\d+)", v) or
+            re.search(r"(\d+)$", v)
+        )
+        opN = int(op_match.group(1)) if op_match else None
+
+        # MONTHS → convert multiples of 12 → YEARS
+        if n % 12 == 0:
+            years = n // 12
+            label = f"{years} year{'s' if years > 1 else ''}"
+            if opN and opN > 1:
+                label += f" ({format_op_suffix(opN)})"
+            return {"value": label, "label": label}
+
+        label = f"{n} month{'s' if n > 1 else ''}"
+        if opN and opN > 1:
+            label += f" ({format_op_suffix(opN)})"
+        return {"value": label, "label": label}
+
+    # ---------- YEARS ----------
+    if "year" in v:
+        m = re.search(r"(\d+)\s*year[s]?", v)
+        if not m:
+            return None
+
+        n = int(m.group(1))
+
+        op_match = (
+            re.search(r"op\s*(\d+)", v) or
+            re.search(r"(\d+)\s*op", v) or
+            re.search(r"post\s*op\s*(\d+)", v) or
+            re.search(r"pre\s*op\s*(\d+)", v) or
+            re.search(r"postop\s*(\d+)", v) or
+            re.search(r"preop\s*(\d+)", v) or
+            re.search(r"year[s]?\s*(\d+)", v) or
+            re.search(r"(\d+)$", v)
+        )
+
+        opN = int(op_match.group(1)) if op_match else None
+
+        label = f"{n} year{'s' if n > 1 else ''}"
+        if opN and opN > 1:
+            label += f" ({format_op_suffix(opN)})"
+
+        return {"value": label, "label": label}
+
+    # ---------- PRE-OP ----------
+    if "pre" in v:
+        m = (
+            re.search(r"pre\s*op\s*(\d+)", v) or
+            re.search(r"preop\s*(\d+)", v) or
+            re.search(r"pre\s*(\d+)", v) or
+            re.search(r"(\d+)\s*pre\s*op", v) or
+            re.search(r"(\d+)\s*preop", v) or
+            re.search(r"(\d+)ndpreop", v) or
+            re.search(r"pre\s*op", v) or
+            re.search(r"preop", v)
+        )
+
+        opN = int(m.group(1)) if (m and m.group(1)) else None
+
+        if opN and opN > 1:
+            label = format_pre_op_suffix(opN)
+        else:
+            label = "pre-op"
+
+        return {"value": label, "label": label}
+
+    # ---------- POST-OP ----------
+    if "post" in v:
+        m = (
+            re.search(r"post\s*op\s*(\d+)", v) or
+            re.search(r"postop\s*(\d+)", v) or
+            re.search(r"post\s*(\d+)", v) or
+            re.search(r"(\d+)\s*post\s*op", v) or
+            re.search(r"(\d+)\s*postop", v) or
+            re.search(r"(\d+)ndpostop", v) or
+            re.search(r"post\s*op", v) or
+            re.search(r"postop", v)
+        )
+
+        opN = int(m.group(1)) if (m and m.group(1)) else None
+
+        if opN and opN > 1:
+            label = format_post_op_suffix(opN)
+        else:
+            label = "post-op"
+
+        return {"value": label, "label": label}
+
+    return None
+
+
+
+
 
 # ---------------------
 # CREATE OPERATION
@@ -138,37 +361,37 @@ def get_unique_names(db: Session = Depends(get_db)):
 
 
 # ---------------------
-# GET ALL operations for a patient
+# GET ALL operations
 # ---------------------
-@router.get("/patient_with_operations/{patient_id}")
-def get_patient_with_operations(patient_id: str, db: Session = Depends(get_db)):
-    patient = db.query(models.SickPatient).filter(models.SickPatient.patient_id == patient_id).first()
-    if not patient:
-        raise HTTPException(status_code=404, detail="Patient not found")
+@router.get("/patients_with_visits")
+def get_patients_with_visits(db: Session = Depends(get_db)):
+    patients = db.query(models.SickPatient).all()
+    operations = db.query(models.Operation).all()
 
-    ops = (
-        db.query(models.Operation)
-        .filter(models.Operation.patient_id == patient_id)
-        .order_by(models.Operation.operation_date.asc())
-        .all()
-    )
+    ops_by_patient = {}
+    for op in operations:
+        ops_by_patient.setdefault(op.patient_id, []).append(op)
 
-    return {
-        "patient": {
-            "patient_id": patient.patient_id,
-            "age": patient.age,
-            "gender": patient.gender,
-            "bmi": patient.bmi,
-            "lymphedema_side": patient.lymphedema_side,
-        },
-        "operations": [
-            {
-                "id_operation": op.id_operation,
-                "name": op.name,
-            }
-            for op in ops
-        ],
-    }
+    result = []
+
+    for p in patients:
+        raw_ops = ops_by_patient.get(p.patient_id, [])
+        normalized = [
+            normalize_visit(op.name)["value"]
+            for op in raw_ops
+            if normalize_visit(op.name)
+        ]
+
+        result.append({
+            "patient_id": p.patient_id,
+            "age": p.age,
+            "gender": p.gender,
+            "bmi": p.bmi,
+            "lymphedema_side": p.lymphedema_side,
+            "visits": normalized
+        })
+
+    return result
 
 
 # ---------------------

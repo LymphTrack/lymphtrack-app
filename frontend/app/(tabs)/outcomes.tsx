@@ -1,14 +1,14 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import {View,Text,FlatList,TouchableOpacity,ScrollView,StyleSheet,useWindowDimensions,} from "react-native";
-import DropDownPicker from "react-native-dropdown-picker";
 import { useFocusEffect } from "@react-navigation/native";
 import { commonStyles } from "@/constants/styles";
 import { COLORS } from "@/constants/colors";
 import { API_URL } from "@/constants/api";
 import { LoadingScreen } from "@/components/loadingScreen";
-import { normalizeVisit } from "@/utils/normalizeVisits";
+import { normalizeVisit, sortVisits } from "@/utils/visitUtils";
 import { showAlert } from "@/utils/alertUtils";
 import { CheckCircle2, Circle } from "lucide-react-native";
+import { FilterDropdown } from "@/components/filterDropdrown";
 
 interface Patient {
   patient_id: string;
@@ -17,6 +17,7 @@ interface Patient {
   bmi: number;
   lymphedema_side: number;
   notes : string | null;
+  visits?: string[]; 
 }
 
 export default function OutcomesScreen() {
@@ -75,32 +76,6 @@ export default function OutcomesScreen() {
     { label: "> 30", value: ">30" },
   ];
 
-  function sortVisits(a: { value: string }, b: { value: string }) {
-    const order = (v: string) => {
-      if (v === "pre_op") return 1;
-      if (v === "post_op") return 2;
-      if (v.endsWith("d") && !v.includes("after")) return 3;
-      if (v.endsWith("m") && !v.includes("after")) return 4;
-      if (v.endsWith("y") && !v.includes("after")) return 5;
-      if (v.startsWith("pre_op_")) return 6;
-      if (v.startsWith("post_op_") && !v.includes("after")) return 7;
-      if (v.includes("after_op2")) return 8;
-      return 9;
-    };
-
-    const oa = order(a.value);
-    const ob = order(b.value);
-
-    if (oa !== ob) return oa - ob;
-
-    const na = parseInt(a.value);
-    const nb = parseInt(b.value);
-
-    if (!isNaN(na) && !isNaN(nb)) return na - nb;
-
-    return a.value.localeCompare(b.value);
-  }
-
   const loadVisits = async () => {
     try {
       setLoading(true);
@@ -109,22 +84,24 @@ export default function OutcomesScreen() {
 
       const data: string[] = await res.json();
 
-      const normalized = data.map((raw) => normalizeVisit(raw));
+      const map = new Map<string, { value: string; label: string }>();
 
-      const uniqueMap = new Map();
-      normalized.forEach((item) => {
-        if (!uniqueMap.has(item.value)) {
-          uniqueMap.set(item.value, item);
+      for (const raw of data) {
+        const n = normalizeVisit(raw);
+        if (!n || !n.value) continue; 
+
+        if (!map.has(n.value)) {
+          map.set(n.value, n);
         }
-      });
-      const unique = Array.from(uniqueMap.values());
+      }
 
+      const unique = Array.from(map.values());
       unique.sort(sortVisits);
 
       setVisitOptions(unique);
-      setLoading(false);
     } catch (err) {
       console.error("Error loading visits:", err);
+    } finally {
       setLoading(false);
     }
   };
@@ -132,11 +109,14 @@ export default function OutcomesScreen() {
   const loadPatients = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`${API_URL}/patients/`);
+
+      const res = await fetch(`${API_URL}/operations/patients_with_visits`);
       if (!res.ok) throw new Error("Failed to fetch patients");
 
       const data = await res.json();
-      setPatients(data || []);
+
+      setPatients(data);
+
     } catch (error) {
       console.error("Error loading patients:", error);
       showAlert("Error", "Failed to load patients");
@@ -160,6 +140,11 @@ export default function OutcomesScreen() {
       const [min, max] = bmiFilter.split("-").map(Number);
       return p.bmi >= min && p.bmi <= max;
     })
+    .filter(p => {
+      if (!visitFilter) return true;
+      return p.visits?.includes(visitFilter);
+    })
+
 
   const toggleSelect = (id: string) => {
     setSelectedPatients(prev => {
@@ -184,12 +169,11 @@ export default function OutcomesScreen() {
     } 
   };
 
-  useFocusEffect(
-    useCallback(() => {
-      loadVisits();
-      loadPatients();
-    }, [positionFilter, visitFilter, genderFilter, sideFilter])
-  );
+  useEffect(() => {
+    loadVisits();
+    loadPatients();
+  }, []);
+
 
   if (loading) return <LoadingScreen text="Loading outcomes..." />;
 
@@ -203,207 +187,71 @@ export default function OutcomesScreen() {
 
       <ScrollView showsVerticalScrollIndicator={false}>
         <View style={[commonStyles.form, width >= 700 && { width: 700, alignSelf: "center" }]}>
-          <View style={[styles.filterRow, {marginTop : 20}]}>
-            <DropDownPicker
+          <View style={[styles.filterRow, { marginTop: 20 }]}>
+            <FilterDropdown
               open={openPosition}
-              value={positionFilter}
-              items={positionOptions}
               setOpen={setOpenPosition}
+              value={positionFilter}
               setValue={setPositionFilter}
+              items={positionOptions}
               placeholder="Select position"
-              style={commonStyles.input}
-              listMode="MODAL"
-              modalContentContainerStyle={{
-                backgroundColor: COLORS.background,
-                paddingVertical: 50,
-                paddingHorizontal: "10%",
-              }}
               modalTitle="Select position"
-              modalTitleStyle={{
-                fontSize: 20,
-                fontWeight: "bold",
-                color: COLORS.text,
-                textAlign: "center",
-                marginBottom: 10,
-              }}
-              listItemContainerStyle={{
-                borderBottomWidth: 1,
-                paddingVertical: 10,
-                borderBottomColor: COLORS.grayLight,
-              }}
             />
 
-            <DropDownPicker
+            <FilterDropdown
               open={openVisit}
-              value={visitFilter}
-              items={visitOptions}
               setOpen={setOpenVisit}
+              value={visitFilter}
               setValue={setVisitFilter}
+              items={visitOptions}
               placeholder="Select visit"
-              style={commonStyles.input}
-              listMode="MODAL"
-              modalProps={{
-                animationType: "slide",
-              }}
-              scrollViewProps={{
-                nestedScrollEnabled: true,
-              }}
-              modalContentContainerStyle={{
-                backgroundColor: COLORS.background,
-                paddingVertical: 50,
-                paddingHorizontal: "10%",
-                flex: 1,
-              }}
               modalTitle="Select visit"
-              modalTitleStyle={{
-                fontSize: 20,
-                fontWeight: "bold",
-                color: COLORS.text,
-                textAlign: "center",
-                marginBottom: 10,
-              }}
-              listItemContainerStyle={{
-                borderBottomWidth: 1,
-                paddingVertical: 10,
-                borderBottomColor: COLORS.grayLight,
-              }}
             />
           </View>
-          
-          <View style={[styles.filterRow, {width : "24.1%"}]}>
-            <DropDownPicker
+
+          <View style={[styles.filterRow, { width: "24.1%" }]}>
+            <FilterDropdown
               open={openGender}
-              value={genderFilter}
-              items={genderOptions}
               setOpen={setOpenGender}
+              value={genderFilter}
               setValue={setGenderFilter}
+              items={genderOptions}
               placeholder="Select gender"
-              style={[commonStyles.input, {
-                height: 38,
-                minHeight: 38,
-                paddingVertical: 0,
-                borderRadius: 16,
-              }]}
-              listMode="MODAL"
-              modalContentContainerStyle={{
-                backgroundColor: COLORS.background,
-                paddingVertical: 50,
-                paddingHorizontal: "10%",
-              }}
               modalTitle="Select gender"
-              modalTitleStyle={{
-                fontSize: 20,
-                fontWeight: "bold",
-                color: COLORS.text,
-                textAlign: "center",
-                marginBottom: 10,
-              }}
-              listItemContainerStyle={{
-                borderBottomWidth: 1,
-                paddingVertical: 10,
-                borderBottomColor: COLORS.grayLight,
-              }}
-            />
-            
-            <DropDownPicker
-              open={openSide}
-              value={sideFilter}
-              items={sideOptions}
-              setOpen={setOpenSide}
-              setValue={setSideFilter}
-              style={[commonStyles.input, {
-                height: 38,
-                minHeight: 38,
-                paddingVertical: 0,
-                borderRadius: 16,
-              }]}
-              listMode="MODAL"
-              modalContentContainerStyle={{
-                backgroundColor: COLORS.background,
-                paddingVertical: 50,
-                paddingHorizontal: "10%",
-              }}
-              modalTitle="Select side"
-              modalTitleStyle={{
-                fontSize: 20,
-                fontWeight: "bold",
-                color: COLORS.text,
-                textAlign: "center",
-                marginBottom: 10,
-              }}
-              listItemContainerStyle={{
-                borderBottomWidth: 1,
-                paddingVertical: 10,
-                borderBottomColor: COLORS.grayLight,
-              }}
-            />
-            
-            <DropDownPicker
-              open={openAge}
-              value={ageFilter}
-              items={ageOptions}
-              setOpen={setOpenAge}
-              setValue={setAgeFilter}
-              placeholder="Select age range"
-              style={[commonStyles.input, {
-                height: 38,
-                minHeight: 38,
-                paddingVertical: 0,
-                borderRadius: 16,
-              }]}
-              listMode="MODAL"
-              modalContentContainerStyle={{
-                backgroundColor: COLORS.background,
-                paddingVertical: 50,
-                paddingHorizontal: "10%",
-              }}
-              modalTitle="Select age range"
-              modalTitleStyle={{
-                fontSize: 20,
-                fontWeight: "bold",
-                color: COLORS.text,
-                textAlign: "center",
-                marginBottom: 10,
-              }}
-              listItemContainerStyle={{
-                borderBottomWidth: 1,
-                paddingVertical: 10,
-                borderBottomColor: COLORS.grayLight,
-              }}
+              small
             />
 
-            <DropDownPicker
+            <FilterDropdown
+              open={openSide}
+              setOpen={setOpenSide}
+              value={sideFilter}
+              setValue={setSideFilter}
+              items={sideOptions}
+              placeholder="Select side"
+              modalTitle="Select side"
+              small
+            />
+
+            <FilterDropdown
+              open={openAge}
+              setOpen={setOpenAge}
+              value={ageFilter}
+              setValue={setAgeFilter}
+              items={ageOptions}
+              placeholder="Select age range"
+              modalTitle="Select age range"
+              small
+            />
+
+            <FilterDropdown
               open={openBMI}
-              value={bmiFilter}
-              items={bmiOptions}
               setOpen={setOpenBMI}
+              value={bmiFilter}
               setValue={setBMIFilter}
+              items={bmiOptions}
               placeholder="Select BMI range"
-              style={[commonStyles.input, {
-                height: 38,
-                minHeight: 38,
-                paddingVertical: 0,
-                borderRadius: 16,
-              }]}
-              listMode="MODAL"
-              modalContentContainerStyle={{
-                backgroundColor: COLORS.background,
-                paddingVertical: 50,
-                paddingHorizontal: "10%",
-              }}
               modalTitle="Select BMI range"
-              modalTitleStyle={{
-                fontSize: 20,
-                fontWeight: "bold",
-                color: COLORS.text,
-                textAlign: "center",
-                marginBottom: 10,
-              }}
-              listItemContainerStyle={{
-                borderBottomWidth: 1,
-                paddingVertical: 10,
-                borderBottomColor: COLORS.grayLight,
-              }}
+              small
             />
           </View>
           <View style={styles.containerPatientCount}>
