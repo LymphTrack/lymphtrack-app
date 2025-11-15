@@ -1,5 +1,5 @@
 export function normalizeVisit(raw: string) {
-  if (!raw) return { value: "", label: "" };
+  if (!raw) return null;
 
   let v = raw
     .trim()
@@ -52,6 +52,16 @@ export function normalizeVisit(raw: string) {
   // ---- MONTHS ----
   if (month) {
     const n = parseInt(month[1]);
+
+    // multiples of 12 → convert to years
+    if (n % 12 === 0) {
+      const years = n / 12;
+      const value =
+        opNumber > 1 ? `${years}y_after_op${opNumber}` : `${years}y`;
+      const label = `${years} year${years > 1 ? "s" : ""}`;
+      return { value, label };
+    }
+
     const value = opNumber > 1 ? `${n}m_after_op${opNumber}` : `${n}m`;
     const label = `${n} month${n > 1 ? "s" : ""}`;
     return { value, label };
@@ -65,6 +75,15 @@ export function normalizeVisit(raw: string) {
     return { value, label };
   }
 
+  // ---- REMOVE NON-MEDICAL VISITS ----
+  const keywords = ["pre", "post", "day", "week", "month", "year", "op", "operation"];
+  const isValid = keywords.some(k => v.includes(k));
+
+  if (!isValid) {
+    return null; // 🔥 ignore "test", "photo", "visit test", "random", ...
+  }
+
+  // fallback (rare)
   return {
     value: v.replace(/\s+/g, "_"),
     label: v.replace(/\s+/g, " ").toUpperCase(),

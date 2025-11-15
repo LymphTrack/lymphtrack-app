@@ -133,21 +133,43 @@ def get_operations(db: Session = Depends(get_db)):
 # ---------------------
 @router.get("/utils/unique-names")
 def get_unique_names(db: Session = Depends(get_db)):
-    print("📌 [unique-names] Route called")
+    names = db.query(Operation.name).distinct().all()
+    return [n[0] for n in names if n[0]]
 
-    try:
-        print("📌 [unique-names] Querying DB...")
-        names = db.query(Operation.name).distinct().all()
-        print(f"📌 [unique-names] Raw DB result: {names}")
 
-        clean = [n[0] for n in names if n[0]]
-        print(f"📌 [unique-names] Cleaned result: {clean}")
+# ---------------------
+# GET ALL operations for a patient
+# ---------------------
+@router.get("/patient_with_operations/{patient_id}")
+def get_patient_with_operations(patient_id: str, db: Session = Depends(get_db)):
+    patient = db.query(models.SickPatient).filter(models.SickPatient.patient_id == patient_id).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
 
-        return clean
+    ops = (
+        db.query(models.Operation)
+        .filter(models.Operation.patient_id == patient_id)
+        .order_by(models.Operation.operation_date.asc())
+        .all()
+    )
 
-    except Exception as e:
-        print("❌ [unique-names] ERROR", str(e))
-        raise HTTPException(status_code=500, detail="Internal error while fetching unique names")
+    return {
+        "patient": {
+            "patient_id": patient.patient_id,
+            "age": patient.age,
+            "gender": patient.gender,
+            "bmi": patient.bmi,
+            "lymphedema_side": patient.lymphedema_side,
+        },
+        "operations": [
+            {
+                "id_operation": op.id_operation,
+                "name": op.name,
+            }
+            for op in ops
+        ],
+    }
+
 
 # ---------------------
 # UPDATE OPERATION
