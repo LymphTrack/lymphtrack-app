@@ -110,12 +110,29 @@ export default function OutcomesScreen() {
     try {
       setLoading(true);
 
-      const res = await fetch(`${API_URL}/operations/patients_with_visits`);
+      const res = await fetch(`${API_URL}/patients/`);
       if (!res.ok) throw new Error("Failed to fetch patients");
 
-      const data = await res.json();
+      const rawPatients = await res.json();
 
-      setPatients(data);
+      const patientsWithVisits = [];
+
+      for (const p of rawPatients) {
+        
+        const opRes = await fetch(`${API_URL}/operations/patient_with_operations/${p.patient_id}`);
+        const info = await opRes.json();
+
+        const visits = info.operations
+          .map(op => normalizeVisit(op.name)?.value)
+          .filter(Boolean);
+
+        patientsWithVisits.push({
+          ...p,
+          visits,
+        });
+      }
+
+      setPatients(patientsWithVisits);
 
     } catch (error) {
       console.error("Error loading patients:", error);
